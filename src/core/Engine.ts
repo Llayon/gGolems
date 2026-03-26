@@ -331,7 +331,7 @@ export class Game {
             }
         }
 
-        const aimOffset = this.mechCamera.getAimScreenOffset(this.golem.torsoYaw);
+        const aimOffset = this.mechCamera.getAimScreenOffset(this.golem.legYaw);
 
         this.onStateUpdate({
             hp: this.golem.hp,

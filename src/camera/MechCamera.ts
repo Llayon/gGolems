@@ -6,9 +6,21 @@ const _zero = new THREE.Vector3();
 const _offset = new THREE.Vector3();
 const _targetPos = new THREE.Vector3();
 const _targetLookAt = new THREE.Vector3();
-const _yAxis = new THREE.Vector3(0, 1, 0);
 const _dir = new THREE.Vector3();
 const _velocityLead = new THREE.Vector3();
+const _bodyForward = new THREE.Vector3();
+const _bodyRight = new THREE.Vector3();
+const _aimForward = new THREE.Vector3();
+
+function setForward(out: THREE.Vector3, yaw: number) {
+    out.set(Math.sin(yaw), 0, -Math.cos(yaw));
+    return out;
+}
+
+function setRight(out: THREE.Vector3, yaw: number) {
+    out.set(Math.cos(yaw), 0, Math.sin(yaw));
+    return out;
+}
 
 export class MechCamera {
     camera: THREE.PerspectiveCamera;
@@ -53,45 +65,43 @@ export class MechCamera {
     }
 
     update(
-        golemPos: THREE.Vector3,
+        anchorPos: THREE.Vector3,
+        bodyYaw: number,
         torsoYaw: number,
-        aimYawClamped: number,
+        aimYawUnclamped: number,
         speed: number,
         mass: number,
         dt: number,
         colliders: THREE.Mesh[]
     ) {
-        const aimOffset = clamp(
-            angleDiff(torsoYaw, aimYawClamped),
-            -CAMERA.maxAimLead,
-            CAMERA.maxAimLead
-        );
-        const yawTarget = torsoYaw + aimOffset * CAMERA.cameraAimInfluence;
+        const torsoOffset = angleDiff(bodyYaw, torsoYaw);
+        const aimOffset = clamp(angleDiff(bodyYaw, aimYawUnclamped), -CAMERA.maxAimLead, CAMERA.maxAimLead);
+        const torsoAimOffset = clamp(angleDiff(torsoYaw, aimYawUnclamped), -CAMERA.maxAimLead, CAMERA.maxAimLead);
 
+        const yawTarget = bodyYaw + torsoOffset * CAMERA.cameraTorsoInfluence;
         if (!this.initialized) {
             this.cameraYaw = yawTarget;
         } else {
-            const yawStep = Math.max(CAMERA.cameraYawLag, Math.abs(angleDiff(this.cameraYaw, yawTarget)) * 0.3) * dt * 10;
+            const yawStep = Math.max(CAMERA.cameraYawLag, Math.abs(angleDiff(this.cameraYaw, yawTarget)) * 0.35) * dt * 10;
             this.cameraYaw = moveTowardsAngle(this.cameraYaw, yawTarget, yawStep);
         }
 
-        _offset.set(
-            CAMERA.offsetRight,
-            CAMERA.offsetUp + Math.max(0, speed - 5) * 0.012,
-            CAMERA.offsetBack
-        );
-        _offset.y -= this.pitch * 2.5;
-        _offset.applyAxisAngle(_yAxis, this.cameraYaw);
+        setForward(_bodyForward, this.cameraYaw);
+        setRight(_bodyRight, this.cameraYaw);
 
-        _velocityLead.set(Math.sin(torsoYaw), 0, Math.cos(torsoYaw)).multiplyScalar(speed * CAMERA.cameraVelocityLead);
-        _targetPos.copy(golemPos).add(_offset).sub(_velocityLead);
+        _offset.copy(anchorPos);
+        _offset.addScaledVector(_bodyRight, CAMERA.offsetRight);
+        _offset.addScaledVector(_bodyForward, -CAMERA.offsetBack);
+        _offset.y += CAMERA.offsetUp;
 
-        const lookYaw = torsoYaw + aimOffset * 0.55;
-        _targetLookAt.set(
-            golemPos.x + Math.sin(lookYaw) * CAMERA.lookForward,
-            golemPos.y + CAMERA.lookAbove + this.pitch * 10,
-            golemPos.z + Math.cos(lookYaw) * CAMERA.lookForward
-        );
+        _velocityLead.copy(_bodyForward).multiplyScalar(-Math.min(speed, 12) * CAMERA.cameraVelocityLead);
+        _targetPos.copy(_offset).add(_velocityLead);
+
+        const actualAimYaw = torsoYaw + torsoAimOffset * CAMERA.cameraAimInfluence;
+        setForward(_aimForward, actualAimYaw);
+        _targetLookAt.copy(anchorPos);
+        _targetLookAt.addScaledVector(_aimForward, CAMERA.lookForward);
+        _targetLookAt.y += CAMERA.lookAbove + this.pitch * 8;
 
         if (!this.initialized) {
             this.currentPos.copy(_targetPos);
@@ -102,12 +112,12 @@ export class MechCamera {
         this.currentPos.lerp(_targetPos, CAMERA.posLerp);
         this.currentLookAt.lerp(_targetLookAt, CAMERA.lookLerp);
 
-        _dir.subVectors(this.currentPos, golemPos).normalize();
-        const dist = this.currentPos.distanceTo(golemPos);
-        this.raycaster.set(golemPos, _dir);
+        _dir.subVectors(this.currentPos, anchorPos).normalize();
+        const dist = this.currentPos.distanceTo(anchorPos);
+        this.raycaster.set(anchorPos, _dir);
         const intersects = this.raycaster.intersectObjects(colliders);
         if (intersects.length > 0 && intersects[0].distance < dist) {
-            this.currentPos.copy(golemPos).addScaledVector(_dir, intersects[0].distance * 0.8);
+            this.currentPos.copy(anchorPos).addScaledVector(_dir, intersects[0].distance * 0.85);
         }
 
         this.updateWalkBob(speed, mass, dt);
@@ -121,8 +131,8 @@ export class MechCamera {
         this.camera.rotateZ(this.currentRoll + this.shakeRotation);
     }
 
-    getAimScreenOffset(torsoYaw: number): number {
-        return clamp(angleDiff(torsoYaw, this.aimYaw), -CAMERA.maxAimLead, CAMERA.maxAimLead);
+    getAimScreenOffset(referenceYaw: number): number {
+        return clamp(angleDiff(referenceYaw, this.aimYaw), -CAMERA.maxAimLead, CAMERA.maxAimLead);
     }
 
     updateWalkBob(speed: number, mass: number, dt: number) {
@@ -134,8 +144,8 @@ export class MechCamera {
 
             const phase = this.walkCycle * Math.PI * 2;
             const bobAmp = WALK.bobAmplitude * mass * normalizedSpeed;
-            const swayAmp = WALK.swayAmplitude * mass * normalizedSpeed;
-            const rollAmp = WALK.rollAmplitude * mass * normalizedSpeed;
+            const swayAmp = WALK.swayAmplitude * 0.45 * mass * normalizedSpeed;
+            const rollAmp = WALK.rollAmplitude * 0.35 * mass * normalizedSpeed;
 
             const rawBob = Math.sin(phase * 2);
             this.bobAmount.y = rawBob * bobAmp;
@@ -144,7 +154,7 @@ export class MechCamera {
             this.bobAmount.y -= impactWave * impactWave * bobAmp * 0.5;
 
             this.bobAmount.x = Math.sin(phase) * swayAmp;
-            this.bobAmount.z = Math.cos(phase * 2) * bobAmp * 0.2;
+            this.bobAmount.z = Math.cos(phase * 2) * bobAmp * 0.12;
             this.currentRoll = Math.sin(phase) * rollAmp;
 
             const stepSin = Math.sin(phase * 2);
@@ -185,7 +195,7 @@ export class MechCamera {
     }
 
     updateFOV(speed: number, dt: number) {
-        const speedFOV = this.baseFOV + (speed / 15) * 8;
+        const speedFOV = this.baseFOV + (speed / 15) * 4;
         this.targetFOV = Math.max(this.targetFOV, speedFOV);
         this.camera.fov += (this.targetFOV - this.camera.fov) * CAMERA.fovLerp;
         this.camera.updateProjectionMatrix();

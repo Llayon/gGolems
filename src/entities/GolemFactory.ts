@@ -36,7 +36,7 @@ export class GolemFactory {
 
         const headGeo = new THREE.BoxGeometry(0.8, 0.8, 0.8);
         const head = new THREE.Mesh(headGeo, runeMat);
-        head.position.set(0, 2.0, 0.5); // relative to torso (5.5 + 2.0 = 7.5)
+        head.position.set(0, 2.0, -0.5); // forward faces -Z
         torsoGroup.add(head);
 
         const armGeo = new THREE.BoxGeometry(0.8, 2.5, 0.8);
@@ -51,7 +51,7 @@ export class GolemFactory {
         const boilerGeo = new THREE.CylinderGeometry(0.8, 0.8, 1.5);
         const boiler = new THREE.Mesh(boilerGeo, boilerMat);
         boiler.rotation.x = Math.PI / 2;
-        boiler.position.set(0, 0, -1.5);
+        boiler.position.set(0, 0, 1.5);
         torsoGroup.add(boiler);
 
         group.add(torsoGroup);
