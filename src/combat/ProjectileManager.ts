@@ -58,7 +58,7 @@ export class ProjectileManager {
             if (intersects.length > 0 && intersects[0].distance < 1.0) {
                 p.active = false;
                 this.scene.remove(p.mesh);
-                decals.addBulletMark(intersects[0].point, intersects[0].face?.normal || new THREE.Vector3(0, 1, 0));
+                decals.addBulletMark(intersects[0].point);
                 continue;
             }
 
