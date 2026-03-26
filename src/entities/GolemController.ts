@@ -155,13 +155,15 @@ export class GolemController {
 
             const maxSpeed = 15;
             const acceleration = 1000;
+            const bodyAimOffset = angleDiff(this.legYaw, aimYawUnclamped);
 
             if (moveZ !== 0 || moveX !== 0) {
                 _moveDir.set(moveX, 0, moveZ).normalize();
-                _moveDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.torsoYaw);
+                _moveDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.legYaw);
 
-                const targetLegAngle = Math.atan2(_moveDir.x, -_moveDir.z);
-                this.legYaw = moveTowardsAngle(this.legYaw, targetLegAngle, legsStep);
+                if (Math.abs(bodyAimOffset) > maxTwist * 0.35) {
+                    this.legYaw = moveTowardsAngle(this.legYaw, aimYawUnclamped, legsStep * 0.65);
+                }
 
                 const vel = this.body.linvel();
                 _currentVel.set(vel.x, 0, vel.z);
@@ -176,8 +178,7 @@ export class GolemController {
                 const vel = this.body.linvel();
                 this.body.applyImpulse({ x: -vel.x * this.mass * 50 * dt, y: 0, z: -vel.z * this.mass * 50 * dt }, true);
 
-                const twistFromAim = angleDiff(this.legYaw, aimYawUnclamped);
-                if (Math.abs(twistFromAim) > maxTwist * 0.75) {
+                if (Math.abs(bodyAimOffset) > maxTwist * 0.75) {
                     this.legYaw = moveTowardsAngle(this.legYaw, aimYawUnclamped, legsStep * 0.9);
                 }
             }

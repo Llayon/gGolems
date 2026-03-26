@@ -59,7 +59,7 @@ export class MechCamera {
     }
 
     onMouseMove(movementX: number, movementY: number) {
-        this.aimYaw -= movementX * CAMERA.yawSpeed;
+        this.aimYaw += movementX * CAMERA.yawSpeed;
         this.pitch -= movementY * CAMERA.pitchSpeed;
         this.pitch = clamp(this.pitch, CAMERA.pitchMin, CAMERA.pitchMax);
     }
