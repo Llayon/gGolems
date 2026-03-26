@@ -217,12 +217,8 @@ export class Game {
         this.projectiles.update(dt);
         this.decals.update(dt);
         
-        this.golem.torso.getWorldPosition(_weaponOrigin);
-        _weaponOrigin.y += 0.5;
-
-        _weaponDir.set(0, 0, -1);
-        _weaponDir.applyAxisAngle(new THREE.Vector3(1, 0, 0), this.mechCamera.pitch);
-        _weaponDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.golem.torsoYaw);
+        this.renderer.camera.getWorldDirection(_weaponDir);
+        _weaponOrigin.copy(this.renderer.camera.position).addScaledVector(_weaponDir, 1.5);
 
         if (this.input.consumeClick()) {
             if (this.golem.tryAction(5)) {

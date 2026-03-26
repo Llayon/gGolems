@@ -74,34 +74,23 @@ export class MechCamera {
         dt: number,
         colliders: THREE.Mesh[]
     ) {
-        const torsoOffset = angleDiff(bodyYaw, torsoYaw);
-        const aimOffset = clamp(angleDiff(bodyYaw, aimYawUnclamped), -CAMERA.maxAimLead, CAMERA.maxAimLead);
         const torsoAimOffset = clamp(angleDiff(torsoYaw, aimYawUnclamped), -CAMERA.maxAimLead, CAMERA.maxAimLead);
-
-        const yawTarget = bodyYaw + torsoOffset * CAMERA.cameraTorsoInfluence;
+        const yawTarget = torsoYaw;
         if (!this.initialized) {
             this.cameraYaw = yawTarget;
         } else {
-            const yawStep = Math.max(CAMERA.cameraYawLag, Math.abs(angleDiff(this.cameraYaw, yawTarget)) * 0.35) * dt * 10;
+            const yawStep = Math.max(CAMERA.cameraYawLag, Math.abs(angleDiff(this.cameraYaw, yawTarget)) * 0.6) * dt * 10;
             this.cameraYaw = moveTowardsAngle(this.cameraYaw, yawTarget, yawStep);
         }
 
         setForward(_bodyForward, this.cameraYaw);
-        setRight(_bodyRight, this.cameraYaw);
-
-        _offset.copy(anchorPos);
-        _offset.addScaledVector(_bodyRight, CAMERA.offsetRight);
-        _offset.addScaledVector(_bodyForward, -CAMERA.offsetBack);
-        _offset.y += CAMERA.offsetUp;
-
-        _velocityLead.copy(_bodyForward).multiplyScalar(-Math.min(speed, 12) * CAMERA.cameraVelocityLead);
-        _targetPos.copy(_offset).add(_velocityLead);
+        _targetPos.copy(anchorPos);
 
         const actualAimYaw = torsoYaw + torsoAimOffset * CAMERA.cameraAimInfluence;
         setForward(_aimForward, actualAimYaw);
-        _targetLookAt.copy(anchorPos);
+        _targetLookAt.copy(_targetPos);
         _targetLookAt.addScaledVector(_aimForward, CAMERA.lookForward);
-        _targetLookAt.y += CAMERA.lookAbove + this.pitch * 8;
+        _targetLookAt.y += this.pitch * 12;
 
         if (!this.initialized) {
             this.currentPos.copy(_targetPos);
@@ -111,14 +100,6 @@ export class MechCamera {
 
         this.currentPos.lerp(_targetPos, CAMERA.posLerp);
         this.currentLookAt.lerp(_targetLookAt, CAMERA.lookLerp);
-
-        _dir.subVectors(this.currentPos, anchorPos).normalize();
-        const dist = this.currentPos.distanceTo(anchorPos);
-        this.raycaster.set(anchorPos, _dir);
-        const intersects = this.raycaster.intersectObjects(colliders);
-        if (intersects.length > 0 && intersects[0].distance < dist) {
-            this.currentPos.copy(anchorPos).addScaledVector(_dir, intersects[0].distance * 0.85);
-        }
 
         this.updateWalkBob(speed, mass, dt);
         this.updateShake(dt);

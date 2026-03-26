@@ -13,6 +13,7 @@ const _currentVel = new THREE.Vector3();
 const _netPos = new THREE.Vector3();
 const _cameraAnchor = new THREE.Vector3();
 const _footOffset = new THREE.Vector3();
+const _cockpitForward = new THREE.Vector3();
 
 export interface GolemState {
     pos: THREE.Vector3;
@@ -80,6 +81,9 @@ export class GolemController {
         this.rightArm = parts.rightArm;
         this.pelvis = parts.pelvis;
         scene.add(this.model);
+        if (isLocal) {
+            this.model.visible = false;
+        }
 
         const bodyDesc = isLocal ? RAPIER.RigidBodyDesc.dynamic() : RAPIER.RigidBodyDesc.kinematicPositionBased();
         bodyDesc.setTranslation(0, 5, 0).lockRotations();
@@ -231,7 +235,9 @@ export class GolemController {
         } else {
             this.walkCycle = this.gameCamera.walkCycle * Math.PI * 2;
             this.torso.getWorldPosition(_cameraAnchor);
-            _cameraAnchor.y += 1.25;
+            _cockpitForward.set(Math.sin(this.torsoYaw), 0, -Math.cos(this.torsoYaw));
+            _cameraAnchor.addScaledVector(_cockpitForward, 0.35);
+            _cameraAnchor.y += 1.45;
 
             this.gameCamera.update(
                 _cameraAnchor,
