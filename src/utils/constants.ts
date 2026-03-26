@@ -1,15 +1,15 @@
 export const CAMERA = {
     // Позиция
-    offsetBack: 14,
-    offsetUp: 8,
-    offsetRight: 1.5,
+    offsetBack: 11.5,
+    offsetUp: 6.8,
+    offsetRight: 0.4,
     lookAbove: 6.5,
-    lookForward: 16,
+    lookForward: 12,
     
     // FOV
-    fov: 60,
-    dashFOV: 74,
-    hitFOV: 56,
+    fov: 58,
+    dashFOV: 70,
+    hitFOV: 54,
     
     // Чувствительность
     yawSpeed: 0.003,
@@ -18,13 +18,13 @@ export const CAMERA = {
     pitchMax: 0.40,
     
     // Плавность (lerp за кадр)
-    posLerp: 0.08,
-    lookLerp: 0.12,
+    posLerp: 0.12,
+    lookLerp: 0.18,
     fovLerp: 0.06,
-    cameraYawLag: 0.1,
-    cameraAimInfluence: 0.35,
-    cameraVelocityLead: 0.22,
-    cameraReturnRate: 2.4,
+    cameraYawLag: 0.04,
+    cameraAimInfluence: 0.12,
+    cameraVelocityLead: 0.08,
+    cameraReturnRate: 3.2,
     
     // Макс отклонение прицела от торса
     maxAimLead: 0.5, // ~28°

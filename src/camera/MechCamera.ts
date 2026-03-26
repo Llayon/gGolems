@@ -71,25 +71,25 @@ export class MechCamera {
         if (!this.initialized) {
             this.cameraYaw = yawTarget;
         } else {
-            const yawStep = Math.max(CAMERA.cameraYawLag, Math.abs(angleDiff(this.cameraYaw, yawTarget)) * 0.18) * dt * 10;
+            const yawStep = Math.max(CAMERA.cameraYawLag, Math.abs(angleDiff(this.cameraYaw, yawTarget)) * 0.3) * dt * 10;
             this.cameraYaw = moveTowardsAngle(this.cameraYaw, yawTarget, yawStep);
         }
 
         _offset.set(
-            CAMERA.offsetRight + aimOffset * 1.2,
-            CAMERA.offsetUp + Math.max(0, speed - 4) * 0.025,
-            CAMERA.offsetBack + Math.max(0, speed - 5) * CAMERA.cameraVelocityLead
+            CAMERA.offsetRight,
+            CAMERA.offsetUp + Math.max(0, speed - 5) * 0.012,
+            CAMERA.offsetBack
         );
-        _offset.y -= this.pitch * 4;
+        _offset.y -= this.pitch * 2.5;
         _offset.applyAxisAngle(_yAxis, this.cameraYaw);
 
         _velocityLead.set(Math.sin(torsoYaw), 0, Math.cos(torsoYaw)).multiplyScalar(speed * CAMERA.cameraVelocityLead);
         _targetPos.copy(golemPos).add(_offset).sub(_velocityLead);
 
-        const lookYaw = torsoYaw + aimOffset * 0.85;
+        const lookYaw = torsoYaw + aimOffset * 0.55;
         _targetLookAt.set(
             golemPos.x + Math.sin(lookYaw) * CAMERA.lookForward,
-            golemPos.y + CAMERA.lookAbove + this.pitch * 12,
+            golemPos.y + CAMERA.lookAbove + this.pitch * 10,
             golemPos.z + Math.cos(lookYaw) * CAMERA.lookForward
         );
 
