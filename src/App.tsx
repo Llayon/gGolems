@@ -4,7 +4,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { initGame } from './game/Engine';
+import { initGame } from './core/Engine';
 
 export default function App() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -15,7 +15,7 @@ export default function App() {
     const [isHost, setIsHost] = useState(false);
     const [gameInstance, setGameInstance] = useState<any>(null);
     const [gameState, setGameState] = useState({
-        hp: 100, maxHp: 100, steam: 100, maxSteam: 100, isOverheated: false, overheatTimer: 0
+        hp: 100, maxHp: 100, steam: 100, maxSteam: 100, isOverheated: false, overheatTimer: 0, aimOffset: 0
     });
 
     const startGame = async (mode: 'host' | 'client', targetHostId?: string) => {
@@ -149,11 +149,21 @@ export default function App() {
                     </div>
 
                     <div className="absolute top-1/2 left-1/2 w-8 h-8 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-70">
-                        <div className="absolute top-1/2 left-0 w-3 h-[2px] bg-cyan-400 -translate-y-1/2 shadow-[0_0_8px_rgba(0,170,255,0.8)]"></div>
-                        <div className="absolute top-1/2 right-0 w-3 h-[2px] bg-cyan-400 -translate-y-1/2 shadow-[0_0_8px_rgba(0,170,255,0.8)]"></div>
-                        <div className="absolute top-0 left-1/2 w-[2px] h-3 bg-cyan-400 -translate-x-1/2 shadow-[0_0_8px_rgba(0,170,255,0.8)]"></div>
-                        <div className="absolute bottom-0 left-1/2 w-[2px] h-3 bg-cyan-400 -translate-x-1/2 shadow-[0_0_8px_rgba(0,170,255,0.8)]"></div>
-                        <div className="absolute top-1/2 left-1/2 w-1 h-1 bg-cyan-400 rounded-full -translate-x-1/2 -translate-y-1/2 shadow-[0_0_8px_rgba(0,170,255,0.8)]"></div>
+                        <div className="absolute top-1/2 left-0 w-3 h-[2px] -translate-y-1/2 bg-white/30"></div>
+                        <div className="absolute top-1/2 right-0 w-3 h-[2px] -translate-y-1/2 bg-white/30"></div>
+                        <div className="absolute top-0 left-1/2 w-[2px] h-3 -translate-x-1/2 bg-white/30"></div>
+                        <div className="absolute bottom-0 left-1/2 w-[2px] h-3 -translate-x-1/2 bg-white/30"></div>
+                    </div>
+
+                    <div 
+                        className="absolute top-1/2 left-1/2 w-8 h-8 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-90 transition-transform duration-75"
+                        style={{ transform: `translate(calc(-50% + ${Math.max(-300, Math.min(300, -gameState.aimOffset * 800))}px), -50%)` }}
+                    >
+                        <div className={`absolute top-1/2 left-0 w-3 h-[2px] -translate-y-1/2 shadow-[0_0_8px_currentColor] transition-colors ${Math.abs(gameState.aimOffset) > 0.1 ? 'bg-orange-500 text-orange-500' : 'bg-cyan-400 text-cyan-400'}`}></div>
+                        <div className={`absolute top-1/2 right-0 w-3 h-[2px] -translate-y-1/2 shadow-[0_0_8px_currentColor] transition-colors ${Math.abs(gameState.aimOffset) > 0.1 ? 'bg-orange-500 text-orange-500' : 'bg-cyan-400 text-cyan-400'}`}></div>
+                        <div className={`absolute top-0 left-1/2 w-[2px] h-3 -translate-x-1/2 shadow-[0_0_8px_currentColor] transition-colors ${Math.abs(gameState.aimOffset) > 0.1 ? 'bg-orange-500 text-orange-500' : 'bg-cyan-400 text-cyan-400'}`}></div>
+                        <div className={`absolute bottom-0 left-1/2 w-[2px] h-3 -translate-x-1/2 shadow-[0_0_8px_currentColor] transition-colors ${Math.abs(gameState.aimOffset) > 0.1 ? 'bg-orange-500 text-orange-500' : 'bg-cyan-400 text-cyan-400'}`}></div>
+                        <div className={`absolute top-1/2 left-1/2 w-1 h-1 rounded-full -translate-x-1/2 -translate-y-1/2 shadow-[0_0_8px_currentColor] transition-colors ${Math.abs(gameState.aimOffset) > 0.1 ? 'bg-orange-500 text-orange-500' : 'bg-cyan-400 text-cyan-400'}`}></div>
                     </div>
                 </>
             )}
