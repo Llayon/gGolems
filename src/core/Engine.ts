@@ -12,7 +12,10 @@ import { ParticleManager } from '../fx/ParticleManager';
 import { DecalManager } from '../fx/DecalManager';
 import { ProjectileManager } from '../combat/ProjectileManager';
 import { MechCamera } from '../camera/MechCamera';
-import { angleDiff } from '../utils/math';
+
+const _weaponOrigin = new THREE.Vector3();
+const _weaponDir = new THREE.Vector3();
+const _aimPoint = new THREE.Vector3();
 
 export class Game {
     renderer: Renderer;
@@ -214,19 +217,18 @@ export class Game {
         this.projectiles.update(dt);
         this.decals.update(dt);
         
+        this.golem.torso.getWorldPosition(_weaponOrigin);
+        _weaponOrigin.y += 0.5;
+
+        _weaponDir.set(0, 0, -1);
+        _weaponDir.applyAxisAngle(new THREE.Vector3(1, 0, 0), this.mechCamera.pitch);
+        _weaponDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.golem.torsoYaw);
+
         if (this.input.consumeClick()) {
             if (this.golem.tryAction(5)) {
-                const origin = new THREE.Vector3();
-                this.golem.torso.getWorldPosition(origin);
-                origin.y += 0.5;
+                const origin = _weaponOrigin.clone().addScaledVector(_weaponDir, 2.0);
                 
-                const dir = new THREE.Vector3(0, 0, -1);
-                dir.applyAxisAngle(new THREE.Vector3(1, 0, 0), this.mechCamera.pitch);
-                dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.golem.torsoYaw);
-                
-                origin.addScaledVector(dir, 2.0);
-                
-                this.projectiles.fire(origin, dir, this.network.myId);
+                this.projectiles.fire(origin, _weaponDir.clone(), this.network.myId);
                 this.mechCamera.onFire(0.3); // RuneBolt weight
                 
                 // Broadcast fire event
@@ -234,7 +236,7 @@ export class Game {
                     type: 'fire',
                     ownerId: this.network.myId,
                     ox: origin.x, oy: origin.y, oz: origin.z,
-                    dx: dir.x, dy: dir.y, dz: dir.z
+                    dx: _weaponDir.x, dy: _weaponDir.y, dz: _weaponDir.z
                 });
             }
         }
@@ -332,7 +334,11 @@ export class Game {
             }
         }
 
-        const aimOffset = angleDiff(this.golem.legYaw, this.golem.torsoYaw);
+        _aimPoint.copy(_weaponOrigin).addScaledVector(_weaponDir, 120);
+        _aimPoint.project(this.renderer.camera);
+
+        const aimScreenX = THREE.MathUtils.clamp(_aimPoint.x, -1.2, 1.2);
+        const aimScreenY = THREE.MathUtils.clamp(_aimPoint.y, -1.2, 1.2);
 
         this.onStateUpdate({
             hp: this.golem.hp,
@@ -341,7 +347,8 @@ export class Game {
             maxSteam: this.golem.maxSteam,
             isOverheated: this.golem.isOverheated,
             overheatTimer: this.golem.overheatTimer,
-            aimOffset: aimOffset
+            aimOffsetX: aimScreenX,
+            aimOffsetY: aimScreenY
         });
 
         this.renderer.render();
