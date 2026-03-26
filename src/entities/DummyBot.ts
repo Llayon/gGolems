@@ -33,7 +33,7 @@ export class DummyBot {
         this.mat.emissive.setHex(0xffffff);
         if (this.hp <= 0) {
             this.hp = 100;
-            this.body.setTranslation({ x: (Math.random() - 0.5) * 20, y: 5, z: (Math.random() - 0.5) * 20 }, true);
+            this.body.setTranslation({ x: (Math.random() - 0.5) * 60, y: 5, z: (Math.random() - 0.5) * 60 }, true);
         }
     }
 

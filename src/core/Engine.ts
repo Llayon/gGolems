@@ -12,6 +12,7 @@ import { ParticleManager } from '../fx/ParticleManager';
 import { DecalManager } from '../fx/DecalManager';
 import { ProjectileManager } from '../combat/ProjectileManager';
 import { MechCamera } from '../camera/MechCamera';
+import { angleDiff } from '../utils/math';
 
 export class Game {
     renderer: Renderer;
@@ -53,7 +54,7 @@ export class Game {
         this.golem.gameCamera = this.mechCamera;
         this.particles = new ParticleManager(this.renderer.scene);
         this.projectiles = new ProjectileManager(this.renderer.scene);
-        this.dummy = new DummyBot(this.renderer.scene, this.physics, 0, 5, -15);
+        this.dummy = new DummyBot(this.renderer.scene, this.physics, 0, 5, -28);
 
         canvas.addEventListener('click', () => {
             canvas.requestPointerLock();
@@ -266,7 +267,7 @@ export class Game {
                     this.mechCamera.onHit(damage);
                     if (this.golem.hp <= 0) {
                         this.golem.hp = this.golem.maxHp;
-                        this.golem.body.setTranslation({ x: (Math.random() - 0.5) * 40, y: 5, z: (Math.random() - 0.5) * 40 }, true);
+                        this.golem.body.setTranslation({ x: (Math.random() - 0.5) * 60, y: 5, z: (Math.random() - 0.5) * 60 }, true);
                         this.mechCamera.addTrauma(1.0); // Big shake on respawn
                     }
                 } else {
@@ -275,8 +276,8 @@ export class Game {
                         p.hp -= damage;
                         if (p.hp <= 0) {
                             p.hp = p.maxHp;
-                            const rx = (Math.random() - 0.5) * 40;
-                            const rz = (Math.random() - 0.5) * 40;
+                            const rx = (Math.random() - 0.5) * 60;
+                            const rz = (Math.random() - 0.5) * 60;
                             p.body.setTranslation({ x: rx, y: 5, z: rz }, true);
                             this.network.sendTo(targetId, { type: 'respawn', x: rx, y: 5, z: rz });
                         }
@@ -331,7 +332,7 @@ export class Game {
             }
         }
 
-        const aimOffset = this.mechCamera.getAimScreenOffset(this.golem.legYaw);
+        const aimOffset = angleDiff(this.golem.legYaw, this.golem.torsoYaw);
 
         this.onStateUpdate({
             hp: this.golem.hp,

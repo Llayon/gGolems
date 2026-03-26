@@ -8,7 +8,7 @@ export class Renderer {
     constructor(canvas: HTMLCanvasElement) {
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color(0x1a1a2e);
-        this.scene.fog = new THREE.FogExp2(0x1a1a2e, 0.02);
+        this.scene.fog = new THREE.FogExp2(0x1a1a2e, 0.012);
 
         this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         
@@ -24,10 +24,10 @@ export class Renderer {
         const dirLight = new THREE.DirectionalLight(0xffaa55, 1.5);
         dirLight.position.set(10, 20, 10);
         dirLight.castShadow = true;
-        dirLight.shadow.camera.top = 20;
-        dirLight.shadow.camera.bottom = -20;
-        dirLight.shadow.camera.left = -20;
-        dirLight.shadow.camera.right = 20;
+        dirLight.shadow.camera.top = 40;
+        dirLight.shadow.camera.bottom = -40;
+        dirLight.shadow.camera.left = -40;
+        dirLight.shadow.camera.right = 40;
         this.scene.add(dirLight);
 
         window.addEventListener('resize', this.onResize);

@@ -157,7 +157,7 @@ export default function App() {
 
                     <div 
                         className="absolute top-1/2 left-1/2 w-8 h-8 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-90 transition-transform duration-75"
-                        style={{ transform: `translate(calc(-50% + ${Math.max(-300, Math.min(300, -gameState.aimOffset * 800))}px), -50%)` }}
+                        style={{ transform: `translate(calc(-50% + ${Math.max(-300, Math.min(300, gameState.aimOffset * 800))}px), -50%)` }}
                     >
                         <div className={`absolute top-1/2 left-0 w-3 h-[2px] -translate-y-1/2 shadow-[0_0_8px_currentColor] transition-colors ${Math.abs(gameState.aimOffset) > 0.1 ? 'bg-orange-500 text-orange-500' : 'bg-cyan-400 text-cyan-400'}`}></div>
                         <div className={`absolute top-1/2 right-0 w-3 h-[2px] -translate-y-1/2 shadow-[0_0_8px_currentColor] transition-colors ${Math.abs(gameState.aimOffset) > 0.1 ? 'bg-orange-500 text-orange-500' : 'bg-cyan-400 text-cyan-400'}`}></div>

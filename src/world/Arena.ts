@@ -7,7 +7,12 @@ export class Arena {
     propManager: PropManager;
 
     constructor(scene: THREE.Scene, physics: RAPIER.World) {
-        const groundGeo = new THREE.PlaneGeometry(100, 100);
+        const arenaHalfSize = 45;
+        const wallThickness = 2;
+        const wallHeight = 6;
+        const wallSpan = arenaHalfSize * 2 - wallThickness * 2;
+
+        const groundGeo = new THREE.PlaneGeometry(arenaHalfSize * 2, arenaHalfSize * 2);
         const groundMat = new THREE.MeshStandardMaterial({ color: 0x2a2a35, roughness: 0.9 });
         const ground = new THREE.Mesh(groundGeo, groundMat);
         ground.rotation.x = -Math.PI / 2;
@@ -17,16 +22,18 @@ export class Arena {
 
         const groundBodyDesc = RAPIER.RigidBodyDesc.fixed();
         const groundBody = physics.createRigidBody(groundBodyDesc);
-        const groundColliderDesc = RAPIER.ColliderDesc.cuboid(50, 0.1, 50);
+        const groundColliderDesc = RAPIER.ColliderDesc.cuboid(arenaHalfSize, 0.1, arenaHalfSize);
         physics.createCollider(groundColliderDesc, groundBody);
 
-        this.createBox(scene, physics, 0, 2.5, -20, 40, 5, 2, 0x3a3a45);
-        this.createBox(scene, physics, 0, 2.5, 20, 40, 5, 2, 0x3a3a45);
-        this.createBox(scene, physics, -20, 2.5, 0, 2, 5, 40, 0x3a3a45);
-        this.createBox(scene, physics, 20, 2.5, 0, 2, 5, 40, 0x3a3a45);
-        
-        this.createBox(scene, physics, -8, 1.5, -8, 4, 3, 4, 0x4a4a55);
-        this.createBox(scene, physics, 8, 1.5, 8, 4, 3, 4, 0x4a4a55);
+        this.createBox(scene, physics, 0, wallHeight / 2, -arenaHalfSize, wallSpan, wallHeight, wallThickness, 0x3a3a45);
+        this.createBox(scene, physics, 0, wallHeight / 2, arenaHalfSize, wallSpan, wallHeight, wallThickness, 0x3a3a45);
+        this.createBox(scene, physics, -arenaHalfSize, wallHeight / 2, 0, wallThickness, wallHeight, wallSpan, 0x3a3a45);
+        this.createBox(scene, physics, arenaHalfSize, wallHeight / 2, 0, wallThickness, wallHeight, wallSpan, 0x3a3a45);
+
+        this.createBox(scene, physics, -18, 1.5, -12, 4, 3, 4, 0x4a4a55);
+        this.createBox(scene, physics, 18, 1.5, 12, 4, 3, 4, 0x4a4a55);
+        this.createBox(scene, physics, 0, 2, -24, 6, 4, 4, 0x4a4a55);
+        this.createBox(scene, physics, 0, 2, 24, 6, 4, 4, 0x4a4a55);
         
         this.propManager = new PropManager(scene);
     }
