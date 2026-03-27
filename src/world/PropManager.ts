@@ -10,12 +10,22 @@ export type TreeSnapshot = {
     fallAngle: number;
 };
 
+export type HouseSnapshot = {
+    id: string;
+    hp: number;
+    stage: 0 | 1 | 2;
+};
+
+export type PropSnapshot = {
+    trees: TreeSnapshot[];
+    houses: HouseSnapshot[];
+};
+
 type TreeProp = {
     id: string;
     root: THREE.Group;
     intact: THREE.Group;
     trunk: THREE.Mesh;
-    leaves: THREE.Mesh;
     stump: THREE.Mesh;
     fallen: THREE.Group;
     body: RAPIER.RigidBody | null;
@@ -23,6 +33,20 @@ type TreeProp = {
     maxHp: number;
     destroyed: boolean;
     fallAngle: number;
+    position: THREE.Vector3;
+};
+
+type HouseProp = {
+    id: string;
+    root: THREE.Group;
+    intact: THREE.Group;
+    damaged: THREE.Group;
+    rubble: THREE.Group;
+    body: RAPIER.RigidBody | null;
+    hp: number;
+    maxHp: number;
+    stage: 0 | 1 | 2;
+    collisionEntries: THREE.Mesh[];
     position: THREE.Vector3;
 };
 
@@ -58,10 +82,31 @@ const TREE_LAYOUT: LayoutEntry[] = [
     { x: 60, z: 38, scale: 1.06 }
 ];
 
+function markShadows(root: THREE.Object3D) {
+    root.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+        }
+    });
+}
+
+function collectMeshes(root: THREE.Object3D) {
+    const meshes: THREE.Mesh[] = [];
+    root.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+            meshes.push(child);
+        }
+    });
+    return meshes;
+}
+
 export class PropManager {
     collisionMeshes: THREE.Mesh[] = [];
     trees: TreeProp[] = [];
+    houses: HouseProp[] = [];
     treeByObjectId = new Map<number, TreeProp>();
+    houseByObjectId = new Map<number, HouseProp>();
     scene: THREE.Scene;
     physics: RAPIER.World;
 
@@ -78,40 +123,123 @@ export class PropManager {
     }
 
     addHouses() {
-        for (const layout of HOUSE_LAYOUT) {
-            const house = new THREE.Group();
+        HOUSE_LAYOUT.forEach((layout, index) => {
+            const root = new THREE.Group();
+            root.position.set(layout.x, 0, layout.z);
+            root.rotation.y = layout.rot ?? 0;
+            this.scene.add(root);
 
-            const walls = new THREE.Mesh(
-                new THREE.BoxGeometry(2.2, 3.2, 2.4),
-                new THREE.MeshStandardMaterial({ color: 0x8b7355, roughness: 0.95 })
-            );
-            walls.position.y = 1.6;
-            walls.castShadow = true;
-            walls.receiveShadow = true;
-            house.add(walls);
+            const wallMat = new THREE.MeshStandardMaterial({ color: 0x8b7355, roughness: 0.95 });
+            const roofMat = new THREE.MeshStandardMaterial({ color: 0x7d1c18, roughness: 0.9 });
+            const trimMat = new THREE.MeshStandardMaterial({ color: 0x4a3b32, roughness: 1 });
+            const rubbleMat = new THREE.MeshStandardMaterial({ color: 0x655648, roughness: 1 });
 
-            const roof = new THREE.Mesh(
-                new THREE.ConeGeometry(1.95, 1.7, 4),
-                new THREE.MeshStandardMaterial({ color: 0x7d1c18, roughness: 0.9 })
-            );
-            roof.position.y = 3.8;
-            roof.rotation.y = Math.PI / 4;
-            roof.castShadow = true;
-            roof.receiveShadow = true;
-            house.add(roof);
+            const intact = new THREE.Group();
+            const intactWalls = new THREE.Mesh(new THREE.BoxGeometry(3.6, 3.2, 3.1), wallMat);
+            intactWalls.position.y = 1.6;
+            intact.add(intactWalls);
 
-            const chimney = new THREE.Mesh(
-                new THREE.BoxGeometry(0.35, 0.9, 0.35),
-                new THREE.MeshStandardMaterial({ color: 0x4a3b32, roughness: 1 })
-            );
-            chimney.position.set(0.45, 4.2, 0.2);
-            chimney.castShadow = true;
-            house.add(chimney);
+            const door = new THREE.Mesh(new THREE.BoxGeometry(0.78, 1.45, 0.14), trimMat);
+            door.position.set(0, 0.72, -1.58);
+            intact.add(door);
 
-            house.position.set(layout.x, 0, layout.z);
-            house.rotation.y = layout.rot ?? 0;
-            this.scene.add(house);
-        }
+            const windowLeft = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.55, 0.12), trimMat.clone());
+            windowLeft.position.set(-0.9, 1.7, -1.6);
+            intact.add(windowLeft);
+
+            const windowRight = windowLeft.clone();
+            windowRight.position.x = 0.9;
+            intact.add(windowRight);
+
+            const intactRoof = new THREE.Mesh(new THREE.ConeGeometry(2.45, 1.9, 4), roofMat);
+            intactRoof.position.y = 4.15;
+            intactRoof.rotation.y = Math.PI / 4;
+            intact.add(intactRoof);
+
+            const chimney = new THREE.Mesh(new THREE.BoxGeometry(0.38, 1.1, 0.38), trimMat);
+            chimney.position.set(0.55, 4.4, 0.28);
+            intact.add(chimney);
+
+            const damaged = new THREE.Group();
+            const backWall = new THREE.Mesh(new THREE.BoxGeometry(3.3, 2.75, 0.34), wallMat.clone());
+            backWall.position.set(0, 1.35, 1.26);
+            damaged.add(backWall);
+
+            const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.34, 2.7, 2.55), wallMat.clone());
+            leftWall.position.set(-1.48, 1.35, 0.02);
+            damaged.add(leftWall);
+
+            const rightWall = new THREE.Mesh(new THREE.BoxGeometry(0.34, 2.4, 2.15), wallMat.clone());
+            rightWall.position.set(1.48, 1.2, -0.18);
+            damaged.add(rightWall);
+
+            const frontStubLeft = new THREE.Mesh(new THREE.BoxGeometry(1.05, 1.8, 0.34), wallMat.clone());
+            frontStubLeft.position.set(-0.95, 0.9, -1.28);
+            damaged.add(frontStubLeft);
+
+            const frontStubRight = new THREE.Mesh(new THREE.BoxGeometry(0.75, 1.1, 0.34), wallMat.clone());
+            frontStubRight.position.set(1.05, 0.55, -1.28);
+            damaged.add(frontStubRight);
+
+            const damagedRoof = new THREE.Mesh(new THREE.ConeGeometry(2.25, 1.35, 4), roofMat.clone());
+            damagedRoof.position.set(0.4, 3.15, 0.2);
+            damagedRoof.rotation.set(0.36, Math.PI / 4 + 0.18, -0.2);
+            damaged.add(damagedRoof);
+
+            const beam = new THREE.Mesh(new THREE.BoxGeometry(2.45, 0.16, 0.16), trimMat.clone());
+            beam.position.set(-0.35, 2.15, -0.65);
+            beam.rotation.z = -0.42;
+            damaged.add(beam);
+
+            damaged.visible = false;
+            root.add(intact, damaged);
+
+            const rubble = new THREE.Group();
+            const rubbleBase = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.9, 2.8), rubbleMat);
+            rubbleBase.position.set(0, 0.45, 0);
+            rubble.add(rubbleBase);
+
+            const roofChunk = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.34, 1.4), roofMat.clone());
+            roofChunk.position.set(-0.6, 0.95, 0.25);
+            roofChunk.rotation.set(0.2, 0.4, -0.22);
+            rubble.add(roofChunk);
+
+            const wallChunk = new THREE.Mesh(new THREE.BoxGeometry(1.05, 1.2, 0.42), wallMat.clone());
+            wallChunk.position.set(0.85, 0.62, -0.5);
+            wallChunk.rotation.set(0, -0.3, 0.2);
+            rubble.add(wallChunk);
+
+            const spar = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.16, 0.16), trimMat.clone());
+            spar.position.set(0.15, 0.86, 0.85);
+            spar.rotation.set(0.22, 0.55, -0.4);
+            rubble.add(spar);
+
+            rubble.visible = false;
+            root.add(rubble);
+
+            markShadows(root);
+
+            const house: HouseProp = {
+                id: `house-${index}`,
+                root,
+                intact,
+                damaged,
+                rubble,
+                body: this.createHouseBody(root.position, layout.rot ?? 0),
+                hp: 60,
+                maxHp: 60,
+                stage: 0,
+                collisionEntries: [],
+                position: root.position.clone()
+            };
+
+            for (const mesh of [...collectMeshes(intact), ...collectMeshes(damaged)]) {
+                this.houseByObjectId.set(mesh.id, house);
+            }
+
+            this.setHouseStage(house, 0);
+            this.houses.push(house);
+        });
     }
 
     addPeople() {
@@ -143,8 +271,6 @@ export class PropManager {
                 barkMat
             );
             trunk.position.y = 1.7 * scale;
-            trunk.castShadow = true;
-            trunk.receiveShadow = true;
             intact.add(trunk);
 
             const leaves = new THREE.Mesh(
@@ -152,7 +278,6 @@ export class PropManager {
                 leafMat
             );
             leaves.position.y = 4.0 * scale;
-            leaves.castShadow = true;
             intact.add(leaves);
             root.add(intact);
 
@@ -161,8 +286,6 @@ export class PropManager {
                 stumpMat
             );
             stump.position.y = 0.45 * scale;
-            stump.castShadow = true;
-            stump.receiveShadow = true;
             stump.visible = false;
             root.add(stump);
 
@@ -173,8 +296,6 @@ export class PropManager {
             );
             fallenTrunk.rotation.z = Math.PI / 2;
             fallenTrunk.position.set(1.45 * scale, 0.4 * scale, 0);
-            fallenTrunk.castShadow = true;
-            fallenTrunk.receiveShadow = true;
             fallen.add(fallenTrunk);
 
             const fallenCrown = new THREE.Mesh(
@@ -182,10 +303,11 @@ export class PropManager {
                 leafMat.clone()
             );
             fallenCrown.position.set(2.8 * scale, 0.95 * scale, 0);
-            fallenCrown.castShadow = true;
             fallen.add(fallenCrown);
             fallen.visible = false;
             root.add(fallen);
+
+            markShadows(root);
 
             const bodyDesc = RAPIER.RigidBodyDesc.fixed().setTranslation(layout.x, 1.7 * scale, layout.z);
             const body = this.physics.createRigidBody(bodyDesc);
@@ -197,7 +319,6 @@ export class PropManager {
                 root,
                 intact,
                 trunk,
-                leaves,
                 stump,
                 fallen,
                 body,
@@ -208,28 +329,62 @@ export class PropManager {
                 position: root.position.clone()
             };
 
-            trunk.userData.treeId = tree.id;
             this.treeByObjectId.set(trunk.id, tree);
             this.collisionMeshes.push(trunk);
             this.trees.push(tree);
         });
     }
 
+    createHouseBody(position: THREE.Vector3, rotationY: number) {
+        const houseRotation = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rotationY);
+        const bodyDesc = RAPIER.RigidBodyDesc.fixed()
+            .setTranslation(position.x, 1.6, position.z)
+            .setRotation({
+                x: houseRotation.x,
+                y: houseRotation.y,
+                z: houseRotation.z,
+                w: houseRotation.w
+            });
+        const body = this.physics.createRigidBody(bodyDesc);
+        const colliderDesc = RAPIER.ColliderDesc.cuboid(1.8, 1.6, 1.55);
+        this.physics.createCollider(colliderDesc, body);
+        return body;
+    }
+
     getCollisionMeshes() {
         return this.collisionMeshes;
     }
 
-    getSnapshot(): TreeSnapshot[] {
-        return this.trees.map((tree) => ({
-            id: tree.id,
-            hp: tree.hp,
-            destroyed: tree.destroyed,
-            fallAngle: tree.fallAngle
-        }));
+    getSnapshot(): PropSnapshot {
+        return {
+            trees: this.trees.map((tree) => ({
+                id: tree.id,
+                hp: tree.hp,
+                destroyed: tree.destroyed,
+                fallAngle: tree.fallAngle
+            })),
+            houses: this.houses.map((house) => ({
+                id: house.id,
+                hp: house.hp,
+                stage: house.stage
+            }))
+        };
     }
 
-    applySnapshot(snapshot: TreeSnapshot[]) {
-        for (const state of snapshot) {
+    applySnapshot(snapshot: PropSnapshot | TreeSnapshot[]) {
+        if (Array.isArray(snapshot)) {
+            for (const state of snapshot) {
+                const tree = this.trees.find((entry) => entry.id === state.id);
+                if (!tree) continue;
+                tree.hp = state.hp;
+                if (state.destroyed) {
+                    this.setTreeDestroyed(tree, state.fallAngle);
+                }
+            }
+            return;
+        }
+
+        for (const state of snapshot.trees) {
             const tree = this.trees.find((entry) => entry.id === state.id);
             if (!tree) continue;
             tree.hp = state.hp;
@@ -237,16 +392,33 @@ export class PropManager {
                 this.setTreeDestroyed(tree, state.fallAngle);
             }
         }
+
+        for (const state of snapshot.houses) {
+            const house = this.houses.find((entry) => entry.id === state.id);
+            if (!house) continue;
+            house.hp = state.hp;
+            this.setHouseStage(house, state.stage);
+        }
     }
 
     handleProjectileHit(object: THREE.Object3D, point: THREE.Vector3, damage: number, authoritative: boolean) {
         const tree = this.findTree(object);
-        if (!tree) return false;
-
-        if (authoritative) {
-            this.damageTree(tree, damage, point);
+        if (tree) {
+            if (authoritative) {
+                this.damageTree(tree, damage, point);
+            }
+            return true;
         }
-        return true;
+
+        const house = this.findHouse(object);
+        if (house) {
+            if (authoritative) {
+                this.damageHouse(house, damage);
+            }
+            return true;
+        }
+
+        return false;
     }
 
     findTree(object: THREE.Object3D | null) {
@@ -254,6 +426,16 @@ export class PropManager {
         while (current) {
             const tree = this.treeByObjectId.get(current.id);
             if (tree) return tree;
+            current = current.parent;
+        }
+        return null;
+    }
+
+    findHouse(object: THREE.Object3D | null) {
+        let current: THREE.Object3D | null = object;
+        while (current) {
+            const house = this.houseByObjectId.get(current.id);
+            if (house) return house;
             current = current.parent;
         }
         return null;
@@ -267,6 +449,17 @@ export class PropManager {
             const dz = tree.position.z - point.z;
             const fallAngle = Math.atan2(dx, dz);
             this.setTreeDestroyed(tree, fallAngle);
+        }
+    }
+
+    damageHouse(house: HouseProp, damage: number) {
+        if (house.stage === 2) return;
+        house.hp = Math.max(0, house.hp - damage);
+
+        if (house.hp <= 0) {
+            this.setHouseStage(house, 2);
+        } else if (house.hp <= house.maxHp * 0.55) {
+            this.setHouseStage(house, 1);
         }
     }
 
@@ -286,5 +479,33 @@ export class PropManager {
             this.physics.removeRigidBody(tree.body);
             tree.body = null;
         }
+    }
+
+    setHouseStage(house: HouseProp, stage: 0 | 1 | 2) {
+        if (house.stage === stage && house.collisionEntries.length > 0) return;
+
+        house.stage = stage;
+        house.intact.visible = stage === 0;
+        house.damaged.visible = stage === 1;
+        house.rubble.visible = stage === 2;
+
+        const nextCollisionEntries =
+            stage === 0 ? collectMeshes(house.intact) :
+            stage === 1 ? collectMeshes(house.damaged) :
+            [];
+
+        this.replaceCollisionEntries(house.collisionEntries, nextCollisionEntries);
+        house.collisionEntries = nextCollisionEntries;
+
+        if (stage === 2 && house.body) {
+            this.physics.removeRigidBody(house.body);
+            house.body = null;
+        }
+    }
+
+    replaceCollisionEntries(previous: THREE.Mesh[], next: THREE.Mesh[]) {
+        const previousIds = new Set(previous.map((mesh) => mesh.id));
+        this.collisionMeshes = this.collisionMeshes.filter((mesh) => !previousIds.has(mesh.id));
+        this.collisionMeshes.push(...next);
     }
 }
