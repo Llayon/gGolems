@@ -1,27 +1,23 @@
 import * as THREE from 'three';
 
-// Процедурная текстура следа — создаётся один раз
-function createFootprintTexture(): THREE.CanvasTexture {
+function createFootprintTexture() {
     const canvas = document.createElement('canvas');
     canvas.width = 64;
     canvas.height = 64;
     const ctx = canvas.getContext('2d')!;
-    
-    // Прозрачный фон
+
     ctx.clearRect(0, 0, 64, 64);
-    
-    // След — тёмный эллипс с мягкими краями
+
     const gradient = ctx.createRadialGradient(32, 32, 5, 32, 32, 28);
     gradient.addColorStop(0, 'rgba(0, 0, 0, 0.6)');
     gradient.addColorStop(0.6, 'rgba(0, 0, 0, 0.3)');
     gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    
+
     ctx.fillStyle = gradient;
     ctx.beginPath();
     ctx.ellipse(32, 32, 28, 24, 0, 0, Math.PI * 2);
     ctx.fill();
-    
-    // Трещины (3 линии)
+
     ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
     ctx.lineWidth = 1.5;
     for (let i = 0; i < 3; i++) {
@@ -34,137 +30,194 @@ function createFootprintTexture(): THREE.CanvasTexture {
         );
         ctx.stroke();
     }
-    
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.needsUpdate = true;
-    return tex;
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+    return texture;
 }
 
-interface Decal {
+function createRuinTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 96;
+    canvas.height = 96;
+    const ctx = canvas.getContext('2d')!;
+
+    ctx.clearRect(0, 0, 96, 96);
+
+    const stain = ctx.createRadialGradient(48, 48, 8, 48, 48, 40);
+    stain.addColorStop(0, 'rgba(35, 28, 22, 0.55)');
+    stain.addColorStop(0.65, 'rgba(22, 18, 14, 0.28)');
+    stain.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = stain;
+    ctx.beginPath();
+    ctx.ellipse(48, 48, 40, 30, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = 'rgba(90, 74, 58, 0.18)';
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 5; i++) {
+        const start = Math.random() * Math.PI * 2;
+        const length = 12 + Math.random() * 20;
+        ctx.beginPath();
+        ctx.moveTo(48 + Math.cos(start) * 6, 48 + Math.sin(start) * 6);
+        ctx.lineTo(48 + Math.cos(start) * length, 48 + Math.sin(start) * (10 + Math.random() * 16));
+        ctx.stroke();
+    }
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+    return texture;
+}
+
+interface DecalEntry {
     mesh: THREE.Mesh;
-    life: number;      // оставшееся время жизни
-    maxLife: number;
-    fadeStart: number;  // когда начинать затухание
+    life: number;
+    fadeStart: number;
+    baseScaleX: number;
+    baseScaleY: number;
 }
 
 export class DecalManager {
     private scene: THREE.Scene;
-    private decals: Decal[] = [];
-    private pool: THREE.Mesh[] = [];
-    
-    private readonly maxDecals = 60;
-    private readonly decalLife = 8;       // секунд
-    private readonly fadeTime = 3;        // последние 3 сек — затухание
-    
-    // Один geometry, один material для ВСЕХ следов
-    private geo: THREE.PlaneGeometry;
-    private mat: THREE.MeshBasicMaterial;
+    private footprintDecals: DecalEntry[] = [];
+    private footprintPool: THREE.Mesh[] = [];
+    private ruinDecals: DecalEntry[] = [];
+    private ruinPool: THREE.Mesh[] = [];
+
+    private readonly footprintLife = 8;
+    private readonly ruinLife = 26;
+
+    private footprintGeo: THREE.PlaneGeometry;
+    private footprintMat: THREE.MeshBasicMaterial;
+    private ruinGeo: THREE.PlaneGeometry;
+    private ruinMat: THREE.MeshBasicMaterial;
 
     constructor(scene: THREE.Scene) {
         this.scene = scene;
-        this.geo = new THREE.PlaneGeometry(1, 1);
-        this.mat = new THREE.MeshBasicMaterial({
+
+        this.footprintGeo = new THREE.PlaneGeometry(1, 1);
+        this.footprintMat = new THREE.MeshBasicMaterial({
             map: createFootprintTexture(),
             transparent: true,
             opacity: 0.5,
             depthWrite: false,
-            polygonOffset: true,      // предотвращает z-fighting с полом
-            polygonOffsetFactor: -1,
+            polygonOffset: true,
+            polygonOffsetFactor: -1
         });
-        
-        // Предсоздаём пул мешей
-        for (let i = 0; i < this.maxDecals; i++) {
-            const mesh = new THREE.Mesh(this.geo, this.mat);
+
+        this.ruinGeo = new THREE.PlaneGeometry(1, 1);
+        this.ruinMat = new THREE.MeshBasicMaterial({
+            map: createRuinTexture(),
+            transparent: true,
+            opacity: 0.42,
+            depthWrite: false,
+            polygonOffset: true,
+            polygonOffsetFactor: -1
+        });
+
+        this.prewarmPool(this.footprintPool, this.footprintGeo, this.footprintMat, 56);
+        this.prewarmPool(this.ruinPool, this.ruinGeo, this.ruinMat, 18);
+    }
+
+    prewarmPool(pool: THREE.Mesh[], geometry: THREE.PlaneGeometry, material: THREE.MeshBasicMaterial, count: number) {
+        for (let i = 0; i < count; i++) {
+            const mesh = new THREE.Mesh(geometry, material);
             mesh.rotation.x = -Math.PI / 2;
             mesh.visible = false;
-            scene.add(mesh);
-            this.pool.push(mesh);
+            this.scene.add(mesh);
+            pool.push(mesh);
         }
     }
 
     addFootprint(pos: THREE.Vector3, yaw: number, mass: number) {
-        // Берём меш из пула или переиспользуем самый старый
-        let mesh: THREE.Mesh;
-        
-        if (this.pool.length > 0) {
-            mesh = this.pool.pop()!;
-        } else {
-            // Переиспользуем самый старый активный
-            const oldest = this.decals.shift()!;
-            mesh = oldest.mesh;
-        }
-        
-        mesh.visible = true;
+        const scale = 1.0 + mass * 0.3;
+        const scaleX = scale * (0.9 + Math.random() * 0.2);
+        const scaleY = scale * (0.9 + Math.random() * 0.2);
+        const mesh = this.claimMesh(this.footprintPool, this.footprintDecals);
         mesh.position.set(pos.x, 0.02, pos.z);
-        mesh.rotation.z = -yaw + (Math.random() - 0.5) * 0.3; // лёгкая случайность
-        
-        // Масштаб зависит от массы голема
-        const scale = 1.0 + mass * 0.3; // mass 1.0→1.3, 2.0→1.6, 3.5→2.05
-        mesh.scale.set(
-            scale * (0.9 + Math.random() * 0.2),  // небольшая вариация
-            scale * (0.9 + Math.random() * 0.2),
-            1
-        );
-        
-        this.decals.push({
+        mesh.rotation.z = -yaw + (Math.random() - 0.5) * 0.3;
+        mesh.scale.set(scaleX, scaleY, 1);
+        this.footprintDecals.push({
             mesh,
-            life: this.decalLife,
-            maxLife: this.decalLife,
-            fadeStart: this.fadeTime,
+            life: this.footprintLife,
+            fadeStart: 3,
+            baseScaleX: scaleX,
+            baseScaleY: scaleY
         });
     }
 
     addBulletMark(pos: THREE.Vector3) {
-        // Маленький тёмный след от снаряда
-        let mesh: THREE.Mesh;
-        if (this.pool.length > 0) {
-            mesh = this.pool.pop()!;
-        } else {
-            const oldest = this.decals.shift()!;
-            mesh = oldest.mesh;
-        }
-        
-        mesh.visible = true;
+        const mesh = this.claimMesh(this.footprintPool, this.footprintDecals);
         mesh.position.set(pos.x, 0.02, pos.z);
         mesh.rotation.z = Math.random() * Math.PI * 2;
         mesh.scale.set(0.4, 0.4, 1);
-        
-        this.decals.push({
+        this.footprintDecals.push({
             mesh,
             life: 5,
-            maxLife: 5,
             fadeStart: 2,
+            baseScaleX: 0.4,
+            baseScaleY: 0.4
         });
     }
 
+    addRuinMark(pos: THREE.Vector3, radius: number, life = this.ruinLife) {
+        const mesh = this.claimMesh(this.ruinPool, this.ruinDecals);
+        const scaleX = radius * (0.9 + Math.random() * 0.18);
+        const scaleY = radius * (0.68 + Math.random() * 0.16);
+        mesh.position.set(pos.x, 0.03, pos.z);
+        mesh.rotation.z = Math.random() * Math.PI * 2;
+        mesh.scale.set(scaleX, scaleY, 1);
+        this.ruinDecals.push({
+            mesh,
+            life,
+            fadeStart: Math.min(10, life * 0.4),
+            baseScaleX: scaleX,
+            baseScaleY: scaleY
+        });
+    }
+
+    claimMesh(pool: THREE.Mesh[], active: DecalEntry[]) {
+        let mesh = pool.pop();
+        if (!mesh) {
+            const oldest = active.shift()!;
+            mesh = oldest.mesh;
+        }
+        mesh.visible = true;
+        return mesh;
+    }
+
     update(dt: number) {
-        for (let i = this.decals.length - 1; i >= 0; i--) {
-            const decal = this.decals[i];
+        this.updateEntries(this.footprintDecals, this.footprintPool, dt);
+        this.updateEntries(this.ruinDecals, this.ruinPool, dt);
+    }
+
+    updateEntries(entries: DecalEntry[], pool: THREE.Mesh[], dt: number) {
+        for (let i = entries.length - 1; i >= 0; i--) {
+            const decal = entries[i];
             decal.life -= dt;
-            
+
             if (decal.life <= 0) {
-                // Возвращаем в пул
                 decal.mesh.visible = false;
-                this.pool.push(decal.mesh);
-                this.decals.splice(i, 1);
+                pool.push(decal.mesh);
+                entries.splice(i, 1);
                 continue;
             }
-            
-            // Затухание в последние N секунд
+
             if (decal.life < decal.fadeStart) {
-                // Управляем через scale.y чтобы не клонировать material
-                // Или используем mesh.material.opacity... но material общий!
-                // Решение: уменьшаем scale как "схлопывание"
                 const fade = decal.life / decal.fadeStart;
-                const currentScale = decal.mesh.scale.x; // сохраняем X
-                decal.mesh.scale.y = currentScale * fade;
+                decal.mesh.scale.x = decal.baseScaleX * fade;
+                decal.mesh.scale.y = decal.baseScaleY * fade;
+            } else {
+                decal.mesh.scale.x = decal.baseScaleX;
+                decal.mesh.scale.y = decal.baseScaleY;
             }
         }
     }
-    
+
     dispose() {
-        this.geo.dispose();
-        this.mat.dispose();
-        // Меши уже в сцене, их удалит Game при destroy
+        this.footprintGeo.dispose();
+        this.footprintMat.dispose();
+        this.ruinGeo.dispose();
+        this.ruinMat.dispose();
     }
 }

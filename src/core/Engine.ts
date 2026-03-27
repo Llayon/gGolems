@@ -108,14 +108,17 @@ export class Game {
             if (event.kind === 'tree_fall') {
                 this.particles.emitBurst(event.x, event.y, event.z, 14, 1.8, 2.8, 1.15);
                 this.debris.emitBurst(event.x, event.y, event.z, 'tree', event.intensity);
+                this.decals.addRuinMark(_propFxPos, 2.8, 22);
                 this.sounds.playStructureHit(0.7 * event.intensity);
             } else if (event.kind === 'house_damage') {
                 this.particles.emitBurst(event.x, event.y, event.z, 20, 2.8, 3.1, 1.2);
                 this.debris.emitBurst(event.x, event.y, event.z, 'houseDamage', event.intensity);
+                this.decals.addRuinMark(_propFxPos, 3.6, 28);
                 this.sounds.playStructureHit(1.0 * event.intensity);
             } else {
                 this.particles.emitBurst(event.x, event.y, event.z, 34, 4.2, 4.2, 1.5);
                 this.debris.emitBurst(event.x, event.y, event.z, 'houseCollapse', event.intensity);
+                this.decals.addRuinMark(_propFxPos, 5.4, 34);
                 this.sounds.playCollapse(1.0 * event.intensity);
             }
 
