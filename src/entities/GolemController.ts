@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { GolemFactory } from './GolemFactory';
-import { angleDiff, moveTowardsAngle } from '../utils/math';
+import { angleDiff, clamp, moveTowardsAngle } from '../utils/math';
 import { GOLEM, ROTATION } from '../utils/constants';
 import { ParticleManager } from '../fx/ParticleManager';
 import { AudioManager } from '../core/AudioManager';
@@ -14,6 +14,9 @@ const _netPos = new THREE.Vector3();
 const _cameraAnchor = new THREE.Vector3();
 const _footOffset = new THREE.Vector3();
 const _cockpitForward = new THREE.Vector3();
+const _bodyForward = new THREE.Vector3();
+const _desiredVel = new THREE.Vector3();
+const _sideVel = new THREE.Vector3();
 
 export interface GolemState {
     pos: THREE.Vector3;
@@ -60,6 +63,7 @@ export class GolemController {
     overheatTimer = 0;
 
     mass = 2.0;
+    throttle = 0;
     walkCycle = 0;
     lastStepPhase = 0;
     currentSpeed = 0;
@@ -126,8 +130,10 @@ export class GolemController {
     update(
         dt: number,
         aimYawUnclamped: number,
-        moveX: number,
-        moveZ: number,
+        throttleInput: number,
+        turnInput: number,
+        centerTorso: boolean,
+        stopThrottle: boolean,
         sounds: AudioManager,
         decals: DecalManager,
         colliders: THREE.Mesh[] = []
@@ -146,8 +152,30 @@ export class GolemController {
 
         if (this.isLocal) {
             const torsoStep = ROTATION.torsoTurnRate.medium * dt;
-            const legsStep = ROTATION.legsTurnRate.medium * dt;
+            const bodyTurnStep = ROTATION.legsTurnRate.medium * dt;
             const maxTwist = ROTATION.maxTorsoTwist;
+            const maxSpeed = GOLEM.classes.medium.speed;
+            const throttleRamp = 1.6;
+            const brakeResponse = 12;
+            const driveResponse = 8;
+            const lateralGrip = 10;
+
+            if (centerTorso) {
+                aimYawUnclamped = this.legYaw;
+                if (this.gameCamera) {
+                    this.gameCamera.aimYaw = this.legYaw;
+                }
+            }
+
+            if (stopThrottle) {
+                this.throttle = 0;
+            } else if (throttleInput !== 0) {
+                this.throttle = clamp(this.throttle + throttleInput * throttleRamp * dt, -0.45, 1);
+            }
+
+            if (turnInput !== 0) {
+                this.legYaw += turnInput * bodyTurnStep;
+            }
 
             let desiredTorsoYaw = aimYawUnclamped;
             const twistFromBody = angleDiff(this.legYaw, desiredTorsoYaw);
@@ -157,35 +185,26 @@ export class GolemController {
             this.torsoYaw = moveTowardsAngle(this.torsoYaw, desiredTorsoYaw, torsoStep);
             this.targetTorsoYaw = desiredTorsoYaw;
 
-            const maxSpeed = 15;
-            const acceleration = 1000;
-            const bodyAimOffset = angleDiff(this.legYaw, aimYawUnclamped);
+            const vel = this.body.linvel();
+            _currentVel.set(vel.x, 0, vel.z);
 
-            if (moveZ !== 0 || moveX !== 0) {
-                _moveDir.set(moveX, 0, moveZ).normalize();
-                _moveDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.legYaw);
+            _bodyForward.set(Math.sin(this.legYaw), 0, -Math.cos(this.legYaw));
+            const forwardSpeed = _currentVel.dot(_bodyForward);
+            _sideVel.copy(_currentVel).addScaledVector(_bodyForward, -forwardSpeed);
+            this.body.applyImpulse({
+                x: -_sideVel.x * this.mass * lateralGrip * dt,
+                y: 0,
+                z: -_sideVel.z * this.mass * lateralGrip * dt
+            }, true);
 
-                if (Math.abs(bodyAimOffset) > maxTwist * 0.35) {
-                    this.legYaw = moveTowardsAngle(this.legYaw, aimYawUnclamped, legsStep * 0.65);
-                }
-
-                const vel = this.body.linvel();
-                _currentVel.set(vel.x, 0, vel.z);
-                if (_currentVel.length() < maxSpeed) {
-                    this.body.applyImpulse({
-                        x: _moveDir.x * acceleration * this.mass * dt,
-                        y: 0,
-                        z: _moveDir.z * acceleration * this.mass * dt
-                    }, true);
-                }
-            } else {
-                const vel = this.body.linvel();
-                this.body.applyImpulse({ x: -vel.x * this.mass * 50 * dt, y: 0, z: -vel.z * this.mass * 50 * dt }, true);
-
-                if (Math.abs(bodyAimOffset) > maxTwist * 0.75) {
-                    this.legYaw = moveTowardsAngle(this.legYaw, aimYawUnclamped, legsStep * 0.9);
-                }
-            }
+            _desiredVel.copy(_bodyForward).multiplyScalar(maxSpeed * this.throttle);
+            _moveDir.copy(_desiredVel).sub(_currentVel);
+            const response = Math.abs(this.throttle) > 0.001 ? driveResponse : brakeResponse;
+            this.body.applyImpulse({
+                x: _moveDir.x * this.mass * response * dt,
+                y: 0,
+                z: _moveDir.z * this.mass * response * dt
+            }, true);
         } else {
             const pos = this.body.translation();
             _netPos.set(pos.x, pos.y, pos.z);

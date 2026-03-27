@@ -194,14 +194,27 @@ export class Game {
         const { mx, my } = this.input.consumeMovement();
         this.mechCamera.onMouseMove(mx, my);
 
-        let moveZ = 0;
-        let moveX = 0;
-        if (this.input.keys['KeyW']) moveZ = -1;
-        if (this.input.keys['KeyS']) moveZ = 1;
-        if (this.input.keys['KeyA']) moveX = -1;
-        if (this.input.keys['KeyD']) moveX = 1;
+        let throttleInput = 0;
+        let turnInput = 0;
+        if (this.input.keys['KeyW']) throttleInput += 1;
+        if (this.input.keys['KeyS']) throttleInput -= 1;
+        if (this.input.keys['KeyA']) turnInput -= 1;
+        if (this.input.keys['KeyD']) turnInput += 1;
 
-        const events = this.golem.update(dt, this.mechCamera.aimYaw, moveX, moveZ, this.sounds, this.decals, this.world.meshes);
+        const centerTorso = this.input.consumeKey('KeyC');
+        const stopThrottle = this.input.consumeKey('KeyX');
+
+        const events = this.golem.update(
+            dt,
+            this.mechCamera.aimYaw,
+            throttleInput,
+            turnInput,
+            centerTorso,
+            stopThrottle,
+            this.sounds,
+            this.decals,
+            this.world.meshes
+        );
         
         const golemState = this.golem.getState();
 
@@ -210,7 +223,7 @@ export class Game {
         this.sounds.update(torsoTurnSpeed);
         
         this.remotePlayers.forEach(player => {
-            player.update(dt, player.targetTorsoYaw, 0, 0, this.sounds, this.decals);
+            player.update(dt, player.targetTorsoYaw, 0, 0, false, false, this.sounds, this.decals);
         });
 
         this.dummy.update(dt);
@@ -218,11 +231,11 @@ export class Game {
         this.decals.update(dt);
         
         this.renderer.camera.getWorldDirection(_weaponDir);
-        _weaponOrigin.copy(this.renderer.camera.position).addScaledVector(_weaponDir, 1.5);
+        _weaponOrigin.copy(this.renderer.camera.position).addScaledVector(_weaponDir, 0.25);
 
         if (this.input.consumeClick()) {
             if (this.golem.tryAction(5)) {
-                const origin = _weaponOrigin.clone().addScaledVector(_weaponDir, 2.0);
+                const origin = _weaponOrigin.clone();
                 
                 this.projectiles.fire(origin, _weaponDir.clone(), this.network.myId);
                 this.mechCamera.onFire(0.3); // RuneBolt weight

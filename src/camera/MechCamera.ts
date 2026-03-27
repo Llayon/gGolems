@@ -22,6 +22,10 @@ function setRight(out: THREE.Vector3, yaw: number) {
     return out;
 }
 
+function frameAlpha(alphaAt60Fps: number, dt: number) {
+    return 1 - Math.pow(1 - alphaAt60Fps, dt * 60);
+}
+
 export class MechCamera {
     camera: THREE.PerspectiveCamera;
     aimYaw = 0;
@@ -74,7 +78,6 @@ export class MechCamera {
         dt: number,
         colliders: THREE.Mesh[]
     ) {
-        const torsoAimOffset = clamp(angleDiff(torsoYaw, aimYawUnclamped), -CAMERA.maxAimLead, CAMERA.maxAimLead);
         const yawTarget = torsoYaw;
         if (!this.initialized) {
             this.cameraYaw = yawTarget;
@@ -86,8 +89,7 @@ export class MechCamera {
         setForward(_bodyForward, this.cameraYaw);
         _targetPos.copy(anchorPos);
 
-        const actualAimYaw = torsoYaw + torsoAimOffset * CAMERA.cameraAimInfluence;
-        setForward(_aimForward, actualAimYaw);
+        setForward(_aimForward, torsoYaw);
         _targetLookAt.copy(_targetPos);
         _targetLookAt.addScaledVector(_aimForward, CAMERA.lookForward);
         _targetLookAt.y += this.pitch * 12;
@@ -98,8 +100,8 @@ export class MechCamera {
             this.initialized = true;
         }
 
-        this.currentPos.lerp(_targetPos, CAMERA.posLerp);
-        this.currentLookAt.lerp(_targetLookAt, CAMERA.lookLerp);
+        this.currentPos.lerp(_targetPos, frameAlpha(CAMERA.posLerp, dt));
+        this.currentLookAt.lerp(_targetLookAt, frameAlpha(CAMERA.lookLerp, dt));
 
         this.updateWalkBob(speed, mass, dt);
         this.updateShake(dt);
@@ -146,8 +148,9 @@ export class MechCamera {
             }
             this.lastStepSign = currentSign;
         } else {
-            this.bobAmount.lerp(_zero, 0.08);
-            this.currentRoll *= 0.92;
+            const settle = frameAlpha(0.08, dt);
+            this.bobAmount.lerp(_zero, settle);
+            this.currentRoll *= Math.pow(0.92, dt * 60);
             this.walkCycle = 0;
             this.lastStepSign = 1;
         }
@@ -178,7 +181,7 @@ export class MechCamera {
     updateFOV(speed: number, dt: number) {
         const speedFOV = this.baseFOV + (speed / 15) * 4;
         this.targetFOV = Math.max(this.targetFOV, speedFOV);
-        this.camera.fov += (this.targetFOV - this.camera.fov) * CAMERA.fovLerp;
+        this.camera.fov += (this.targetFOV - this.camera.fov) * frameAlpha(CAMERA.fovLerp, dt);
         this.camera.updateProjectionMatrix();
         this.targetFOV += (speedFOV - this.targetFOV) * Math.min(1, CAMERA.cameraReturnRate * dt);
     }
