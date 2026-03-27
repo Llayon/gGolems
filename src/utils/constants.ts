@@ -3,7 +3,7 @@ export const CAMERA = {
 
     // FOV
     fov: 58,
-    dashFOV: 68,
+    dashFOV: 64,
     hitFOV: 54,
 
     // Input sensitivity

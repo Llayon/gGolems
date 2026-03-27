@@ -115,6 +115,7 @@ export class GolemController {
     lastStepPhase = 0;
     currentSpeed = 0;
     damageFlashTimer = 0;
+    dashRecoveryTimer = 0;
 
     targetPos = new THREE.Vector3();
     targetLegYaw = 0;
@@ -222,7 +223,8 @@ export class GolemController {
     dash() {
         const dir = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), this.legYaw);
         if (this.isLocal) {
-            this.body.applyImpulse({ x: dir.x * 760, y: 0, z: dir.z * 760 }, true);
+            this.body.applyImpulse({ x: dir.x * 840, y: 0, z: dir.z * 840 }, true);
+            this.dashRecoveryTimer = 0.24;
         }
     }
 
@@ -270,7 +272,7 @@ export class GolemController {
             const torsoStep = ROTATION.torsoTurnRate.medium * dt;
             const maxTwist = ROTATION.maxTorsoTwist;
             const throttleRamp = 1.05;
-            const brakeResponse = 9;
+            const brakeResponse = 6.4;
             const driveResponse = 5.4;
             const lateralGrip = 10;
             const legIntegrity = Math.max(
@@ -295,6 +297,18 @@ export class GolemController {
 
             if (turnInput !== 0) {
                 this.legYaw += turnInput * bodyTurnStep;
+            } else if (this.gameCamera) {
+                const bodyCatchTarget = this.gameCamera.aimYaw;
+                const bodyCatchOffset = angleDiff(this.legYaw, bodyCatchTarget);
+                const bodyCatchAbs = Math.abs(bodyCatchOffset);
+                const catchThreshold = maxTwist * 0.72;
+
+                if (bodyCatchAbs > catchThreshold) {
+                    const catchStrength = clamp((bodyCatchAbs - catchThreshold) / (maxTwist - catchThreshold), 0, 1);
+                    const locomotionBias = Math.abs(this.throttle) > 0.08 ? 0.55 : 0.22;
+                    const catchStep = bodyTurnStep * locomotionBias * catchStrength;
+                    this.legYaw = moveTowardsAngle(this.legYaw, bodyCatchTarget, catchStep);
+                }
             }
 
             let desiredTorsoYaw = aimYawUnclamped;
@@ -330,10 +344,20 @@ export class GolemController {
             _desiredVel.copy(_bodyForward).multiplyScalar(maxSpeed * this.throttle);
             _moveDir.copy(_desiredVel).sub(_currentVel);
             const response = Math.abs(this.throttle) > 0.001 ? driveResponse : brakeResponse;
+            const desiredForwardSpeed = maxSpeed * this.throttle;
+            let finalResponse = response;
+
+            if (this.dashRecoveryTimer > 0) {
+                this.dashRecoveryTimer = Math.max(0, this.dashRecoveryTimer - dt);
+                if (Math.abs(forwardSpeed) > Math.abs(desiredForwardSpeed) + 0.35) {
+                    finalResponse = Math.max(finalResponse, 8.1);
+                }
+            }
+
             this.body.applyImpulse({
-                x: _moveDir.x * this.mass * response * dt,
+                x: _moveDir.x * this.mass * finalResponse * dt,
                 y: 0,
-                z: _moveDir.z * this.mass * response * dt
+                z: _moveDir.z * this.mass * finalResponse * dt
             }, true);
         } else {
             const pos = this.body.translation();
