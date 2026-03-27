@@ -9,6 +9,7 @@ import { Arena } from '../world/Arena';
 import { GolemController } from '../entities/GolemController';
 import { DummyBot } from '../entities/DummyBot';
 import { ParticleManager } from '../fx/ParticleManager';
+import { DebrisManager } from '../fx/DebrisManager';
 import { DecalManager } from '../fx/DecalManager';
 import { ProjectileManager } from '../combat/ProjectileManager';
 import { MechCamera } from '../camera/MechCamera';
@@ -32,6 +33,7 @@ export class Game {
     mechCamera: MechCamera;
     remotePlayers: Map<string, GolemController> = new Map();
     particles: ParticleManager;
+    debris: DebrisManager;
     projectiles: ProjectileManager;
     dummy: DummyBot;
     physicsWrapper: Physics;
@@ -69,6 +71,7 @@ export class Game {
         this.golem = new GolemController(this.renderer.scene, this.physics, true);
         this.golem.gameCamera = this.mechCamera;
         this.particles = new ParticleManager(this.renderer.scene);
+        this.debris = new DebrisManager(this.renderer.scene);
         this.projectiles = new ProjectileManager(this.renderer.scene);
         this.dummy = new DummyBot(
             this.renderer.scene,
@@ -104,12 +107,15 @@ export class Game {
 
             if (event.kind === 'tree_fall') {
                 this.particles.emitBurst(event.x, event.y, event.z, 14, 1.8, 2.8, 1.15);
+                this.debris.emitBurst(event.x, event.y, event.z, 'tree', event.intensity);
                 this.sounds.playStructureHit(0.7 * event.intensity);
             } else if (event.kind === 'house_damage') {
                 this.particles.emitBurst(event.x, event.y, event.z, 20, 2.8, 3.1, 1.2);
+                this.debris.emitBurst(event.x, event.y, event.z, 'houseDamage', event.intensity);
                 this.sounds.playStructureHit(1.0 * event.intensity);
             } else {
                 this.particles.emitBurst(event.x, event.y, event.z, 34, 4.2, 4.2, 1.5);
+                this.debris.emitBurst(event.x, event.y, event.z, 'houseCollapse', event.intensity);
                 this.sounds.playCollapse(1.0 * event.intensity);
             }
 
@@ -481,6 +487,7 @@ export class Game {
         this.golem.boiler.getWorldPosition(boilerPos);
         this.particles.emit(boilerPos.x, boilerPos.y + 0.5, boilerPos.z);
         this.particles.update(dt);
+        this.debris.update(dt);
 
         // Network synchronization (20 Hz)
         this.networkTickTimer += dt;
