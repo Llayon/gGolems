@@ -21,6 +21,14 @@ export type PropSnapshot = {
     houses: HouseSnapshot[];
 };
 
+export type PropFxEvent = {
+    kind: 'tree_fall' | 'house_damage' | 'house_collapse';
+    x: number;
+    y: number;
+    z: number;
+    intensity: number;
+};
+
 type TreeProp = {
     id: string;
     root: THREE.Group;
@@ -107,6 +115,7 @@ export class PropManager {
     houses: HouseProp[] = [];
     treeByObjectId = new Map<number, TreeProp>();
     houseByObjectId = new Map<number, HouseProp>();
+    fxEvents: PropFxEvent[] = [];
     scene: THREE.Scene;
     physics: RAPIER.World;
 
@@ -355,6 +364,12 @@ export class PropManager {
         return this.collisionMeshes;
     }
 
+    consumeFxEvents() {
+        const events = this.fxEvents;
+        this.fxEvents = [];
+        return events;
+    }
+
     getSnapshot(): PropSnapshot {
         return {
             trees: this.trees.map((tree) => ({
@@ -479,11 +494,20 @@ export class PropManager {
             this.physics.removeRigidBody(tree.body);
             tree.body = null;
         }
+
+        this.fxEvents.push({
+            kind: 'tree_fall',
+            x: tree.position.x,
+            y: 1.1,
+            z: tree.position.z,
+            intensity: 0.8
+        });
     }
 
     setHouseStage(house: HouseProp, stage: 0 | 1 | 2) {
         if (house.stage === stage && house.collisionEntries.length > 0) return;
 
+        const previousStage = house.stage;
         house.stage = stage;
         house.intact.visible = stage === 0;
         house.damaged.visible = stage === 1;
@@ -500,6 +524,24 @@ export class PropManager {
         if (stage === 2 && house.body) {
             this.physics.removeRigidBody(house.body);
             house.body = null;
+        }
+
+        if (stage === 1 && previousStage < 1) {
+            this.fxEvents.push({
+                kind: 'house_damage',
+                x: house.position.x,
+                y: 1.8,
+                z: house.position.z,
+                intensity: 1.0
+            });
+        } else if (stage === 2 && previousStage < 2) {
+            this.fxEvents.push({
+                kind: 'house_collapse',
+                x: house.position.x,
+                y: 1.2,
+                z: house.position.z,
+                intensity: 1.4
+            });
         }
     }
 

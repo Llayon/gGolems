@@ -19,6 +19,8 @@ const _weaponDir = new THREE.Vector3();
 const _aimPoint = new THREE.Vector3();
 const _botTarget = new THREE.Vector3();
 const _spawnDir = new THREE.Vector3();
+const _propFxPos = new THREE.Vector3();
+const _listenerPos = new THREE.Vector3();
 
 type SessionMode = 'solo' | 'host' | 'client';
 
@@ -90,6 +92,31 @@ export class Game {
         });
 
         this.setupNetwork();
+    }
+
+    playPropFx() {
+        const localPos = this.golem.body.translation();
+        _listenerPos.set(localPos.x, localPos.y, localPos.z);
+        for (const event of this.world.propManager.consumeFxEvents()) {
+            _propFxPos.set(event.x, event.y, event.z);
+            const distance = _propFxPos.distanceTo(_listenerPos);
+            const proximity = THREE.MathUtils.clamp(1 - distance / 28, 0, 1);
+
+            if (event.kind === 'tree_fall') {
+                this.particles.emitBurst(event.x, event.y, event.z, 14, 1.8, 2.8, 1.15);
+                this.sounds.playStructureHit(0.7 * event.intensity);
+            } else if (event.kind === 'house_damage') {
+                this.particles.emitBurst(event.x, event.y, event.z, 20, 2.8, 3.1, 1.2);
+                this.sounds.playStructureHit(1.0 * event.intensity);
+            } else {
+                this.particles.emitBurst(event.x, event.y, event.z, 34, 4.2, 4.2, 1.5);
+                this.sounds.playCollapse(1.0 * event.intensity);
+            }
+
+            if (proximity > 0) {
+                this.mechCamera.addTrauma(proximity * 0.28 * event.intensity);
+            }
+        }
     }
 
     setupNetwork() {
@@ -447,6 +474,8 @@ export class Game {
                 }
             }
         );
+
+        this.playPropFx();
         
         const boilerPos = new THREE.Vector3();
         this.golem.boiler.getWorldPosition(boilerPos);

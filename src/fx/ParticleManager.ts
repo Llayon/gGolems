@@ -1,12 +1,19 @@
 import * as THREE from 'three';
 
+type Particle = {
+    active: boolean;
+    life: number;
+    pos: THREE.Vector3;
+    vel: THREE.Vector3;
+};
+
 export class ParticleManager {
     system: THREE.Points;
-    particles: any[] = [];
+    particles: Particle[] = [];
     
     constructor(scene: THREE.Scene) {
         const geo = new THREE.BufferGeometry();
-        const count = 200;
+        const count = 320;
         const positions = new Float32Array(count * 3);
         geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
         
@@ -32,13 +39,38 @@ export class ParticleManager {
     }
 
     emit(x: number, y: number, z: number) {
-        const p = this.particles.find(p => !p.active);
-        if (p) {
-            p.active = true;
-            p.life = 1.0;
-            p.pos.set(x, y, z);
-            p.vel.set((Math.random() - 0.5) * 1.0, Math.random() * 2 + 2, (Math.random() - 0.5) * 1.0);
+        this.spawnParticle(x, y, z, (Math.random() - 0.5) * 1.0, Math.random() * 2 + 2, (Math.random() - 0.5) * 1.0, 1.0);
+    }
+
+    emitBurst(
+        x: number,
+        y: number,
+        z: number,
+        count = 12,
+        spread = 1.4,
+        upwardBoost = 2.4,
+        lifetime = 1.0
+    ) {
+        for (let i = 0; i < count; i++) {
+            this.spawnParticle(
+                x + (Math.random() - 0.5) * spread,
+                y + Math.random() * spread * 0.4,
+                z + (Math.random() - 0.5) * spread,
+                (Math.random() - 0.5) * spread * 1.4,
+                Math.random() * upwardBoost + upwardBoost * 0.4,
+                (Math.random() - 0.5) * spread * 1.4,
+                lifetime * (0.7 + Math.random() * 0.6)
+            );
         }
+    }
+
+    spawnParticle(x: number, y: number, z: number, vx: number, vy: number, vz: number, life: number) {
+        const p = this.particles.find((entry) => !entry.active);
+        if (!p) return;
+        p.active = true;
+        p.life = life;
+        p.pos.set(x, y, z);
+        p.vel.set(vx, vy, vz);
     }
 
     update(dt: number) {
@@ -53,6 +85,8 @@ export class ParticleManager {
                     positions[idx+1] = -1000;
                     positions[idx+2] = 0;
                 } else {
+                    p.vel.y -= dt * 4.2;
+                    p.vel.multiplyScalar(0.992);
                     p.pos.addScaledVector(p.vel, dt);
                     positions[idx] = p.pos.x;
                     positions[idx+1] = p.pos.y;
