@@ -357,6 +357,84 @@ function MobileHud(props: {
     );
 }
 
+function MobileCombatOverlay(props: {
+    legYaw: number;
+    torsoYaw: number;
+    twistRatio: number;
+    hpRatio: number;
+    steamRatio: number;
+    speed: number;
+    maxSpeed: number;
+    isPortrait: boolean;
+}) {
+    const chassisHeading = wrapDegrees(Math.round(toDegrees(props.legYaw))).toString().padStart(3, '0');
+    const torsoHeading = wrapDegrees(Math.round(toDegrees(props.torsoYaw))).toString().padStart(3, '0');
+    const twistDegrees = Math.round(toDegrees(angleDiff(props.legYaw, props.torsoYaw)));
+    const twistText = `${twistDegrees > 0 ? '+' : ''}${twistDegrees}`;
+    const speedDisplay = Math.round((props.speed / Math.max(props.maxSpeed, 0.1)) * 86);
+    const torsoMarker = polarToCartesian(42, 42, 22, 270 + clamp(props.twistRatio, -1, 1) * 72);
+    const leftLimit = polarToCartesian(42, 42, 22, 198);
+    const rightLimit = polarToCartesian(42, 42, 22, 342);
+
+    return (
+        <div className={`pointer-events-none absolute inset-x-0 z-20 px-3 ${props.isPortrait ? 'bottom-[266px]' : 'bottom-[178px]'}`}>
+            <div className="mx-auto flex w-[min(92vw,360px)] items-center gap-3 rounded-[28px] border border-[#8f6a38]/55 bg-[linear-gradient(180deg,rgba(18,17,15,0.92),rgba(8,8,8,0.9))] px-3 py-3 shadow-[0_0_22px_rgba(0,0,0,0.34),inset_0_0_18px_rgba(0,0,0,0.45)]">
+                <div className="relative h-[84px] w-[84px] shrink-0 rounded-full border border-[#8f6a38]/55 bg-[radial-gradient(circle_at_center,rgba(20,18,16,0.95),rgba(7,7,7,0.88))]">
+                    <svg viewBox="0 0 84 84" className="h-full w-full">
+                        <circle cx="42" cy="42" r="22" fill="none" stroke="rgba(157,119,64,0.45)" strokeWidth="2.5" />
+                        <circle cx={leftLimit.x} cy={leftLimit.y} r="2.8" fill="#9d7740" />
+                        <circle cx={rightLimit.x} cy={rightLimit.y} r="2.8" fill="#9d7740" />
+                        <circle cx={torsoMarker.x} cy={torsoMarker.y} r="4" fill="#7ee6f0" />
+                        <circle cx="42" cy="42" r="3" fill="#efb768" />
+                    </svg>
+                    <div className="absolute left-1/2 top-[11px] h-0 w-0 -translate-x-1/2 border-x-[5px] border-x-transparent border-b-[10px] border-b-[#efb768]" />
+                    <div className="absolute inset-x-0 bottom-[8px] text-center text-[8px] tracking-[0.26em] text-[#9fc4cc]">
+                        {'\u041a\u0423\u0420\u0421'}
+                    </div>
+                </div>
+
+                <div className="min-w-0 flex-1">
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                        <div className="rounded-2xl border border-[#8f6a38]/35 bg-black/30 px-2 py-2">
+                            <div className="text-[8px] tracking-[0.22em] text-[#8fb8c2]">{'\u0428\u0410\u0421\u0421\u0418'}</div>
+                            <div className="mt-1 text-sm font-bold tracking-[0.14em] text-[#efb768]">{chassisHeading}</div>
+                        </div>
+                        <div className="rounded-2xl border border-[#8f6a38]/35 bg-black/30 px-2 py-2">
+                            <div className="text-[8px] tracking-[0.22em] text-[#8fb8c2]">{'\u0422\u041e\u0420\u0421'}</div>
+                            <div className="mt-1 text-sm font-bold tracking-[0.14em] text-[#7ee6f0]">{torsoHeading}</div>
+                        </div>
+                        <div className="rounded-2xl border border-[#8f6a38]/35 bg-black/30 px-2 py-2">
+                            <div className="text-[8px] tracking-[0.22em] text-[#8fb8c2]">{'\u0421\u0414\u0412\u0418\u0413'}</div>
+                            <div className="mt-1 text-sm font-bold tracking-[0.14em]" style={{ color: Math.abs(props.twistRatio) > 0.78 ? '#ffb28c' : '#f3deb5' }}>
+                                {twistText}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="mt-2 grid grid-cols-[0.9fr_0.9fr_0.7fr] gap-2">
+                        <div className="rounded-2xl border border-[#8f6a38]/35 bg-black/30 px-2 py-2">
+                            <div className="mb-1 text-[8px] tracking-[0.22em] text-[#d0b07a]">{'\u0411\u0420\u041e\u041d\u042f'}</div>
+                            <div className="h-2 rounded-full bg-[#241c16]">
+                                <div className="h-full rounded-full bg-[linear-gradient(90deg,#d04838,#f0b371)]" style={{ width: `${props.hpRatio * 100}%` }} />
+                            </div>
+                        </div>
+                        <div className="rounded-2xl border border-[#8f6a38]/35 bg-black/30 px-2 py-2">
+                            <div className="mb-1 text-[8px] tracking-[0.22em] text-[#d0b07a]">{'\u041f\u0410\u0420'}</div>
+                            <div className="h-2 rounded-full bg-[#241c16]">
+                                <div className="h-full rounded-full bg-[linear-gradient(90deg,#efb768,#7ee6f0)]" style={{ width: `${props.steamRatio * 100}%` }} />
+                            </div>
+                        </div>
+                        <div className="rounded-2xl border border-[#8f6a38]/35 bg-black/30 px-2 py-2 text-center">
+                            <div className="text-[8px] tracking-[0.22em] text-[#8fb8c2]">{'\u0425\u041e\u0414'}</div>
+                            <div className="mt-1 text-sm font-bold tracking-[0.14em] text-[#f3deb5]">{speedDisplay}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 function MobileControls(props: {
     game: any;
     showPanel: boolean;
@@ -826,6 +904,18 @@ export default function App() {
                             steamRatio={steamRatio}
                             legYaw={gameState.legYaw}
                             torsoYaw={gameState.torsoYaw}
+                            speed={gameState.speed}
+                            maxSpeed={gameState.maxSpeed}
+                            isPortrait={isPortrait}
+                        />
+                    ) : null}
+                    {isTouchDevice ? (
+                        <MobileCombatOverlay
+                            legYaw={gameState.legYaw}
+                            torsoYaw={gameState.torsoYaw}
+                            twistRatio={twistRatio}
+                            hpRatio={hpRatio}
+                            steamRatio={steamRatio}
                             speed={gameState.speed}
                             maxSpeed={gameState.maxSpeed}
                             isPortrait={isPortrait}
