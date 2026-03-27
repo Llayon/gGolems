@@ -222,7 +222,7 @@ export class GolemController {
     dash() {
         const dir = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), this.legYaw);
         if (this.isLocal) {
-            this.body.applyImpulse({ x: dir.x * 1000, y: 0, z: dir.z * 1000 }, true);
+            this.body.applyImpulse({ x: dir.x * 760, y: 0, z: dir.z * 760 }, true);
         }
     }
 
@@ -299,8 +299,18 @@ export class GolemController {
 
             let desiredTorsoYaw = aimYawUnclamped;
             const twistFromBody = angleDiff(this.legYaw, desiredTorsoYaw);
-            if (twistFromBody > maxTwist) desiredTorsoYaw = this.legYaw + maxTwist;
-            if (twistFromBody < -maxTwist) desiredTorsoYaw = this.legYaw - maxTwist;
+            if (twistFromBody > maxTwist) {
+                desiredTorsoYaw = this.legYaw + maxTwist;
+                if (this.gameCamera) {
+                    this.gameCamera.aimYaw = desiredTorsoYaw;
+                }
+            }
+            if (twistFromBody < -maxTwist) {
+                desiredTorsoYaw = this.legYaw - maxTwist;
+                if (this.gameCamera) {
+                    this.gameCamera.aimYaw = desiredTorsoYaw;
+                }
+            }
 
             this.torsoYaw = moveTowardsAngle(this.torsoYaw, desiredTorsoYaw, torsoStep);
             this.targetTorsoYaw = desiredTorsoYaw;
@@ -380,7 +390,7 @@ export class GolemController {
 
             this.gameCamera.update(
                 _cameraAnchor,
-                this.torsoYaw,
+                this.gameCamera.aimYaw,
                 this.currentSpeed,
                 this.mass,
                 dt

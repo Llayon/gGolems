@@ -14,7 +14,7 @@ export const CAMERA = {
 
     // Per-frame smoothing values calibrated for 60 FPS.
     posLerp: 0.14,
-    lookLerp: 0.2,
+    lookLerp: 0.32,
     fovLerp: 0.06,
     cameraReturnRate: 3.2,
 };
@@ -38,12 +38,12 @@ export const SHAKE = {
 export const ROTATION = {
     torsoTurnRate: {
         light: 2.8,
-        medium: 1.8,
+        medium: 1.6,
         heavy: 1.1,
     },
     legsTurnRate: {
         light: 1.8,
-        medium: 1.1,
+        medium: 0.95,
         heavy: 0.65,
     },
     maxTorsoTwist: 1.75,
