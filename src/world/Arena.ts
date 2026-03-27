@@ -51,7 +51,11 @@ export class Arena {
         this.createBox(scene, physics, -12, 1.5, 0, 4, 3, 4, 0x565662);
         this.createBox(scene, physics, 12, 1.5, 0, 4, 3, 4, 0x565662);
         
-        this.propManager = new PropManager(scene);
+        this.propManager = new PropManager(scene, physics);
+    }
+
+    getCollisionMeshes() {
+        return [...this.meshes, ...this.propManager.getCollisionMeshes()];
     }
 
     createBox(scene: THREE.Scene, physics: RAPIER.World, x: number, y: number, z: number, w: number, h: number, d: number, color: number) {

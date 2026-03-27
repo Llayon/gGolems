@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { DummyBot } from '../entities/DummyBot';
 import { GolemController, GolemSection } from '../entities/GolemController';
 import { DecalManager } from '../fx/DecalManager';
+import { PropManager } from '../world/PropManager';
 
 const _segment = new THREE.Vector3();
 const _segmentDir = new THREE.Vector3();
@@ -56,6 +57,7 @@ export class ProjectileManager {
         localId: string, 
         isHost: boolean, 
         colliders: THREE.Mesh[],
+        props: PropManager,
         decals: DecalManager,
         onPlayerHit: (ownerId: string, targetId: string, damage: number, section: GolemSection | '__dummy__') => void
     ) {
@@ -76,7 +78,11 @@ export class ProjectileManager {
             if (intersects.length > 0 && intersects[0].distance <= travelDistance) {
                 p.active = false;
                 this.scene.remove(p.mesh);
-                decals.addBulletMark(intersects[0].point);
+                const hit = intersects[0];
+                const consumedByProp = props.handleProjectileHit(hit.object, hit.point, 15, isHost);
+                if (!consumedByProp) {
+                    decals.addBulletMark(hit.point);
+                }
                 continue;
             }
 

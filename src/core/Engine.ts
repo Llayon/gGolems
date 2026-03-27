@@ -132,6 +132,9 @@ export class Game {
                     this.dummy.hp = data.dummy.hp;
                     this.dummy.targetPos.set(data.dummy.x, data.dummy.y, data.dummy.z);
                 }
+                if (data.props) {
+                    this.world.propManager.applySnapshot(data.props);
+                }
                 
                 if (data.players) {
                     // Remove players that are no longer in the state
@@ -341,7 +344,7 @@ export class Game {
             stopThrottle,
             this.sounds,
             this.decals,
-            this.world.meshes
+            this.world.getCollisionMeshes()
         );
         
         const golemState = this.golem.getState();
@@ -408,7 +411,8 @@ export class Game {
             this.golem, 
             this.network.myId, 
             authorityMode,
-            this.world.meshes,
+            this.world.getCollisionMeshes(),
+            this.world.propManager,
             this.decals,
             (ownerId, targetId, damage, section) => {
                 if (targetId === '__dummy__') {
@@ -479,7 +483,8 @@ export class Game {
                 this.network.broadcast({ 
                     type: 'state', 
                     players: playersState,
-                    dummy: { x: this.dummy.mesh.position.x, y: this.dummy.mesh.position.y, z: this.dummy.mesh.position.z, hp: this.dummy.hp }
+                    dummy: { x: this.dummy.mesh.position.x, y: this.dummy.mesh.position.y, z: this.dummy.mesh.position.z, hp: this.dummy.hp },
+                    props: this.world.propManager.getSnapshot()
                 });
             } else if (this.sessionMode === 'client') {
                 // Client sends input/position to Host
