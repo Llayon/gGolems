@@ -1,24 +1,19 @@
 import * as THREE from 'three';
-import { angleDiff, clamp, moveTowardsAngle } from '../utils/math';
+import { clamp } from '../utils/math';
 import { CAMERA, WALK, SHAKE } from '../utils/constants';
 
 const _zero = new THREE.Vector3();
-const _offset = new THREE.Vector3();
 const _targetPos = new THREE.Vector3();
 const _targetLookAt = new THREE.Vector3();
-const _dir = new THREE.Vector3();
-const _velocityLead = new THREE.Vector3();
-const _bodyForward = new THREE.Vector3();
-const _bodyRight = new THREE.Vector3();
 const _aimForward = new THREE.Vector3();
 
-function setForward(out: THREE.Vector3, yaw: number) {
-    out.set(Math.sin(yaw), 0, -Math.cos(yaw));
-    return out;
-}
-
-function setRight(out: THREE.Vector3, yaw: number) {
-    out.set(Math.cos(yaw), 0, Math.sin(yaw));
+function setLookVector(out: THREE.Vector3, yaw: number, pitch: number) {
+    const flatLength = Math.cos(pitch);
+    out.set(
+        Math.sin(yaw) * flatLength,
+        Math.sin(pitch),
+        -Math.cos(yaw) * flatLength
+    );
     return out;
 }
 
@@ -29,7 +24,6 @@ function frameAlpha(alphaAt60Fps: number, dt: number) {
 export class MechCamera {
     camera: THREE.PerspectiveCamera;
     aimYaw = 0;
-    cameraYaw = 0;
     pitch = 0;
 
     currentPos = new THREE.Vector3();
@@ -50,8 +44,6 @@ export class MechCamera {
     baseFOV: number;
     targetFOV: number;
 
-    raycaster = new THREE.Raycaster();
-
     constructor(camera: THREE.PerspectiveCamera) {
         this.camera = camera;
         this.baseFOV = CAMERA.fov;
@@ -70,29 +62,14 @@ export class MechCamera {
 
     update(
         anchorPos: THREE.Vector3,
-        bodyYaw: number,
         torsoYaw: number,
-        aimYawUnclamped: number,
         speed: number,
         mass: number,
-        dt: number,
-        colliders: THREE.Mesh[]
+        dt: number
     ) {
-        const yawTarget = torsoYaw;
-        if (!this.initialized) {
-            this.cameraYaw = yawTarget;
-        } else {
-            const yawStep = Math.max(CAMERA.cameraYawLag, Math.abs(angleDiff(this.cameraYaw, yawTarget)) * 0.6) * dt * 10;
-            this.cameraYaw = moveTowardsAngle(this.cameraYaw, yawTarget, yawStep);
-        }
-
-        setForward(_bodyForward, this.cameraYaw);
         _targetPos.copy(anchorPos);
-
-        setForward(_aimForward, torsoYaw);
-        _targetLookAt.copy(_targetPos);
-        _targetLookAt.addScaledVector(_aimForward, CAMERA.lookForward);
-        _targetLookAt.y += this.pitch * 12;
+        setLookVector(_aimForward, torsoYaw, this.pitch);
+        _targetLookAt.copy(_targetPos).addScaledVector(_aimForward, CAMERA.lookForward);
 
         if (!this.initialized) {
             this.currentPos.copy(_targetPos);
@@ -112,10 +89,6 @@ export class MechCamera {
         this.camera.position.add(this.shakeOffset);
         this.camera.lookAt(this.currentLookAt);
         this.camera.rotateZ(this.currentRoll + this.shakeRotation);
-    }
-
-    getAimScreenOffset(referenceYaw: number): number {
-        return clamp(angleDiff(referenceYaw, this.aimYaw), -CAMERA.maxAimLead, CAMERA.maxAimLead);
     }
 
     updateWalkBob(speed: number, mass: number, dt: number) {

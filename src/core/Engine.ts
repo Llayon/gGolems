@@ -389,8 +389,7 @@ export class Game {
             centerTorso,
             stopThrottle,
             this.sounds,
-            this.decals,
-            this.world.getCollisionMeshes()
+            this.decals
         );
         
         const golemState = this.golem.getState();

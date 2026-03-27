@@ -242,8 +242,7 @@ export class GolemController {
         centerTorso: boolean,
         stopThrottle: boolean,
         sounds: AudioManager,
-        decals: DecalManager,
-        colliders: THREE.Mesh[] = []
+        decals: DecalManager
     ): GolemEvents {
         const events: GolemEvents = { dashed: false, vented: false, footstep: false };
 
@@ -381,13 +380,10 @@ export class GolemController {
 
             this.gameCamera.update(
                 _cameraAnchor,
-                this.legYaw,
                 this.torsoYaw,
-                this.gameCamera.aimYaw,
                 this.currentSpeed,
                 this.mass,
-                dt,
-                colliders
+                dt
             );
 
             this.gameCamera.onFootstep = () => {

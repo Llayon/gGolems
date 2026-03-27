@@ -714,7 +714,7 @@ export default function App() {
         : Math.abs(twistRatio) > 0.86
             ? 'ПРЕДЕЛ ТОРСА'
             : Math.abs(twistRatio) > 0.6
-                ? 'ЦЕНТРОВАТЬ ТОРС [C]'
+                ? (isTouchDevice ? 'ЦЕНТРОВАТЬ ТОРС' : 'ЦЕНТРОВАТЬ ТОРС [C]')
                 : throttleRatio < -0.05
                     ? 'ЗАДНИЙ ХОД'
                     : throttleRatio > 0.7
@@ -740,6 +740,15 @@ export default function App() {
             ? 'НЕ УДАЛОСЬ'
             : 'КОПИРОВАТЬ';
 
+    const hostBadgeClass = isTouchDevice
+        ? 'pointer-events-auto absolute left-1/2 top-3 z-30 flex w-[min(88vw,320px)] -translate-x-1/2 items-center justify-between gap-3 rounded-2xl border border-[#8f6a38]/45 bg-[rgba(10,10,10,0.78)] px-3 py-2 text-[#e1cea7] shadow-[0_0_22px_rgba(0,0,0,0.32)] backdrop-blur-sm'
+        : 'pointer-events-auto absolute right-4 top-4 z-30 flex items-center gap-3 rounded-2xl border border-[#8f6a38]/45 bg-[rgba(10,10,10,0.78)] px-4 py-3 text-[#e1cea7] shadow-[0_0_22px_rgba(0,0,0,0.32)] backdrop-blur-sm';
+    const pilotPanelAnchorClass = isTouchDevice
+        ? `left-3 ${sessionMode === 'host' && myId && !showPilotPanel ? 'top-[64px]' : sessionMode === 'host' && myId ? 'top-[122px]' : 'top-[74px]'}`
+        : 'left-4 top-4';
+    const pilotPanelHideLabel = isTouchDevice ? '\u0421\u041a\u0420\u042b\u0422\u042c' : '\u0421\u041a\u0420\u042b\u0422\u042c [H]';
+    const pilotPanelShowLabel = isTouchDevice ? '\u041f\u0410\u041d\u0415\u041b\u042c' : '\u041f\u0410\u041d\u0415\u041b\u042c [H]';
+    const alignPromptLabel = isTouchDevice ? '\u0412\u042b\u0420\u041e\u0412\u041d\u042f\u0422\u042c \u0428\u0410\u0421\u0421\u0418' : '\u0412\u042b\u0420\u041e\u0412\u041D\u042F\u0422\u042C \u0428\u0410\u0421\u0421\u0418 [C]';
     return (
         <div className="relative h-[100dvh] w-full overflow-hidden bg-[#100d0b] font-mono text-[#f2ddb1]">
             <canvas ref={canvasRef} className={`block h-full w-full ${inLobby ? 'hidden' : ''}`} />
@@ -823,8 +832,8 @@ export default function App() {
                         />
                     ) : null}
 
-                    {sessionMode === 'host' && myId ? (
-                        <div className="pointer-events-auto absolute right-4 top-4 z-30 flex items-center gap-3 rounded-2xl border border-[#8f6a38]/45 bg-[rgba(10,10,10,0.78)] px-4 py-3 text-[#e1cea7] shadow-[0_0_22px_rgba(0,0,0,0.32)] backdrop-blur-sm">
+                    {sessionMode === 'host' && myId && (!isTouchDevice || !showPilotPanel) ? (
+                        <div className={hostBadgeClass}>
                             <div className="min-w-0">
                                 <div className="text-[10px] tracking-[0.34em] text-[#8fb8c2]">ID ХОСТА</div>
                                 <div className="mt-1 select-all font-bold tracking-[0.18em] text-[#efb768]">{myId}</div>
@@ -840,7 +849,7 @@ export default function App() {
                         </div>
                     ) : null}
 
-                    <div className={`absolute z-20 ${isTouchDevice ? 'left-3 top-14' : 'left-4 top-4'}`}>
+                    <div className={`absolute z-20 ${pilotPanelAnchorClass}`}>
                         {showPilotPanel ? (
                             <div className={`pointer-events-auto rounded-2xl border border-[#8f6a38]/35 bg-[rgba(10,10,10,0.62)] p-4 text-sm text-[#d7c5a1] shadow-[0_0_20px_rgba(0,0,0,0.38)] backdrop-blur-sm ${isTouchDevice ? 'max-w-[220px] text-xs' : 'max-w-[280px]'}`}>
                                 <div className="mb-3 flex items-start justify-between gap-3">
@@ -865,7 +874,7 @@ export default function App() {
                                         onClick={() => setShowPilotPanel(false)}
                                         className="rounded-full border border-[#8f6a38]/55 bg-black/45 px-3 py-1 text-[10px] tracking-[0.24em] text-[#cdb488] transition-colors hover:border-[#efb768]/70 hover:text-[#efb768]"
                                     >
-                                        СКРЫТЬ [H]
+                                        {pilotPanelHideLabel}
                                     </button>
                                 </div>
 
@@ -880,15 +889,15 @@ export default function App() {
                                     <li><span className="text-[#efb768]">SPACE</span> сброс пара</li>
                                 </ul>
                             </div>
-                        ) : (
+                        ) : !isTouchDevice ? (
                             <button
                                 type="button"
                                 onClick={() => setShowPilotPanel(true)}
                                 className="pointer-events-auto rounded-full border border-[#8f6a38]/55 bg-[rgba(10,10,10,0.72)] px-4 py-2 text-[10px] tracking-[0.3em] text-[#cdb488] shadow-[0_0_18px_rgba(0,0,0,0.3)] transition-colors hover:border-[#efb768]/70 hover:text-[#efb768]"
                             >
-                                ПАНЕЛЬ [H]
+                                {pilotPanelShowLabel}
                             </button>
-                        )}
+                        ) : null}
                     </div>
 
                     {!isTouchDevice ? <TorsoTwistArc twistRatio={twistRatio} maxTwist={gameState.maxTwist} /> : null}
@@ -943,7 +952,7 @@ export default function App() {
 
                     {Math.abs(twistRatio) > 0.55 ? (
                         <div className="pointer-events-none absolute left-1/2 top-[58%] z-30 -translate-x-1/2 rounded-full border border-[#8f6a38]/60 bg-black/55 px-4 py-2 text-[11px] tracking-[0.36em] text-[#efb768]">
-                            ВЫРОВНЯТЬ ШАССИ [C]
+                            {alignPromptLabel}
                         </div>
                     ) : null}
 
