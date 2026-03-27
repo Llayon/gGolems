@@ -656,7 +656,7 @@ export default function App() {
                         reticleY={reticleY}
                         hitConfirmRatio={hitConfirmRatio}
                         hitTargetRatio={hitTargetRatio}
-                        showAlignPrompt={Math.abs(twistRatio) > 0.55}
+                        showAlignPrompt={!isTouchDevice && Math.abs(twistRatio) > 0.55}
                         alignPromptLabel={alignPromptLabel}
                     />
 

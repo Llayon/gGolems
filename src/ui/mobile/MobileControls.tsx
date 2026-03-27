@@ -14,10 +14,11 @@ export function MobileControls(props: MobileControlsProps) {
     const aimPointerIdRef = useRef<number | null>(null);
     const aimLastRef = useRef<{ x: number; y: number } | null>(null);
     const [stick, setStick] = useState({ x: 0, y: 0 });
+    const [aimActive, setAimActive] = useState(false);
     const stickSize = props.isPortrait ? 132 : 144;
     const knobOffset = props.isPortrait ? 30 : 34;
     const bottomInset = props.isPortrait ? 12 : 10;
-    const lookBottomInset = props.isPortrait ? 118 : 92;
+    const lookBottomInset = props.isPortrait ? 116 : 82;
     const sideInset = 12;
     const actionGapSide = 14;
 
@@ -92,15 +93,16 @@ export function MobileControls(props: MobileControlsProps) {
                 style={{
                     ...lookAnchorStyle,
                     bottom: `calc(env(safe-area-inset-bottom, 0px) + ${lookBottomInset}px)`,
-                    width: props.isPortrait ? '44vw' : '34vw',
-                    maxWidth: props.isPortrait ? 220 : 260,
-                    minWidth: props.isPortrait ? 168 : 180,
-                    height: props.isPortrait ? 186 : 148
+                    width: props.isPortrait ? '40vw' : '28vw',
+                    maxWidth: props.isPortrait ? 192 : 220,
+                    minWidth: props.isPortrait ? 146 : 150,
+                    height: props.isPortrait ? 164 : 118
                 }}
                 onPointerDown={(event) => {
                     ensureAudio();
                     aimPointerIdRef.current = event.pointerId;
                     aimLastRef.current = { x: event.clientX, y: event.clientY };
+                    setAimActive(true);
                 }}
                 onPointerMove={(event) => {
                     if (aimPointerIdRef.current !== event.pointerId || !aimLastRef.current) return;
@@ -113,15 +115,21 @@ export function MobileControls(props: MobileControlsProps) {
                     if (aimPointerIdRef.current !== event.pointerId) return;
                     aimPointerIdRef.current = null;
                     aimLastRef.current = null;
+                    setAimActive(false);
                 }}
                 onPointerCancel={(event) => {
                     if (aimPointerIdRef.current !== event.pointerId) return;
                     aimPointerIdRef.current = null;
                     aimLastRef.current = null;
+                    setAimActive(false);
                 }}
             >
-                <div className="absolute inset-0 rounded-[28px] bg-[radial-gradient(circle_at_center,rgba(126,230,240,0.08),rgba(0,0,0,0))]" />
-                <div className="absolute inset-x-0 top-3 text-center text-[9px] tracking-[0.3em] text-[#8fb8c2]">ОБЗОР</div>
+                {aimActive ? (
+                    <>
+                        <div className="absolute inset-0 rounded-[28px] border border-[#8f6a38]/35 bg-[radial-gradient(circle_at_center,rgba(126,230,240,0.08),rgba(0,0,0,0))]" />
+                        <div className="absolute inset-x-0 top-3 text-center text-[8px] tracking-[0.24em] text-[#8fb8c2]">ОБЗОР</div>
+                    </>
+                ) : null}
             </div>
 
             <div
