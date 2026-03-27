@@ -7,6 +7,8 @@ import { useEffect, useRef, useState } from 'react';
 import { initGame } from './core/Engine';
 
 type SessionMode = 'solo' | 'host' | 'client';
+type SectionName = 'head' | 'centerTorso' | 'leftTorso' | 'rightTorso' | 'leftArm' | 'rightArm' | 'leftLeg' | 'rightLeg';
+type SectionState = Record<SectionName, number>;
 
 type GameHudState = {
     hp: number;
@@ -26,6 +28,19 @@ type GameHudState = {
     hitConfirm: number;
     hitTargetHp: number;
     hitTargetMaxHp: number;
+    sections: SectionState;
+    maxSections: SectionState;
+};
+
+const defaultSections: SectionState = {
+    head: 18,
+    centerTorso: 48,
+    leftTorso: 34,
+    rightTorso: 34,
+    leftArm: 24,
+    rightArm: 24,
+    leftLeg: 36,
+    rightLeg: 36
 };
 
 const initialGameState: GameHudState = {
@@ -45,7 +60,9 @@ const initialGameState: GameHudState = {
     aimOffsetY: 0,
     hitConfirm: 0,
     hitTargetHp: 0,
-    hitTargetMaxHp: 100
+    hitTargetMaxHp: 100,
+    sections: { ...defaultSections },
+    maxSections: { ...defaultSections }
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -228,6 +245,43 @@ function CockpitFrame(props: { warning: string; throttleLabel: string }) {
             </div>
             <div className="absolute left-1/2 bottom-[214px] -translate-x-1/2 rounded-full border border-[#5f4d2e]/70 bg-[rgba(7,7,7,0.82)] px-5 py-2 text-[10px] tracking-[0.4em] text-[#a7c1c8]">
                 {throttleLabel}
+            </div>
+        </div>
+    );
+}
+
+function SectionArmorDisplay(props: { sections: SectionState; maxSections: SectionState }) {
+    const { sections, maxSections } = props;
+
+    const ratioOf = (section: SectionName) => clamp(sections[section] / Math.max(maxSections[section], 1), 0, 1);
+    const colorOf = (section: SectionName) => {
+        const ratio = ratioOf(section);
+        if (ratio <= 0) return '#291d16';
+        if (ratio < 0.35) return '#f25c54';
+        if (ratio < 0.7) return '#efb768';
+        return '#7ee6f0';
+    };
+
+    const sectionBox = (section: SectionName, className: string) => (
+        <div
+            className={`absolute rounded-[12px] border border-[#5b4427]/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] ${className}`}
+            style={{ backgroundColor: colorOf(section), opacity: 0.2 + ratioOf(section) * 0.8 }}
+            title={section}
+        />
+    );
+
+    return (
+        <div className="rounded-[24px] border border-[#8f6a38]/70 bg-[linear-gradient(180deg,rgba(13,13,13,0.94),rgba(28,20,15,0.96))] p-3 shadow-[inset_0_0_18px_rgba(0,0,0,0.5)]">
+            <div className="text-center text-[9px] tracking-[0.28em] text-[#efb768]">СЕКЦИИ</div>
+            <div className="relative mx-auto mt-3 h-[130px] w-[120px]">
+                {sectionBox('head', 'left-1/2 top-0 h-4 w-4 -translate-x-1/2')}
+                {sectionBox('centerTorso', 'left-1/2 top-5 h-9 w-7 -translate-x-1/2')}
+                {sectionBox('leftTorso', 'left-[25px] top-7 h-7 w-5')}
+                {sectionBox('rightTorso', 'right-[25px] top-7 h-7 w-5')}
+                {sectionBox('leftArm', 'left-0 top-7 h-8 w-5')}
+                {sectionBox('rightArm', 'right-0 top-7 h-8 w-5')}
+                {sectionBox('leftLeg', 'left-[42px] bottom-0 h-12 w-4')}
+                {sectionBox('rightLeg', 'right-[42px] bottom-0 h-12 w-4')}
             </div>
         </div>
     );
@@ -640,7 +694,9 @@ export default function App() {
                                 </div>
                             </div>
 
-                            <div className="flex w-[112px] flex-col gap-3">
+                            <div className="flex w-[132px] flex-col gap-3">
+                                <SectionArmorDisplay sections={gameState.sections} maxSections={gameState.maxSections} />
+
                                 <div className="rounded-[24px] border border-[#8f6a38]/70 bg-[linear-gradient(180deg,rgba(13,13,13,0.94),rgba(28,20,15,0.96))] p-3 shadow-[inset_0_0_18px_rgba(0,0,0,0.5)]">
                                     <div className="text-[9px] tracking-[0.3em] text-[#efb768]">БРОНЯ</div>
                                     <div className="mt-2 h-2 rounded-full bg-[#241c16]">

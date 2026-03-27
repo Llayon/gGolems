@@ -155,8 +155,8 @@ export class Game {
                                 if (this.golem.hp > pState.hp) {
                                     this.mechCamera.onHit(this.golem.hp - pState.hp); // I took damage
                                 }
-                                this.golem.hp = pState.hp;
                             }
+                            if (pState.sections) this.golem.setSectionState(pState.sections);
                             continue;
                         }
                         
@@ -170,7 +170,12 @@ export class Game {
                         remoteGolem.targetPos.set(pState.x, pState.y, pState.z);
                         remoteGolem.targetLegYaw = pState.ly;
                         remoteGolem.targetTorsoYaw = pState.ty;
-                        if (pState.hp !== undefined) {
+                        if (pState.sections) {
+                            if (remoteGolem.hp > pState.hp) {
+                                remoteGolem.flashDamage();
+                            }
+                            remoteGolem.setSectionState(pState.sections);
+                        } else if (pState.hp !== undefined) {
                             if (remoteGolem.hp > pState.hp) {
                                 remoteGolem.flashDamage();
                             }
@@ -197,7 +202,7 @@ export class Game {
                     this.golem.targetTorsoYaw = data.yaw;
                     this.mechCamera.aimYaw = data.yaw;
                 }
-                this.golem.hp = this.golem.maxHp;
+                this.golem.resetSections();
                 this.mechCamera.addTrauma(1.0); // Big shake on respawn
             } else if (data.type === 'fire') {
                 if (id !== this.network.myId) {
@@ -253,6 +258,7 @@ export class Game {
         golem.model.position.set(spawn.x, spawn.y - 1.5, spawn.z);
         golem.legs.rotation.y = yaw;
         golem.torso.rotation.y = yaw;
+        golem.resetSections();
 
         if (golem.isLocal && golem.gameCamera) {
             golem.gameCamera.aimYaw = yaw;
@@ -364,7 +370,7 @@ export class Game {
         _weaponOrigin.copy(this.renderer.camera.position).addScaledVector(_weaponDir, 0.25);
 
         if (this.input.consumeClick()) {
-            if (this.golem.tryAction(5)) {
+            if (this.golem.canFire() && this.golem.tryAction(5)) {
                 const origin = _weaponOrigin.clone();
                 
                 this.projectiles.fire(origin, _weaponDir.clone(), this.network.myId);
@@ -404,38 +410,35 @@ export class Game {
             authorityMode,
             this.world.meshes,
             this.decals,
-            (ownerId, targetId, damage) => {
+            (ownerId, targetId, damage, section) => {
                 if (targetId === '__dummy__') {
                     const remainingHp = this.dummy.takeDamage(damage);
                     this.confirmHitForOwner(ownerId, remainingHp, 100);
                     return;
                 }
 
+                const hitSection = section === '__dummy__' ? 'centerTorso' : section;
+
                 if (targetId === this.network.myId) {
-                    this.golem.hp -= damage;
-                    const remainingHp = Math.max(0, this.golem.hp);
+                    const result = this.golem.applySectionDamage(hitSection, damage);
                     this.mechCamera.onHit(damage);
-                    if (this.golem.hp <= 0) {
-                        this.golem.hp = this.golem.maxHp;
+                    if (result.lethal) {
                         this.placeGolemAtSpawn(this.golem, this.getInitialLocalSpawn());
                         this.mechCamera.addTrauma(1.0); // Big shake on respawn
                     }
-                    this.confirmHitForOwner(ownerId, remainingHp, this.golem.maxHp);
+                    this.confirmHitForOwner(ownerId, result.totalHp, this.golem.maxHp);
                 } else {
                     const p = this.remotePlayers.get(targetId);
                     if (p) {
-                        p.hp -= damage;
-                        const remainingHp = Math.max(0, p.hp);
-                        p.flashDamage();
-                        if (p.hp <= 0) {
-                            p.hp = p.maxHp;
+                        const result = p.applySectionDamage(hitSection, damage);
+                        if (result.lethal) {
                             const spawnSlot = this.remoteSpawnSlots.get(targetId) ?? 1;
                             const spawn = this.getPlayerSpawn(spawnSlot);
                             const yaw = this.getSpawnYaw(spawn);
                             this.placeGolemAtSpawn(p, spawn, yaw);
                             this.network.sendTo(targetId, { type: 'respawn', x: spawn.x, y: spawn.y, z: spawn.z, yaw });
                         }
-                        this.confirmHitForOwner(ownerId, remainingHp, p.maxHp);
+                        this.confirmHitForOwner(ownerId, result.totalHp, p.maxHp);
                     }
                 }
             }
@@ -459,7 +462,8 @@ export class Game {
                 playersState[this.network.myId] = {
                     x: Number(pos.x.toFixed(2)), y: Number(pos.y.toFixed(2)), z: Number(pos.z.toFixed(2)),
                     ly: Number(this.golem.legYaw.toFixed(2)), ty: Number(this.golem.torsoYaw.toFixed(2)),
-                    hp: this.golem.hp
+                    hp: this.golem.hp,
+                    sections: { ...this.golem.sections }
                 };
                 
                 this.remotePlayers.forEach((player, id) => {
@@ -467,7 +471,8 @@ export class Game {
                     playersState[id] = {
                         x: Number(pPos.x.toFixed(2)), y: Number(pPos.y.toFixed(2)), z: Number(pPos.z.toFixed(2)),
                         ly: Number(player.legYaw.toFixed(2)), ty: Number(player.torsoYaw.toFixed(2)),
-                        hp: player.hp
+                        hp: player.hp,
+                        sections: { ...player.sections }
                     };
                 });
                 
@@ -510,7 +515,9 @@ export class Game {
             aimOffsetY: aimScreenY,
             hitConfirm: this.hitConfirmTimer,
             hitTargetHp: this.hitTargetHp,
-            hitTargetMaxHp: this.hitTargetMaxHp
+            hitTargetMaxHp: this.hitTargetMaxHp,
+            sections: { ...golemState.sections },
+            maxSections: { ...golemState.maxSections }
         });
 
         this.renderer.render();

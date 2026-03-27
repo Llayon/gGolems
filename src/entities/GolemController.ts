@@ -18,6 +18,44 @@ const _bodyForward = new THREE.Vector3();
 const _desiredVel = new THREE.Vector3();
 const _sideVel = new THREE.Vector3();
 
+export type GolemSection =
+    | 'head'
+    | 'centerTorso'
+    | 'leftTorso'
+    | 'rightTorso'
+    | 'leftArm'
+    | 'rightArm'
+    | 'leftLeg'
+    | 'rightLeg';
+
+export type GolemSectionState = Record<GolemSection, number>;
+
+export const GOLEM_SECTION_ORDER: GolemSection[] = [
+    'head',
+    'centerTorso',
+    'leftTorso',
+    'rightTorso',
+    'leftArm',
+    'rightArm',
+    'leftLeg',
+    'rightLeg'
+];
+
+const GOLEM_SECTION_MAX: GolemSectionState = {
+    head: 18,
+    centerTorso: 48,
+    leftTorso: 34,
+    rightTorso: 34,
+    leftArm: 24,
+    rightArm: 24,
+    leftLeg: 36,
+    rightLeg: 36
+};
+
+function createSectionState(): GolemSectionState {
+    return { ...GOLEM_SECTION_MAX };
+}
+
 export interface GolemState {
     pos: THREE.Vector3;
     legYaw: number;
@@ -31,6 +69,8 @@ export interface GolemState {
     overheatTimer: number;
     currentSpeed: number;
     mass: number;
+    sections: GolemSectionState;
+    maxSections: GolemSectionState;
 }
 
 export interface GolemEvents {
@@ -43,6 +83,7 @@ export class GolemController {
     model: THREE.Group;
     legs: THREE.Group;
     torso: THREE.Group;
+    head: THREE.Mesh;
     boiler: THREE.Mesh;
     leftLeg: THREE.Mesh;
     rightLeg: THREE.Mesh;
@@ -55,6 +96,8 @@ export class GolemController {
     bronzeMaterial: THREE.MeshStandardMaterial;
     runeMaterial: THREE.MeshStandardMaterial;
     boilerMaterial: THREE.MeshStandardMaterial;
+    sections: GolemSectionState = createSectionState();
+    maxSections: GolemSectionState = createSectionState();
 
     legYaw = 0;
     torsoYaw = 0;
@@ -83,6 +126,7 @@ export class GolemController {
         this.model = parts.model;
         this.legs = parts.legs;
         this.torso = parts.torso;
+        this.head = parts.head;
         this.boiler = parts.boiler;
         this.leftLeg = parts.leftLeg;
         this.rightLeg = parts.rightLeg;
@@ -104,10 +148,61 @@ export class GolemController {
         const colliderDesc = RAPIER.ColliderDesc.capsule(0.75, 0.8);
         colliderDesc.setMass(this.mass);
         physics.createCollider(colliderDesc, this.body);
+        this.syncAggregateHp();
     }
 
     flashDamage(duration = 0.16) {
         this.damageFlashTimer = Math.max(this.damageFlashTimer, duration);
+    }
+
+    syncAggregateHp() {
+        this.maxHp = GOLEM_SECTION_ORDER.reduce((sum, section) => sum + this.maxSections[section], 0);
+        this.hp = GOLEM_SECTION_ORDER.reduce((sum, section) => sum + this.sections[section], 0);
+    }
+
+    setSectionState(nextSections: Partial<GolemSectionState>) {
+        for (const section of GOLEM_SECTION_ORDER) {
+            const nextValue = nextSections[section];
+            if (typeof nextValue === 'number') {
+                this.sections[section] = nextValue;
+            }
+        }
+        this.applySectionVisuals();
+        this.syncAggregateHp();
+    }
+
+    resetSections() {
+        this.sections = createSectionState();
+        this.applySectionVisuals();
+        this.syncAggregateHp();
+    }
+
+    applySectionVisuals() {
+        this.head.visible = this.sections.head > 0;
+        this.leftArm.visible = this.sections.leftArm > 0;
+        this.rightArm.visible = this.sections.rightArm > 0;
+        this.leftLeg.visible = this.sections.leftLeg > 0;
+        this.rightLeg.visible = this.sections.rightLeg > 0;
+    }
+
+    applySectionDamage(section: GolemSection, damage: number) {
+        const current = this.sections[section];
+        const remaining = Math.max(0, current - damage);
+        this.sections[section] = remaining;
+        this.flashDamage();
+        this.applySectionVisuals();
+        this.syncAggregateHp();
+        return {
+            section,
+            remaining,
+            destroyed: current > 0 && remaining <= 0,
+            lethal: (section === 'head' || section === 'centerTorso') && remaining <= 0,
+            totalHp: this.hp
+        };
+    }
+
+    canFire() {
+        return this.sections.leftArm > 0 || this.sections.rightArm > 0;
     }
 
     tryAction(cost: number) {
@@ -174,13 +269,17 @@ export class GolemController {
 
         if (this.isLocal) {
             const torsoStep = ROTATION.torsoTurnRate.medium * dt;
-            const bodyTurnStep = ROTATION.legsTurnRate.medium * dt;
             const maxTwist = ROTATION.maxTorsoTwist;
-            const maxSpeed = GOLEM.classes.medium.speed;
             const throttleRamp = 1.6;
             const brakeResponse = 12;
             const driveResponse = 8;
             const lateralGrip = 10;
+            const legIntegrity = Math.max(
+                0.25,
+                (this.sections.leftLeg / this.maxSections.leftLeg + this.sections.rightLeg / this.maxSections.rightLeg) * 0.5
+            );
+            const bodyTurnStep = ROTATION.legsTurnRate.medium * dt * (0.45 + legIntegrity * 0.55);
+            const maxSpeed = GOLEM.classes.medium.speed * (0.3 + legIntegrity * 0.7);
 
             if (centerTorso) {
                 aimYawUnclamped = this.legYaw;
@@ -332,7 +431,9 @@ export class GolemController {
             isOverheated: this.isOverheated,
             overheatTimer: this.overheatTimer,
             currentSpeed: this.currentSpeed,
-            mass: this.mass
+            mass: this.mass,
+            sections: { ...this.sections },
+            maxSections: { ...this.maxSections }
         };
     }
 }

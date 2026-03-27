@@ -60,6 +60,7 @@ export class GolemFactory {
             model: group,
             legs: legsGroup,
             torso: torsoGroup,
+            head,
             boiler,
             leftLeg,
             rightLeg,

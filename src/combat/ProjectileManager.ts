@@ -1,13 +1,17 @@
 import * as THREE from 'three';
 import { DummyBot } from '../entities/DummyBot';
-import { GolemController } from '../entities/GolemController';
+import { GolemController, GolemSection } from '../entities/GolemController';
 import { DecalManager } from '../fx/DecalManager';
 
 const _segment = new THREE.Vector3();
 const _segmentDir = new THREE.Vector3();
 const _closestPoint = new THREE.Vector3();
 const _travelLine = new THREE.Line3();
-const _playerCenter = new THREE.Vector3();
+const _sectionCenter = new THREE.Vector3();
+const _sectionOffset = new THREE.Vector3();
+const _sectionWorld = new THREE.Vector3();
+
+type HitResult = { section: GolemSection; distanceSq: number } | null;
 
 export class ProjectileManager {
     projectiles: { mesh: THREE.Mesh, dir: THREE.Vector3, life: number, active: boolean, ownerId: string, prevPos: THREE.Vector3 }[] = [];
@@ -53,7 +57,7 @@ export class ProjectileManager {
         isHost: boolean, 
         colliders: THREE.Mesh[],
         decals: DecalManager,
-        onPlayerHit: (ownerId: string, targetId: string, damage: number) => void
+        onPlayerHit: (ownerId: string, targetId: string, damage: number, section: GolemSection | '__dummy__') => void
     ) {
         const dummyPos = dummy.mesh.position;
         for (const p of this.projectiles) {
@@ -81,37 +85,74 @@ export class ProjectileManager {
             if (p.ownerId !== 'solo-bot' && _closestPoint.distanceToSquared(dummyPos) < 2.5 * 2.5) {
                 p.active = false;
                 this.scene.remove(p.mesh);
-                if (isHost) onPlayerHit(p.ownerId, '__dummy__', 15);
+                if (isHost) onPlayerHit(p.ownerId, '__dummy__', 15, '__dummy__');
                 continue;
             }
 
             // Player collisions
             // Check local player
-            const localPos = localPlayer.body.translation();
-            _playerCenter.set(localPos.x, localPos.y, localPos.z);
-            _travelLine.closestPointToPoint(_playerCenter, true, _closestPoint);
-            if (p.ownerId !== localId && _closestPoint.distanceToSquared(_playerCenter) < 2.5 * 2.5) {
+            const localHit = this.getGolemHitSection(localPlayer);
+            if (p.ownerId !== localId && localHit) {
                 p.active = false;
                 this.scene.remove(p.mesh);
-                if (isHost) onPlayerHit(p.ownerId, localId, 15);
+                if (isHost) onPlayerHit(p.ownerId, localId, 15, localHit.section);
                 continue;
             }
 
             // Check remote players
             let hitRemote = false;
             for (const [pid, player] of players.entries()) {
-                const playerPos = player.body.translation();
-                _playerCenter.set(playerPos.x, playerPos.y, playerPos.z);
-                _travelLine.closestPointToPoint(_playerCenter, true, _closestPoint);
-                if (p.ownerId !== pid && _closestPoint.distanceToSquared(_playerCenter) < 2.5 * 2.5) {
+                const remoteHit = this.getGolemHitSection(player);
+                if (p.ownerId !== pid && remoteHit) {
                     p.active = false;
                     this.scene.remove(p.mesh);
-                    if (isHost) onPlayerHit(p.ownerId, pid, 15);
+                    if (isHost) onPlayerHit(p.ownerId, pid, 15, remoteHit.section);
                     hitRemote = true;
                     break;
                 }
             }
             if (hitRemote) continue;
         }
+    }
+
+    getGolemHitSection(player: GolemController): HitResult {
+        let bestHit: HitResult = null;
+
+        const testSphere = (center: THREE.Vector3, radius: number, section: GolemSection) => {
+            _travelLine.closestPointToPoint(center, true, _closestPoint);
+            const distanceSq = _closestPoint.distanceToSquared(center);
+            if (distanceSq > radius * radius) return;
+            if (!bestHit || distanceSq < bestHit.distanceSq) {
+                bestHit = { section, distanceSq };
+            }
+        };
+
+        player.head.getWorldPosition(_sectionCenter);
+        testSphere(_sectionCenter, 0.7, 'head');
+
+        player.torso.getWorldPosition(_sectionCenter);
+        testSphere(_sectionCenter, 1.35, 'centerTorso');
+
+        _sectionOffset.set(-0.95, 0, 0);
+        player.torso.localToWorld(_sectionWorld.copy(_sectionOffset));
+        testSphere(_sectionWorld, 1.05, 'leftTorso');
+
+        _sectionOffset.set(0.95, 0, 0);
+        player.torso.localToWorld(_sectionWorld.copy(_sectionOffset));
+        testSphere(_sectionWorld, 1.05, 'rightTorso');
+
+        player.leftArm.getWorldPosition(_sectionCenter);
+        testSphere(_sectionCenter, 1.0, 'leftArm');
+
+        player.rightArm.getWorldPosition(_sectionCenter);
+        testSphere(_sectionCenter, 1.0, 'rightArm');
+
+        player.leftLeg.getWorldPosition(_sectionCenter);
+        testSphere(_sectionCenter, 0.95, 'leftLeg');
+
+        player.rightLeg.getWorldPosition(_sectionCenter);
+        testSphere(_sectionCenter, 0.95, 'rightLeg');
+
+        return bestHit;
     }
 }
