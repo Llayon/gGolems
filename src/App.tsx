@@ -6,6 +6,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { initGame } from './core/Engine';
 
+type SessionMode = 'solo' | 'host' | 'client';
+
 type GameHudState = {
     hp: number;
     maxHp: number;
@@ -74,6 +76,34 @@ function describeArc(cx: number, cy: number, radius: number, startAngle: number,
     const end = polarToCartesian(cx, cy, radius, startAngle);
     const largeArcFlag = endAngle - startAngle <= 180 ? '0' : '1';
     return `M ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArcFlag} 0 ${end.x} ${end.y}`;
+}
+
+async function copyText(text: string) {
+    if (!text) return false;
+
+    try {
+        if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(text);
+            return true;
+        }
+    } catch {
+        // Fallback below.
+    }
+
+    try {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'absolute';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.select();
+        const result = document.execCommand('copy');
+        document.body.removeChild(textarea);
+        return result;
+    } catch {
+        return false;
+    }
 }
 
 function HeadingTape(props: { legYaw: number; torsoYaw: number; maxTwist: number }) {
@@ -199,24 +229,55 @@ function CockpitFrame(props: { warning: string; throttleLabel: string }) {
 
 export default function App() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const copyResetRef = useRef<number | null>(null);
     const [loading, setLoading] = useState(false);
     const [inLobby, setInLobby] = useState(true);
     const [hostId, setHostId] = useState('');
     const [myId, setMyId] = useState('');
     const [isHost, setIsHost] = useState(false);
+    const [sessionMode, setSessionMode] = useState<SessionMode>('solo');
+    const [showPilotPanel, setShowPilotPanel] = useState(true);
+    const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
     const [gameInstance, setGameInstance] = useState<any>(null);
     const [gameState, setGameState] = useState<GameHudState>(initialGameState);
 
-    const startGame = async (mode: 'host' | 'client', targetHostId?: string) => {
+    const showCopyState = (nextState: 'copied' | 'error') => {
+        setCopyState(nextState);
+        if (copyResetRef.current !== null) {
+            window.clearTimeout(copyResetRef.current);
+        }
+        copyResetRef.current = window.setTimeout(() => {
+            setCopyState('idle');
+            copyResetRef.current = null;
+        }, 1800);
+    };
+
+    const copyHostId = async () => {
+        if (sessionMode !== 'host' || !myId) return;
+        const success = await copyText(myId);
+        showCopyState(success ? 'copied' : 'error');
+    };
+
+    const startGame = async (mode: SessionMode, targetHostId?: string) => {
         if (!canvasRef.current) return;
         setInLobby(false);
         setLoading(true);
+        setShowPilotPanel(true);
+        setSessionMode(mode);
+        setCopyState('idle');
 
         const game = await initGame(canvasRef.current, (state: GameHudState) => {
             setGameState({ ...state });
-        });
+        }, mode);
 
         setGameInstance(game);
+
+        if (mode === 'solo') {
+            setMyId('');
+            setIsHost(false);
+            setLoading(false);
+            return;
+        }
 
         if (mode === 'host') {
             game.network.initAsHost((id: string) => {
@@ -233,6 +294,11 @@ export default function App() {
             }, (err: any) => {
                 console.error(err);
                 alert(`Ошибка подключения: ${err}`);
+                game.stop();
+                setGameInstance(null);
+                setSessionMode('solo');
+                setIsHost(false);
+                setMyId('');
                 setInLobby(true);
                 setLoading(false);
             });
@@ -241,9 +307,27 @@ export default function App() {
 
     useEffect(() => {
         return () => {
+            if (copyResetRef.current !== null) {
+                window.clearTimeout(copyResetRef.current);
+            }
             if (gameInstance) gameInstance.stop();
         };
     }, [gameInstance]);
+
+    useEffect(() => {
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (inLobby || loading || event.repeat || event.code !== 'KeyH') return;
+
+            const target = event.target;
+            if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
+
+            event.preventDefault();
+            setShowPilotPanel((current) => !current);
+        };
+
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [inLobby, loading]);
 
     const torsoOffset = angleDiff(gameState.legYaw, gameState.torsoYaw);
     const twistRatio = gameState.maxTwist > 0 ? clamp(torsoOffset / gameState.maxTwist, -1, 1) : 0;
@@ -273,6 +357,16 @@ export default function App() {
     const reverseFillHeight = `${Math.max(0, -throttleRatio / 0.45) * (100 - zeroLineTop)}%`;
     const reticleX = Math.max(-320, Math.min(320, gameState.aimOffsetX * 320));
     const reticleY = Math.max(-220, Math.min(220, -gameState.aimOffsetY * 180));
+    const sessionLabel = sessionMode === 'solo'
+        ? 'ЛОКАЛЬНЫЙ БОЙ'
+        : isHost
+            ? 'КАНАЛ ХОСТА'
+            : 'КАНАЛ КЛИЕНТА';
+    const copyLabel = copyState === 'copied'
+        ? 'СКОПИРОВАНО'
+        : copyState === 'error'
+            ? 'НЕ УДАЛОСЬ'
+            : 'КОПИРОВАТЬ';
 
     return (
         <div className="relative h-screen w-full overflow-hidden bg-[#100d0b] font-mono text-[#f2ddb1]">
@@ -285,6 +379,19 @@ export default function App() {
                     </h1>
 
                     <div className="flex w-96 flex-col gap-6 rounded-2xl border border-[#8f6a38]/40 bg-black/45 p-8 backdrop-blur-sm">
+                        <button
+                            onClick={() => startGame('solo')}
+                            className="rounded bg-[#7d4f22] py-3 font-bold tracking-[0.22em] text-white shadow-[0_0_15px_rgba(125,79,34,0.35)] transition-colors hover:bg-[#99622d]"
+                        >
+                            БОЙ С БОТОМ
+                        </button>
+
+                        <div className="flex items-center gap-4">
+                            <div className="h-px flex-1 bg-[#8f6a38]/30" />
+                            <span className="text-sm tracking-[0.35em] text-[#d2b78d]/60">СЕТЬ</span>
+                            <div className="h-px flex-1 bg-[#8f6a38]/30" />
+                        </div>
+
                         <button
                             onClick={() => startGame('host')}
                             className="rounded bg-[#b0622d] py-3 font-bold tracking-[0.22em] text-white shadow-[0_0_15px_rgba(176,98,45,0.35)] transition-colors hover:bg-[#ca7240]"
@@ -330,21 +437,72 @@ export default function App() {
                 <>
                     <CockpitFrame warning={warningText} throttleLabel={throttleText} />
 
-                    <div className="pointer-events-none absolute left-4 top-4 z-20 max-w-[280px] rounded-2xl border border-[#8f6a38]/35 bg-[rgba(10,10,10,0.62)] p-4 text-sm text-[#d7c5a1] shadow-[0_0_20px_rgba(0,0,0,0.38)] backdrop-blur-sm">
-                        <h1 className="mb-2 text-lg font-bold tracking-[0.32em] text-[#efb768]">ПАНЕЛЬ ПИЛОТА</h1>
-                        <p className="mb-3 text-xs tracking-[0.22em] text-[#8fb8c2]">
-                            {isHost ? 'КАНАЛ ХОСТА' : 'КАНАЛ КЛИЕНТА'} | ID {myId || 'СИНХРОНИЗАЦИЯ'}
-                        </p>
-                        <ul className="space-y-1 text-[11px] tracking-[0.18em] text-[#b9c7c8]">
-                            <li><span className="text-[#efb768]">МЫШЬ</span> наводка торса</li>
-                            <li><span className="text-[#efb768]">W / S</span> поднять / сбросить тягу</li>
-                            <li><span className="text-[#efb768]">A / D</span> повернуть шасси</li>
-                            <li><span className="text-[#efb768]">C</span> центрировать торс</li>
-                            <li><span className="text-[#efb768]">X</span> отсечь тягу</li>
-                            <li><span className="text-[#efb768]">ЛКМ</span> рунный болт</li>
-                            <li><span className="text-[#efb768]">SHIFT</span> рывок</li>
-                            <li><span className="text-[#efb768]">SPACE</span> сброс пара</li>
-                        </ul>
+                    {sessionMode === 'host' && myId ? (
+                        <div className="pointer-events-auto absolute right-4 top-4 z-30 flex items-center gap-3 rounded-2xl border border-[#8f6a38]/45 bg-[rgba(10,10,10,0.78)] px-4 py-3 text-[#e1cea7] shadow-[0_0_22px_rgba(0,0,0,0.32)] backdrop-blur-sm">
+                            <div className="min-w-0">
+                                <div className="text-[10px] tracking-[0.34em] text-[#8fb8c2]">ID ХОСТА</div>
+                                <div className="mt-1 select-all font-bold tracking-[0.18em] text-[#efb768]">{myId}</div>
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={copyHostId}
+                                className="shrink-0 rounded-full border border-[#8f6a38]/55 bg-black/40 px-4 py-2 text-[10px] tracking-[0.24em] text-[#d8c19a] transition-colors hover:border-[#efb768]/70 hover:text-[#efb768]"
+                            >
+                                {copyLabel}
+                            </button>
+                        </div>
+                    ) : null}
+
+                    <div className="absolute left-4 top-4 z-20">
+                        {showPilotPanel ? (
+                            <div className="pointer-events-auto max-w-[280px] rounded-2xl border border-[#8f6a38]/35 bg-[rgba(10,10,10,0.62)] p-4 text-sm text-[#d7c5a1] shadow-[0_0_20px_rgba(0,0,0,0.38)] backdrop-blur-sm">
+                                <div className="mb-3 flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <h1 className="text-lg font-bold tracking-[0.32em] text-[#efb768]">ПАНЕЛЬ ПИЛОТА</h1>
+                                        <p className="mt-2 text-xs tracking-[0.22em] text-[#8fb8c2]">
+                                            {sessionMode === 'solo' ? sessionLabel : `${sessionLabel} | ID ${myId || 'СИНХРОНИЗАЦИЯ'}`}
+                                        </p>
+                                        {sessionMode === 'host' && myId ? (
+                                            <button
+                                                type="button"
+                                                onClick={copyHostId}
+                                                className="mt-3 rounded-full border border-[#8f6a38]/55 bg-black/35 px-3 py-1 text-[10px] tracking-[0.24em] text-[#d8c19a] transition-colors hover:border-[#efb768]/70 hover:text-[#efb768]"
+                                            >
+                                                {copyLabel}
+                                            </button>
+                                        ) : null}
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPilotPanel(false)}
+                                        className="rounded-full border border-[#8f6a38]/55 bg-black/45 px-3 py-1 text-[10px] tracking-[0.24em] text-[#cdb488] transition-colors hover:border-[#efb768]/70 hover:text-[#efb768]"
+                                    >
+                                        СКРЫТЬ [H]
+                                    </button>
+                                </div>
+
+                                <ul className="space-y-1 text-[11px] tracking-[0.18em] text-[#b9c7c8]">
+                                    <li><span className="text-[#efb768]">МЫШЬ</span> наводка торса</li>
+                                    <li><span className="text-[#efb768]">W / S</span> поднять / сбросить тягу</li>
+                                    <li><span className="text-[#efb768]">A / D</span> повернуть шасси</li>
+                                    <li><span className="text-[#efb768]">C</span> центрировать торс</li>
+                                    <li><span className="text-[#efb768]">X</span> отсечь тягу</li>
+                                    <li><span className="text-[#efb768]">ЛКМ</span> рунный болт</li>
+                                    <li><span className="text-[#efb768]">SHIFT</span> рывок</li>
+                                    <li><span className="text-[#efb768]">SPACE</span> сброс пара</li>
+                                </ul>
+                            </div>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={() => setShowPilotPanel(true)}
+                                className="pointer-events-auto rounded-full border border-[#8f6a38]/55 bg-[rgba(10,10,10,0.72)] px-4 py-2 text-[10px] tracking-[0.3em] text-[#cdb488] shadow-[0_0_18px_rgba(0,0,0,0.3)] transition-colors hover:border-[#efb768]/70 hover:text-[#efb768]"
+                            >
+                                ПАНЕЛЬ [H]
+                            </button>
+                        )}
                     </div>
 
                     <TorsoTwistArc twistRatio={twistRatio} maxTwist={gameState.maxTwist} />

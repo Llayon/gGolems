@@ -17,6 +17,9 @@ import { GOLEM, ROTATION } from '../utils/constants';
 const _weaponOrigin = new THREE.Vector3();
 const _weaponDir = new THREE.Vector3();
 const _aimPoint = new THREE.Vector3();
+const _botTarget = new THREE.Vector3();
+
+type SessionMode = 'solo' | 'host' | 'client';
 
 export class Game {
     renderer: Renderer;
@@ -34,14 +37,16 @@ export class Game {
     sounds: AudioManager;
     decals: DecalManager;
     onStateUpdate: (state: any) => void;
+    sessionMode: SessionMode;
     
     lastTime = 0;
     isRunning = false;
     animationFrameId = 0;
     networkTickTimer = 0;
 
-    constructor(canvas: HTMLCanvasElement, onStateUpdate: (state: any) => void) {
+    constructor(canvas: HTMLCanvasElement, onStateUpdate: (state: any) => void, sessionMode: SessionMode = 'solo') {
         this.onStateUpdate = onStateUpdate;
+        this.sessionMode = sessionMode;
         this.renderer = new Renderer(canvas);
         this.input = new InputManager();
         this.network = new NetworkManager();
@@ -58,7 +63,18 @@ export class Game {
         this.golem.gameCamera = this.mechCamera;
         this.particles = new ParticleManager(this.renderer.scene);
         this.projectiles = new ProjectileManager(this.renderer.scene);
-        this.dummy = new DummyBot(this.renderer.scene, this.physics, 0, 5, -28);
+        this.dummy = new DummyBot(
+            this.renderer.scene,
+            this.physics,
+            this.world.botSpawn.x,
+            this.world.botSpawn.y,
+            this.world.botSpawn.z,
+            sessionMode !== 'client'
+        );
+
+        if (sessionMode === 'client') {
+            this.setClientMode();
+        }
 
         canvas.addEventListener('click', () => {
             canvas.requestPointerLock();
@@ -167,6 +183,7 @@ export class Game {
     }
 
     setClientMode() {
+        this.sessionMode = 'client';
         this.dummy.isHost = false;
         this.dummy.body.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
     }
@@ -227,7 +244,15 @@ export class Game {
             player.update(dt, player.targetTorsoYaw, 0, 0, false, false, this.sounds, this.decals);
         });
 
-        this.dummy.update(dt);
+        const authorityMode = this.sessionMode !== 'client';
+        const localPos = this.golem.body.translation();
+        const botFireSolution = this.sessionMode === 'solo'
+            ? this.dummy.update(dt, _botTarget.set(localPos.x, localPos.y + 1.4, localPos.z))
+            : this.dummy.update(dt);
+        if (botFireSolution) {
+            this.projectiles.fire(botFireSolution.origin, botFireSolution.dir, 'solo-bot');
+        }
+
         this.projectiles.update(dt);
         this.decals.update(dt);
         
@@ -242,12 +267,14 @@ export class Game {
                 this.mechCamera.onFire(0.3); // RuneBolt weight
                 
                 // Broadcast fire event
-                this.network.broadcast({
-                    type: 'fire',
-                    ownerId: this.network.myId,
-                    ox: origin.x, oy: origin.y, oz: origin.z,
-                    dx: _weaponDir.x, dy: _weaponDir.y, dz: _weaponDir.z
-                });
+                if (this.sessionMode !== 'solo') {
+                    this.network.broadcast({
+                        type: 'fire',
+                        ownerId: this.network.myId,
+                        ox: origin.x, oy: origin.y, oz: origin.z,
+                        dx: _weaponDir.x, dy: _weaponDir.y, dz: _weaponDir.z
+                    });
+                }
             }
         }
         
@@ -270,7 +297,7 @@ export class Game {
             this.remotePlayers, 
             this.golem, 
             this.network.myId, 
-            this.network.isHost,
+            authorityMode,
             this.world.meshes,
             this.decals,
             (targetId, damage) => {
@@ -279,7 +306,11 @@ export class Game {
                     this.mechCamera.onHit(damage);
                     if (this.golem.hp <= 0) {
                         this.golem.hp = this.golem.maxHp;
-                        this.golem.body.setTranslation({ x: (Math.random() - 0.5) * 60, y: 5, z: (Math.random() - 0.5) * 60 }, true);
+                        this.golem.body.setTranslation({
+                            x: (Math.random() - 0.5) * this.world.spawnRadius * 2,
+                            y: 5,
+                            z: (Math.random() - 0.5) * this.world.spawnRadius * 2
+                        }, true);
                         this.mechCamera.addTrauma(1.0); // Big shake on respawn
                     }
                 } else {
@@ -288,8 +319,8 @@ export class Game {
                         p.hp -= damage;
                         if (p.hp <= 0) {
                             p.hp = p.maxHp;
-                            const rx = (Math.random() - 0.5) * 60;
-                            const rz = (Math.random() - 0.5) * 60;
+                            const rx = (Math.random() - 0.5) * this.world.spawnRadius * 2;
+                            const rz = (Math.random() - 0.5) * this.world.spawnRadius * 2;
                             p.body.setTranslation({ x: rx, y: 5, z: rz }, true);
                             this.network.sendTo(targetId, { type: 'respawn', x: rx, y: 5, z: rz });
                         }
@@ -310,7 +341,7 @@ export class Game {
             
             const pos = this.golem.body.translation();
             
-            if (this.network.isHost) {
+            if (this.sessionMode === 'host') {
                 // Host broadcasts all states
                 const playersState: any = {};
                 playersState[this.network.myId] = {
@@ -333,7 +364,7 @@ export class Game {
                     players: playersState,
                     dummy: { x: this.dummy.mesh.position.x, y: this.dummy.mesh.position.y, z: this.dummy.mesh.position.z, hp: this.dummy.hp }
                 });
-            } else {
+            } else if (this.sessionMode === 'client') {
                 // Client sends input/position to Host
                 this.network.sendToHost({
                     type: 'input',
@@ -371,9 +402,9 @@ export class Game {
     }
 }
 
-export async function initGame(canvas: HTMLCanvasElement, onStateUpdate: (state: any) => void) {
+export async function initGame(canvas: HTMLCanvasElement, onStateUpdate: (state: any) => void, sessionMode: SessionMode = 'solo') {
     await RAPIER.init();
-    const game = new Game(canvas, onStateUpdate);
+    const game = new Game(canvas, onStateUpdate, sessionMode);
     game.start();
     return game;
 }

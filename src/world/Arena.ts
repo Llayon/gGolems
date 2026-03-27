@@ -5,9 +5,12 @@ import { PropManager } from './PropManager';
 export class Arena {
     meshes: THREE.Mesh[] = [];
     propManager: PropManager;
+    readonly halfSize = 78;
+    readonly spawnRadius = 62;
+    readonly botSpawn = new THREE.Vector3(0, 5, -54);
 
     constructor(scene: THREE.Scene, physics: RAPIER.World) {
-        const arenaHalfSize = 45;
+        const arenaHalfSize = this.halfSize;
         const wallThickness = 2;
         const wallHeight = 6;
         const wallSpan = arenaHalfSize * 2 - wallThickness * 2;
@@ -30,10 +33,16 @@ export class Arena {
         this.createBox(scene, physics, -arenaHalfSize, wallHeight / 2, 0, wallThickness, wallHeight, wallSpan, 0x3a3a45);
         this.createBox(scene, physics, arenaHalfSize, wallHeight / 2, 0, wallThickness, wallHeight, wallSpan, 0x3a3a45);
 
-        this.createBox(scene, physics, -18, 1.5, -12, 4, 3, 4, 0x4a4a55);
-        this.createBox(scene, physics, 18, 1.5, 12, 4, 3, 4, 0x4a4a55);
-        this.createBox(scene, physics, 0, 2, -24, 6, 4, 4, 0x4a4a55);
-        this.createBox(scene, physics, 0, 2, 24, 6, 4, 4, 0x4a4a55);
+        this.createBox(scene, physics, -32, 1.75, -24, 6, 3.5, 6, 0x4a4a55);
+        this.createBox(scene, physics, 32, 1.75, 24, 6, 3.5, 6, 0x4a4a55);
+        this.createBox(scene, physics, -28, 2.25, 28, 8, 4.5, 6, 0x4a4a55);
+        this.createBox(scene, physics, 28, 2.25, -28, 8, 4.5, 6, 0x4a4a55);
+        this.createBox(scene, physics, 0, 2.5, -42, 10, 5, 8, 0x4a4a55);
+        this.createBox(scene, physics, 0, 2.5, 42, 10, 5, 8, 0x4a4a55);
+        this.createBox(scene, physics, -50, 2, 0, 6, 4, 10, 0x4a4a55);
+        this.createBox(scene, physics, 50, 2, 0, 6, 4, 10, 0x4a4a55);
+        this.createBox(scene, physics, -12, 1.5, 0, 4, 3, 4, 0x565662);
+        this.createBox(scene, physics, 12, 1.5, 0, 4, 3, 4, 0x565662);
         
         this.propManager = new PropManager(scene);
     }

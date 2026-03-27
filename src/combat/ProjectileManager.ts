@@ -77,7 +77,7 @@ export class ProjectileManager {
 
             // Dummy collision
             _travelLine.closestPointToPoint(dummyPos, true, _closestPoint);
-            if (_closestPoint.distanceToSquared(dummyPos) < 2.5 * 2.5) {
+            if (p.ownerId !== 'solo-bot' && _closestPoint.distanceToSquared(dummyPos) < 2.5 * 2.5) {
                 p.active = false;
                 this.scene.remove(p.mesh);
                 if (isHost) dummy.takeDamage(15);
