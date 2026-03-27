@@ -56,6 +56,21 @@ export class GolemFactory {
 
         group.add(torsoGroup);
 
-        return { model: group, legs: legsGroup, torso: torsoGroup, boiler, leftLeg, rightLeg, leftArm, rightArm, pelvis };
+        return {
+            model: group,
+            legs: legsGroup,
+            torso: torsoGroup,
+            boiler,
+            leftLeg,
+            rightLeg,
+            leftArm,
+            rightArm,
+            pelvis,
+            materials: {
+                bronze: bronzeMat,
+                rune: runeMat,
+                boiler: boilerMat
+            }
+        };
     }
 }

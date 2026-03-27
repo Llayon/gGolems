@@ -41,6 +41,7 @@ export class DummyBot {
         this.hp -= amount;
         this.damageTimer = 0.1;
         this.mat.emissive.setHex(0xffffff);
+        const remainingHp = Math.max(0, this.hp);
         if (this.hp <= 0) {
             this.hp = 100;
             this.body.setTranslation({
@@ -50,6 +51,7 @@ export class DummyBot {
             }, true);
             this.fireCooldown = 1.5;
         }
+        return remainingHp;
     }
 
     update(dt: number, target?: THREE.Vector3) {

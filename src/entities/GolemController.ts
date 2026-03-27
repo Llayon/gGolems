@@ -52,6 +52,9 @@ export class GolemController {
     body: RAPIER.RigidBody;
     isLocal: boolean;
     gameCamera?: MechCamera;
+    bronzeMaterial: THREE.MeshStandardMaterial;
+    runeMaterial: THREE.MeshStandardMaterial;
+    boilerMaterial: THREE.MeshStandardMaterial;
 
     legYaw = 0;
     torsoYaw = 0;
@@ -68,6 +71,7 @@ export class GolemController {
     walkCycle = 0;
     lastStepPhase = 0;
     currentSpeed = 0;
+    damageFlashTimer = 0;
 
     targetPos = new THREE.Vector3();
     targetLegYaw = 0;
@@ -85,6 +89,9 @@ export class GolemController {
         this.leftArm = parts.leftArm;
         this.rightArm = parts.rightArm;
         this.pelvis = parts.pelvis;
+        this.bronzeMaterial = parts.materials.bronze;
+        this.runeMaterial = parts.materials.rune;
+        this.boilerMaterial = parts.materials.boiler;
         scene.add(this.model);
         if (isLocal) {
             this.model.visible = false;
@@ -97,6 +104,10 @@ export class GolemController {
         const colliderDesc = RAPIER.ColliderDesc.capsule(0.75, 0.8);
         colliderDesc.setMass(this.mass);
         physics.createCollider(colliderDesc, this.body);
+    }
+
+    flashDamage(duration = 0.16) {
+        this.damageFlashTimer = Math.max(this.damageFlashTimer, duration);
     }
 
     tryAction(cost: number) {
@@ -140,6 +151,16 @@ export class GolemController {
         colliders: THREE.Mesh[] = []
     ): GolemEvents {
         const events: GolemEvents = { dashed: false, vented: false, footstep: false };
+
+        if (this.damageFlashTimer > 0) {
+            this.damageFlashTimer = Math.max(0, this.damageFlashTimer - dt);
+        }
+        const flashRatio = this.damageFlashTimer > 0 ? this.damageFlashTimer / 0.16 : 0;
+        const flashIntensity = flashRatio * 1.6;
+        this.bronzeMaterial.emissive.setRGB(0.55 * flashRatio, 0.42 * flashRatio, 0.18 * flashRatio);
+        this.bronzeMaterial.emissiveIntensity = flashIntensity;
+        this.runeMaterial.emissiveIntensity = 2 + flashIntensity * 0.6;
+        this.boilerMaterial.emissiveIntensity = 1.5 + flashIntensity * 0.35;
 
         if (this.isOverheated) {
             this.overheatTimer -= dt;

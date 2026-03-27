@@ -7,6 +7,7 @@ const _segment = new THREE.Vector3();
 const _segmentDir = new THREE.Vector3();
 const _closestPoint = new THREE.Vector3();
 const _travelLine = new THREE.Line3();
+const _playerCenter = new THREE.Vector3();
 
 export class ProjectileManager {
     projectiles: { mesh: THREE.Mesh, dir: THREE.Vector3, life: number, active: boolean, ownerId: string, prevPos: THREE.Vector3 }[] = [];
@@ -52,7 +53,7 @@ export class ProjectileManager {
         isHost: boolean, 
         colliders: THREE.Mesh[],
         decals: DecalManager,
-        onPlayerHit: (targetId: string, damage: number) => void
+        onPlayerHit: (ownerId: string, targetId: string, damage: number) => void
     ) {
         const dummyPos = dummy.mesh.position;
         for (const p of this.projectiles) {
@@ -80,28 +81,32 @@ export class ProjectileManager {
             if (p.ownerId !== 'solo-bot' && _closestPoint.distanceToSquared(dummyPos) < 2.5 * 2.5) {
                 p.active = false;
                 this.scene.remove(p.mesh);
-                if (isHost) dummy.takeDamage(15);
+                if (isHost) onPlayerHit(p.ownerId, '__dummy__', 15);
                 continue;
             }
 
             // Player collisions
             // Check local player
-            _travelLine.closestPointToPoint(localPlayer.model.position, true, _closestPoint);
-            if (p.ownerId !== localId && _closestPoint.distanceToSquared(localPlayer.model.position) < 2.5 * 2.5) {
+            const localPos = localPlayer.body.translation();
+            _playerCenter.set(localPos.x, localPos.y, localPos.z);
+            _travelLine.closestPointToPoint(_playerCenter, true, _closestPoint);
+            if (p.ownerId !== localId && _closestPoint.distanceToSquared(_playerCenter) < 2.5 * 2.5) {
                 p.active = false;
                 this.scene.remove(p.mesh);
-                if (isHost) onPlayerHit(localId, 15);
+                if (isHost) onPlayerHit(p.ownerId, localId, 15);
                 continue;
             }
 
             // Check remote players
             let hitRemote = false;
             for (const [pid, player] of players.entries()) {
-                _travelLine.closestPointToPoint(player.model.position, true, _closestPoint);
-                if (p.ownerId !== pid && _closestPoint.distanceToSquared(player.model.position) < 2.5 * 2.5) {
+                const playerPos = player.body.translation();
+                _playerCenter.set(playerPos.x, playerPos.y, playerPos.z);
+                _travelLine.closestPointToPoint(_playerCenter, true, _closestPoint);
+                if (p.ownerId !== pid && _closestPoint.distanceToSquared(_playerCenter) < 2.5 * 2.5) {
                     p.active = false;
                     this.scene.remove(p.mesh);
-                    if (isHost) onPlayerHit(pid, 15);
+                    if (isHost) onPlayerHit(p.ownerId, pid, 15);
                     hitRemote = true;
                     break;
                 }

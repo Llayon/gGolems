@@ -40,6 +40,9 @@ export class Game {
     onStateUpdate: (state: any) => void;
     sessionMode: SessionMode;
     remoteSpawnSlots: Map<string, number> = new Map();
+    hitConfirmTimer = 0;
+    hitTargetHp = 0;
+    hitTargetMaxHp = 100;
     
     lastTime = 0;
     isRunning = false;
@@ -167,7 +170,12 @@ export class Game {
                         remoteGolem.targetPos.set(pState.x, pState.y, pState.z);
                         remoteGolem.targetLegYaw = pState.ly;
                         remoteGolem.targetTorsoYaw = pState.ty;
-                        if (pState.hp !== undefined) remoteGolem.hp = pState.hp;
+                        if (pState.hp !== undefined) {
+                            if (remoteGolem.hp > pState.hp) {
+                                remoteGolem.flashDamage();
+                            }
+                            remoteGolem.hp = pState.hp;
+                        }
                     }
                 }
             } else if (data.type === 'input' && this.network.isHost) {
@@ -204,6 +212,8 @@ export class Game {
                         });
                     }
                 }
+            } else if (data.type === 'hitConfirm') {
+                this.registerHitConfirm(data.hp ?? 0, data.maxHp ?? 100);
             }
         };
     }
@@ -258,6 +268,29 @@ export class Game {
         return ((this.remotePlayers.size - 1) % Math.max(1, this.world.playerSpawns.length - 1)) + 1;
     }
 
+    registerHitConfirm(targetHp: number, targetMaxHp: number) {
+        this.hitConfirmTimer = 0.22;
+        this.hitTargetHp = Math.max(0, targetHp);
+        this.hitTargetMaxHp = Math.max(1, targetMaxHp);
+    }
+
+    confirmHitForOwner(ownerId: string, targetHp: number, targetMaxHp: number) {
+        if (ownerId === 'solo-bot') return;
+
+        const isLocalShooter = this.sessionMode === 'solo'
+            ? ownerId !== 'solo-bot'
+            : ownerId === this.network.myId;
+
+        if (isLocalShooter) {
+            this.registerHitConfirm(targetHp, targetMaxHp);
+            return;
+        }
+
+        if (this.sessionMode === 'host' && ownerId) {
+            this.network.sendTo(ownerId, { type: 'hitConfirm', hp: targetHp, maxHp: targetMaxHp });
+        }
+    }
+
     start() {
         this.isRunning = true;
         this.lastTime = performance.now();
@@ -276,6 +309,7 @@ export class Game {
 
         const dt = Math.min((time - this.lastTime) / 1000, 0.1);
         this.lastTime = time;
+        this.hitConfirmTimer = Math.max(0, this.hitConfirmTimer - dt);
 
         this.physics.step();
 
@@ -370,19 +404,29 @@ export class Game {
             authorityMode,
             this.world.meshes,
             this.decals,
-            (targetId, damage) => {
+            (ownerId, targetId, damage) => {
+                if (targetId === '__dummy__') {
+                    const remainingHp = this.dummy.takeDamage(damage);
+                    this.confirmHitForOwner(ownerId, remainingHp, 100);
+                    return;
+                }
+
                 if (targetId === this.network.myId) {
                     this.golem.hp -= damage;
+                    const remainingHp = Math.max(0, this.golem.hp);
                     this.mechCamera.onHit(damage);
                     if (this.golem.hp <= 0) {
                         this.golem.hp = this.golem.maxHp;
                         this.placeGolemAtSpawn(this.golem, this.getInitialLocalSpawn());
                         this.mechCamera.addTrauma(1.0); // Big shake on respawn
                     }
+                    this.confirmHitForOwner(ownerId, remainingHp, this.golem.maxHp);
                 } else {
                     const p = this.remotePlayers.get(targetId);
                     if (p) {
                         p.hp -= damage;
+                        const remainingHp = Math.max(0, p.hp);
+                        p.flashDamage();
                         if (p.hp <= 0) {
                             p.hp = p.maxHp;
                             const spawnSlot = this.remoteSpawnSlots.get(targetId) ?? 1;
@@ -391,6 +435,7 @@ export class Game {
                             this.placeGolemAtSpawn(p, spawn, yaw);
                             this.network.sendTo(targetId, { type: 'respawn', x: spawn.x, y: spawn.y, z: spawn.z, yaw });
                         }
+                        this.confirmHitForOwner(ownerId, remainingHp, p.maxHp);
                     }
                 }
             }
@@ -462,7 +507,10 @@ export class Game {
             maxSpeed: GOLEM.classes.medium.speed,
             maxTwist: ROTATION.maxTorsoTwist,
             aimOffsetX: aimScreenX,
-            aimOffsetY: aimScreenY
+            aimOffsetY: aimScreenY,
+            hitConfirm: this.hitConfirmTimer,
+            hitTargetHp: this.hitTargetHp,
+            hitTargetMaxHp: this.hitTargetMaxHp
         });
 
         this.renderer.render();
