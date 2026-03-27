@@ -85,10 +85,10 @@ export class GolemController {
     torso: THREE.Group;
     head: THREE.Mesh;
     boiler: THREE.Mesh;
-    leftLeg: THREE.Mesh;
-    rightLeg: THREE.Mesh;
-    leftArm: THREE.Mesh;
-    rightArm: THREE.Mesh;
+    leftLeg: THREE.Group;
+    rightLeg: THREE.Group;
+    leftArm: THREE.Group;
+    rightArm: THREE.Group;
     pelvis: THREE.Mesh;
     body: RAPIER.RigidBody;
     isLocal: boolean;
