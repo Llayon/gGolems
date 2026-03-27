@@ -280,7 +280,7 @@ export class GolemController {
                 (this.sections.leftLeg / this.maxSections.leftLeg + this.sections.rightLeg / this.maxSections.rightLeg) * 0.5
             );
             const bodyTurnStep = ROTATION.legsTurnRate.medium * dt * (0.45 + legIntegrity * 0.55);
-            const maxSpeed = GOLEM.classes.medium.speed * (0.28 + legIntegrity * 0.68);
+            const maxSpeed = GOLEM.classes.medium.speed * (0.3 + legIntegrity * 0.72);
 
             if (centerTorso) {
                 aimYawUnclamped = this.legYaw;
