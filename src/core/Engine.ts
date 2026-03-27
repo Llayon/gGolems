@@ -14,6 +14,7 @@ import { DecalManager } from '../fx/DecalManager';
 import { ProjectileManager } from '../combat/ProjectileManager';
 import { MechCamera } from '../camera/MechCamera';
 import { GOLEM, ROTATION } from '../utils/constants';
+import { QualityProfile, detectQualityProfile } from '../utils/quality';
 
 const _weaponOrigin = new THREE.Vector3();
 const _weaponDir = new THREE.Vector3();
@@ -45,6 +46,7 @@ export class Game {
     network: NetworkManager;
     sounds: AudioManager;
     decals: DecalManager;
+    quality: QualityProfile;
     onStateUpdate: (state: any) => void;
     sessionMode: SessionMode;
     remoteSpawnSlots: Map<string, number> = new Map();
@@ -56,15 +58,17 @@ export class Game {
     isRunning = false;
     animationFrameId = 0;
     networkTickTimer = 0;
+    boilerParticleTimer = 0;
 
     constructor(canvas: HTMLCanvasElement, onStateUpdate: (state: any) => void, sessionMode: SessionMode = 'solo') {
         this.onStateUpdate = onStateUpdate;
         this.sessionMode = sessionMode;
-        this.renderer = new Renderer(canvas);
+        this.quality = detectQualityProfile();
+        this.renderer = new Renderer(canvas, this.quality);
         this.input = new InputManager();
         this.network = new NetworkManager();
         this.sounds = new AudioManager();
-        this.decals = new DecalManager(this.renderer.scene);
+        this.decals = new DecalManager(this.renderer.scene, this.quality);
         
         this.physicsWrapper = new Physics();
         this.physicsWrapper.initSync();
@@ -74,8 +78,8 @@ export class Game {
         this.mechCamera = new MechCamera(this.renderer.camera);
         this.golem = new GolemController(this.renderer.scene, this.physics, true);
         this.golem.gameCamera = this.mechCamera;
-        this.particles = new ParticleManager(this.renderer.scene);
-        this.debris = new DebrisManager(this.renderer.scene);
+        this.particles = new ParticleManager(this.renderer.scene, this.quality);
+        this.debris = new DebrisManager(this.renderer.scene, this.quality);
         this.projectiles = new ProjectileManager(this.renderer.scene);
         this.dummy = new DummyBot(
             this.renderer.scene,
@@ -492,9 +496,13 @@ export class Game {
 
         this.playPropFx();
         
-        const boilerPos = new THREE.Vector3();
-        this.golem.boiler.getWorldPosition(boilerPos);
-        this.particles.emit(boilerPos.x, boilerPos.y + 0.5, boilerPos.z);
+        this.boilerParticleTimer += dt;
+        if (this.boilerParticleTimer >= this.quality.boilerParticleInterval) {
+            this.boilerParticleTimer = 0;
+            const boilerPos = new THREE.Vector3();
+            this.golem.boiler.getWorldPosition(boilerPos);
+            this.particles.emit(boilerPos.x, boilerPos.y + 0.5, boilerPos.z);
+        }
         this.particles.update(dt);
         this.debris.update(dt);
 

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { QualityProfile } from '../utils/quality';
 
 function createFootprintTexture() {
     const canvas = document.createElement('canvas');
@@ -91,8 +92,9 @@ export class DecalManager {
     private footprintMat: THREE.MeshBasicMaterial;
     private ruinGeo: THREE.PlaneGeometry;
     private ruinMat: THREE.MeshBasicMaterial;
+    private ruinLifeScale: number;
 
-    constructor(scene: THREE.Scene) {
+    constructor(scene: THREE.Scene, quality: QualityProfile) {
         this.scene = scene;
 
         this.footprintGeo = new THREE.PlaneGeometry(1, 1);
@@ -115,8 +117,9 @@ export class DecalManager {
             polygonOffsetFactor: -1
         });
 
-        this.prewarmPool(this.footprintPool, this.footprintGeo, this.footprintMat, 56);
-        this.prewarmPool(this.ruinPool, this.ruinGeo, this.ruinMat, 18);
+        this.ruinLifeScale = quality.ruinLifeScale;
+        this.prewarmPool(this.footprintPool, this.footprintGeo, this.footprintMat, quality.footprintPool);
+        this.prewarmPool(this.ruinPool, this.ruinGeo, this.ruinMat, quality.ruinPool);
     }
 
     prewarmPool(pool: THREE.Mesh[], geometry: THREE.PlaneGeometry, material: THREE.MeshBasicMaterial, count: number) {
@@ -164,13 +167,14 @@ export class DecalManager {
         const mesh = this.claimMesh(this.ruinPool, this.ruinDecals);
         const scaleX = radius * (0.9 + Math.random() * 0.18);
         const scaleY = radius * (0.68 + Math.random() * 0.16);
+        const adjustedLife = life * this.ruinLifeScale;
         mesh.position.set(pos.x, 0.03, pos.z);
         mesh.rotation.z = Math.random() * Math.PI * 2;
         mesh.scale.set(scaleX, scaleY, 1);
         this.ruinDecals.push({
             mesh,
-            life,
-            fadeStart: Math.min(10, life * 0.4),
+            life: adjustedLife,
+            fadeStart: Math.min(10, adjustedLife * 0.4),
             baseScaleX: scaleX,
             baseScaleY: scaleY
         });

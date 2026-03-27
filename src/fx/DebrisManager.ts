@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { QualityProfile } from '../utils/quality';
 
 type DebrisProfile = 'tree' | 'houseDamage' | 'houseCollapse';
 
@@ -19,8 +20,10 @@ export class DebrisManager {
     roofMat: THREE.MeshStandardMaterial;
     beamMat: THREE.MeshStandardMaterial;
     geos: THREE.BufferGeometry[];
+    burstScale: number;
+    nextPieceIndex = 0;
 
-    constructor(scene: THREE.Scene) {
+    constructor(scene: THREE.Scene, quality: QualityProfile) {
         this.group = new THREE.Group();
         scene.add(this.group);
 
@@ -36,11 +39,12 @@ export class DebrisManager {
             new THREE.BoxGeometry(0.42, 0.2, 0.28),
             new THREE.BoxGeometry(0.58, 0.14, 0.42)
         ];
+        this.burstScale = quality.debrisBurstScale;
 
-        for (let i = 0; i < 96; i++) {
+        for (let i = 0; i < quality.debrisPool; i++) {
             const mesh = new THREE.Mesh(this.geos[0], this.masonryMat);
             mesh.visible = false;
-            mesh.castShadow = true;
+            mesh.castShadow = quality.debrisCastShadows;
             mesh.receiveShadow = true;
             this.group.add(mesh);
             this.pieces.push({
@@ -69,8 +73,17 @@ export class DebrisManager {
             profile === 'houseDamage' ? 3.1 :
             4.2;
 
-        for (let i = 0; i < count; i++) {
-            const piece = this.pieces.find((entry) => !entry.active);
+        const scaledCount = Math.max(1, Math.round(count * this.burstScale));
+        for (let i = 0; i < scaledCount; i++) {
+            let piece: DebrisPiece | null = null;
+            for (let search = 0; search < this.pieces.length; search++) {
+                const index = (this.nextPieceIndex + search) % this.pieces.length;
+                if (!this.pieces[index].active) {
+                    piece = this.pieces[index];
+                    this.nextPieceIndex = (index + 1) % this.pieces.length;
+                    break;
+                }
+            }
             if (!piece) return;
 
             const material = this.pickMaterial(profile, i);

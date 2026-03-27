@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { QualityProfile } from '../utils/quality';
 
 type Particle = {
     active: boolean;
@@ -10,10 +11,12 @@ type Particle = {
 export class ParticleManager {
     system: THREE.Points;
     particles: Particle[] = [];
+    burstScale: number;
+    nextParticleIndex = 0;
     
-    constructor(scene: THREE.Scene) {
+    constructor(scene: THREE.Scene, quality: QualityProfile) {
         const geo = new THREE.BufferGeometry();
-        const count = 320;
+        const count = quality.particlePool;
         const positions = new Float32Array(count * 3);
         geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
         
@@ -27,6 +30,7 @@ export class ParticleManager {
         
         this.system = new THREE.Points(geo, mat);
         scene.add(this.system);
+        this.burstScale = quality.particleBurstScale;
 
         for (let i = 0; i < count; i++) {
             this.particles.push({
@@ -51,7 +55,8 @@ export class ParticleManager {
         upwardBoost = 2.4,
         lifetime = 1.0
     ) {
-        for (let i = 0; i < count; i++) {
+        const scaledCount = Math.max(1, Math.round(count * this.burstScale));
+        for (let i = 0; i < scaledCount; i++) {
             this.spawnParticle(
                 x + (Math.random() - 0.5) * spread,
                 y + Math.random() * spread * 0.4,
@@ -65,7 +70,15 @@ export class ParticleManager {
     }
 
     spawnParticle(x: number, y: number, z: number, vx: number, vy: number, vz: number, life: number) {
-        const p = this.particles.find((entry) => !entry.active);
+        let p: Particle | null = null;
+        for (let i = 0; i < this.particles.length; i++) {
+            const index = (this.nextParticleIndex + i) % this.particles.length;
+            if (!this.particles[index].active) {
+                p = this.particles[index];
+                this.nextParticleIndex = (index + 1) % this.particles.length;
+                break;
+            }
+        }
         if (!p) return;
         p.active = true;
         p.life = life;
