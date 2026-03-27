@@ -23,6 +23,10 @@ const _spawnDir = new THREE.Vector3();
 const _propFxPos = new THREE.Vector3();
 const _listenerPos = new THREE.Vector3();
 
+function clamp(value: number, min: number, max: number) {
+    return Math.max(min, Math.min(max, value));
+}
+
 type SessionMode = 'solo' | 'host' | 'client';
 
 export class Game {
@@ -361,15 +365,17 @@ export class Game {
         const { mx, my } = this.input.consumeMovement();
         this.mechCamera.onMouseMove(mx, my);
 
-        let throttleInput = 0;
-        let turnInput = 0;
+        let throttleInput = this.input.virtualThrottle;
+        let turnInput = this.input.virtualTurn;
         if (this.input.keys['KeyW']) throttleInput += 1;
         if (this.input.keys['KeyS']) throttleInput -= 1;
         if (this.input.keys['KeyA']) turnInput -= 1;
         if (this.input.keys['KeyD']) turnInput += 1;
+        throttleInput = clamp(throttleInput, -1, 1);
+        turnInput = clamp(turnInput, -1, 1);
 
-        const centerTorso = this.input.consumeKey('KeyC');
-        const stopThrottle = this.input.consumeKey('KeyX');
+        const centerTorso = this.input.consumeKey('KeyC') || this.input.consumeVirtualAction('centerTorso');
+        const stopThrottle = this.input.consumeKey('KeyX') || this.input.consumeVirtualAction('stopThrottle');
 
         const events = this.golem.update(
             dt,
@@ -427,14 +433,14 @@ export class Game {
             }
         }
         
-        if (this.input.consumeKey('ShiftLeft')) {
+        if (this.input.consumeKey('ShiftLeft') || this.input.consumeVirtualAction('dash')) {
             if (this.golem.tryAction(30)) {
                 this.golem.dash();
                 this.mechCamera.onDash();
             }
         }
         
-        if (this.input.consumeKey('Space')) {
+        if (this.input.consumeKey('Space') || this.input.consumeVirtualAction('vent')) {
             if (this.golem.tryAction(0)) {
                 this.golem.vent(this.particles);
                 this.mechCamera.addTrauma(0.5);

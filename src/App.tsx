@@ -287,11 +287,235 @@ function SectionArmorDisplay(props: { sections: SectionState; maxSections: Secti
     );
 }
 
+function MobileHud(props: {
+    warning: string;
+    throttleText: string;
+    twistRatio: number;
+    hpRatio: number;
+    steamRatio: number;
+    legYaw: number;
+    torsoYaw: number;
+    speed: number;
+    maxSpeed: number;
+}) {
+    const speedRatio = clamp(props.speed / Math.max(props.maxSpeed, 0.1), 0, 1);
+    const heading = wrapDegrees(Math.round(toDegrees(props.legYaw))).toString().padStart(3, '0');
+    const torso = wrapDegrees(Math.round(toDegrees(props.torsoYaw))).toString().padStart(3, '0');
+
+    return (
+        <>
+            <div className="pointer-events-none absolute inset-x-0 top-0 z-20 bg-[linear-gradient(180deg,rgba(15,12,10,0.92),rgba(15,12,10,0.18),rgba(15,12,10,0))] px-3 pb-8 pt-3">
+                <div className="mx-auto flex max-w-[min(96vw,540px)] items-start justify-between gap-2">
+                    <div className="min-w-0 rounded-2xl border border-[#8f6a38]/55 bg-[rgba(10,10,10,0.72)] px-3 py-2 shadow-[0_0_18px_rgba(0,0,0,0.3)]">
+                        <div className="text-[9px] tracking-[0.28em] text-[#8fb8c2]">ШАССИ {heading}</div>
+                        <div className="mt-1 text-[9px] tracking-[0.28em] text-[#7ee6f0]">ТОРС {torso}</div>
+                    </div>
+                    <div className="min-w-0 rounded-full border border-[#8f6a38]/55 bg-[rgba(10,10,10,0.72)] px-4 py-2 text-center text-[10px] tracking-[0.22em] text-[#efb768] shadow-[0_0_18px_rgba(0,0,0,0.3)]">
+                        {props.warning}
+                    </div>
+                </div>
+            </div>
+
+            <div className="pointer-events-none absolute inset-x-0 bottom-[154px] z-20 px-3">
+                <div className="mx-auto flex max-w-[min(96vw,560px)] items-end justify-between gap-3">
+                    <div className="min-w-[110px] rounded-2xl border border-[#8f6a38]/55 bg-[rgba(10,10,10,0.72)] px-3 py-3 shadow-[0_0_18px_rgba(0,0,0,0.3)]">
+                        <div className="text-[9px] tracking-[0.28em] text-[#efb768]">ТЯГА</div>
+                        <div className="mt-2 text-[11px] tracking-[0.18em] text-[#f0d8ae]">{props.throttleText}</div>
+                        <div className="mt-3 h-2 rounded-full bg-[#241c16]">
+                            <div className="h-full rounded-full bg-[linear-gradient(90deg,#efb768,#7ee6f0)]" style={{ width: `${speedRatio * 100}%` }} />
+                        </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-[#8f6a38]/55 bg-[rgba(10,10,10,0.72)] px-4 py-3 text-center shadow-[0_0_18px_rgba(0,0,0,0.3)]">
+                        <div className="text-[9px] tracking-[0.28em] text-[#8fb8c2]">СКОРОСТЬ</div>
+                        <div className="mt-1 text-2xl font-bold tracking-[0.18em] text-[#f3deb5]">
+                            {Math.round((props.speed / Math.max(props.maxSpeed, 0.1)) * 86)}
+                        </div>
+                    </div>
+
+                    <div className="min-w-[110px] rounded-2xl border border-[#8f6a38]/55 bg-[rgba(10,10,10,0.72)] px-3 py-3 shadow-[0_0_18px_rgba(0,0,0,0.3)]">
+                        <div className="text-[9px] tracking-[0.28em] text-[#efb768]">СКРУТКА</div>
+                        <div className="mt-2 h-2 rounded-full bg-[#241c16]">
+                            <div
+                                className={`h-full rounded-full ${Math.abs(props.twistRatio) > 0.78 ? 'bg-[linear-gradient(90deg,#f25c54,#efb768)]' : 'bg-[linear-gradient(90deg,#7ee6f0,#efb768)]'}`}
+                                style={{ width: `${Math.abs(props.twistRatio) * 100}%`, marginLeft: props.twistRatio < 0 ? `${(1 - Math.abs(props.twistRatio)) * 100}%` : '0%' }}
+                            />
+                        </div>
+                        <div className="mt-3 flex gap-2">
+                            <div className="h-2 flex-1 rounded-full bg-[#241c16]">
+                                <div className="h-full rounded-full bg-[linear-gradient(90deg,#d04838,#f0b371)]" style={{ width: `${props.hpRatio * 100}%` }} />
+                            </div>
+                            <div className="h-2 flex-1 rounded-full bg-[#241c16]">
+                                <div className="h-full rounded-full bg-[linear-gradient(90deg,#efb768,#7ee6f0)]" style={{ width: `${props.steamRatio * 100}%` }} />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </>
+    );
+}
+
+function MobileControls(props: { game: any; showPanel: boolean; onTogglePanel: () => void }) {
+    const moveAreaRef = useRef<HTMLDivElement>(null);
+    const movePointerIdRef = useRef<number | null>(null);
+    const aimPointerIdRef = useRef<number | null>(null);
+    const aimLastRef = useRef<{ x: number; y: number } | null>(null);
+    const [stick, setStick] = useState({ x: 0, y: 0 });
+
+    const ensureAudio = () => {
+        props.game?.sounds?.init?.();
+    };
+
+    const updateStick = (clientX: number, clientY: number) => {
+        const area = moveAreaRef.current;
+        if (!area) return;
+        const rect = area.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        const normalizedX = clamp((clientX - centerX) / (rect.width * 0.32), -1, 1);
+        const normalizedY = clamp((clientY - centerY) / (rect.height * 0.32), -1, 1);
+        setStick({ x: normalizedX, y: normalizedY });
+        props.game?.input?.setVirtualAxes?.(-normalizedY, normalizedX);
+    };
+
+    const resetStick = () => {
+        movePointerIdRef.current = null;
+        setStick({ x: 0, y: 0 });
+        props.game?.input?.setVirtualAxes?.(0, 0);
+    };
+
+    return (
+        <div className="pointer-events-none absolute inset-0 z-40 touch-none">
+            <div className="absolute bottom-4 left-4">
+                <div
+                    ref={moveAreaRef}
+                    className="pointer-events-auto relative h-36 w-36 rounded-full border border-[#8f6a38]/55 bg-[radial-gradient(circle_at_center,rgba(33,26,20,0.92),rgba(10,10,10,0.55))] shadow-[0_0_18px_rgba(0,0,0,0.28)]"
+                    onPointerDown={(event) => {
+                        ensureAudio();
+                        movePointerIdRef.current = event.pointerId;
+                        updateStick(event.clientX, event.clientY);
+                    }}
+                    onPointerMove={(event) => {
+                        if (movePointerIdRef.current !== event.pointerId) return;
+                        updateStick(event.clientX, event.clientY);
+                    }}
+                    onPointerUp={(event) => {
+                        if (movePointerIdRef.current !== event.pointerId) return;
+                        resetStick();
+                    }}
+                    onPointerCancel={(event) => {
+                        if (movePointerIdRef.current !== event.pointerId) return;
+                        resetStick();
+                    }}
+                >
+                    <div className="absolute inset-5 rounded-full border border-[#6f5631]/40" />
+                    <div className="absolute inset-x-0 top-2 text-center text-[9px] tracking-[0.28em] text-[#d1b17d]">ХОД / ПОВОРОТ</div>
+                    <div
+                        className="absolute left-1/2 top-1/2 h-12 w-12 rounded-full border border-[#efb768]/75 bg-[radial-gradient(circle_at_35%_35%,#efb768,#704623)] shadow-[0_0_18px_rgba(239,183,104,0.35)]"
+                        style={{ transform: `translate(calc(-50% + ${stick.x * 34}px), calc(-50% + ${stick.y * 34}px))` }}
+                    />
+                </div>
+            </div>
+
+            <div
+                className="pointer-events-auto absolute bottom-20 right-4 h-44 w-[46vw] max-w-[220px] rounded-[28px] border border-[#8f6a38]/45 bg-[linear-gradient(180deg,rgba(20,18,16,0.18),rgba(10,10,10,0.04))]"
+                onPointerDown={(event) => {
+                    ensureAudio();
+                    aimPointerIdRef.current = event.pointerId;
+                    aimLastRef.current = { x: event.clientX, y: event.clientY };
+                }}
+                onPointerMove={(event) => {
+                    if (aimPointerIdRef.current !== event.pointerId || !aimLastRef.current) return;
+                    const dx = event.clientX - aimLastRef.current.x;
+                    const dy = event.clientY - aimLastRef.current.y;
+                    props.game?.input?.addVirtualLook?.(dx * 0.95, dy * 0.95);
+                    aimLastRef.current = { x: event.clientX, y: event.clientY };
+                }}
+                onPointerUp={(event) => {
+                    if (aimPointerIdRef.current !== event.pointerId) return;
+                    aimPointerIdRef.current = null;
+                    aimLastRef.current = null;
+                }}
+                onPointerCancel={(event) => {
+                    if (aimPointerIdRef.current !== event.pointerId) return;
+                    aimPointerIdRef.current = null;
+                    aimLastRef.current = null;
+                }}
+            >
+                <div className="absolute inset-0 rounded-[28px] bg-[radial-gradient(circle_at_center,rgba(126,230,240,0.08),rgba(0,0,0,0))]" />
+                <div className="absolute inset-x-0 top-3 text-center text-[9px] tracking-[0.3em] text-[#8fb8c2]">ОБЗОР</div>
+            </div>
+
+            <div className="absolute bottom-4 right-4 flex flex-col items-end gap-3">
+                <button
+                    type="button"
+                    className="pointer-events-auto h-20 w-20 rounded-full border border-[#7ee6f0]/65 bg-[radial-gradient(circle_at_30%_30%,rgba(126,230,240,0.72),rgba(31,72,82,0.86))] text-[11px] font-bold tracking-[0.2em] text-[#effcff] shadow-[0_0_22px_rgba(16,48,55,0.4)]"
+                    onPointerDown={() => {
+                        ensureAudio();
+                        props.game?.input?.triggerVirtualAction?.('fire');
+                    }}
+                >
+                    ОГОНЬ
+                </button>
+
+                <div className="flex gap-2">
+                    <button
+                        type="button"
+                        className="pointer-events-auto rounded-2xl border border-[#8f6a38]/60 bg-[rgba(10,10,10,0.78)] px-3 py-3 text-[10px] tracking-[0.22em] text-[#efb768]"
+                        onPointerDown={() => {
+                            ensureAudio();
+                            props.game?.input?.triggerVirtualAction?.('dash');
+                        }}
+                    >
+                        РЫВОК
+                    </button>
+                    <button
+                        type="button"
+                        className="pointer-events-auto rounded-2xl border border-[#8f6a38]/60 bg-[rgba(10,10,10,0.78)] px-3 py-3 text-[10px] tracking-[0.22em] text-[#efb768]"
+                        onPointerDown={() => {
+                            ensureAudio();
+                            props.game?.input?.triggerVirtualAction?.('vent');
+                        }}
+                    >
+                        ПАР
+                    </button>
+                </div>
+
+                <div className="flex gap-2">
+                    <button
+                        type="button"
+                        className="pointer-events-auto rounded-2xl border border-[#8f6a38]/60 bg-[rgba(10,10,10,0.78)] px-3 py-2 text-[10px] tracking-[0.2em] text-[#d7c5a1]"
+                        onPointerDown={() => props.game?.input?.triggerVirtualAction?.('centerTorso')}
+                    >
+                        ЦЕНТР ТОРС
+                    </button>
+                    <button
+                        type="button"
+                        className="pointer-events-auto rounded-2xl border border-[#8f6a38]/60 bg-[rgba(10,10,10,0.78)] px-3 py-2 text-[10px] tracking-[0.2em] text-[#d7c5a1]"
+                        onPointerDown={() => props.game?.input?.triggerVirtualAction?.('stopThrottle')}
+                    >
+                        СТОП ХОД
+                    </button>
+                    <button
+                        type="button"
+                        className="pointer-events-auto rounded-2xl border border-[#8f6a38]/60 bg-[rgba(10,10,10,0.78)] px-3 py-2 text-[10px] tracking-[0.2em] text-[#d7c5a1]"
+                        onPointerDown={props.onTogglePanel}
+                    >
+                        {props.showPanel ? 'СКРЫТЬ' : 'ПАНЕЛЬ'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export default function App() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const copyResetRef = useRef<number | null>(null);
     const [loading, setLoading] = useState(false);
     const [inLobby, setInLobby] = useState(true);
+    const [isTouchDevice, setIsTouchDevice] = useState(false);
     const [hostId, setHostId] = useState('');
     const [myId, setMyId] = useState('');
     const [isHost, setIsHost] = useState(false);
@@ -322,7 +546,7 @@ export default function App() {
         if (!canvasRef.current) return;
         setInLobby(false);
         setLoading(true);
-        setShowPilotPanel(true);
+        setShowPilotPanel(!isTouchDevice);
         setSessionMode(mode);
         setCopyState('idle');
 
@@ -364,6 +588,16 @@ export default function App() {
             });
         }
     };
+
+    useEffect(() => {
+        const media = window.matchMedia('(pointer: coarse)');
+        const updateTouchState = () => {
+            setIsTouchDevice(media.matches || navigator.maxTouchPoints > 0);
+        };
+        updateTouchState();
+        media.addEventListener?.('change', updateTouchState);
+        return () => media.removeEventListener?.('change', updateTouchState);
+    }, []);
 
     useEffect(() => {
         return () => {
@@ -431,16 +665,16 @@ export default function App() {
             : 'КОПИРОВАТЬ';
 
     return (
-        <div className="relative h-screen w-full overflow-hidden bg-[#100d0b] font-mono text-[#f2ddb1]">
+        <div className="relative h-[100dvh] w-full overflow-hidden bg-[#100d0b] font-mono text-[#f2ddb1]">
             <canvas ref={canvasRef} className={`block h-full w-full ${inLobby ? 'hidden' : ''}`} />
 
             {inLobby ? (
-                <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[radial-gradient(circle_at_center,#2a1c12_0%,#130e0b_60%,#090807_100%)] text-white">
-                    <h1 className="mb-8 text-4xl font-bold tracking-[0.35em] text-[#efb768] drop-shadow-[0_0_14px_rgba(239,183,104,0.45)]">
+                <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[radial-gradient(circle_at_center,#2a1c12_0%,#130e0b_60%,#090807_100%)] px-4 text-white">
+                    <h1 className="mb-6 text-center text-2xl font-bold tracking-[0.22em] text-[#efb768] drop-shadow-[0_0_14px_rgba(239,183,104,0.45)] sm:mb-8 sm:text-4xl sm:tracking-[0.35em]">
                         ПАРОМАГИЧЕСКИЙ КОКПИТ
                     </h1>
 
-                    <div className="flex w-96 flex-col gap-6 rounded-2xl border border-[#8f6a38]/40 bg-black/45 p-8 backdrop-blur-sm">
+                    <div className="flex w-[min(92vw,24rem)] flex-col gap-5 rounded-2xl border border-[#8f6a38]/40 bg-black/45 p-5 backdrop-blur-sm sm:gap-6 sm:p-8">
                         <button
                             onClick={() => startGame('solo')}
                             className="rounded bg-[#7d4f22] py-3 font-bold tracking-[0.22em] text-white shadow-[0_0_15px_rgba(125,79,34,0.35)] transition-colors hover:bg-[#99622d]"
@@ -497,7 +731,20 @@ export default function App() {
 
             {!loading && !inLobby ? (
                 <>
-                    <CockpitFrame warning={warningText} throttleLabel={throttleText} />
+                    {!isTouchDevice ? <CockpitFrame warning={warningText} throttleLabel={throttleText} /> : null}
+                    {isTouchDevice ? (
+                        <MobileHud
+                            warning={warningText}
+                            throttleText={throttleText}
+                            twistRatio={twistRatio}
+                            hpRatio={hpRatio}
+                            steamRatio={steamRatio}
+                            legYaw={gameState.legYaw}
+                            torsoYaw={gameState.torsoYaw}
+                            speed={gameState.speed}
+                            maxSpeed={gameState.maxSpeed}
+                        />
+                    ) : null}
 
                     {sessionMode === 'host' && myId ? (
                         <div className="pointer-events-auto absolute right-4 top-4 z-30 flex items-center gap-3 rounded-2xl border border-[#8f6a38]/45 bg-[rgba(10,10,10,0.78)] px-4 py-3 text-[#e1cea7] shadow-[0_0_22px_rgba(0,0,0,0.32)] backdrop-blur-sm">
@@ -516,9 +763,9 @@ export default function App() {
                         </div>
                     ) : null}
 
-                    <div className="absolute left-4 top-4 z-20">
+                    <div className={`absolute z-20 ${isTouchDevice ? 'left-3 top-14' : 'left-4 top-4'}`}>
                         {showPilotPanel ? (
-                            <div className="pointer-events-auto max-w-[280px] rounded-2xl border border-[#8f6a38]/35 bg-[rgba(10,10,10,0.62)] p-4 text-sm text-[#d7c5a1] shadow-[0_0_20px_rgba(0,0,0,0.38)] backdrop-blur-sm">
+                            <div className={`pointer-events-auto rounded-2xl border border-[#8f6a38]/35 bg-[rgba(10,10,10,0.62)] p-4 text-sm text-[#d7c5a1] shadow-[0_0_20px_rgba(0,0,0,0.38)] backdrop-blur-sm ${isTouchDevice ? 'max-w-[220px] text-xs' : 'max-w-[280px]'}`}>
                                 <div className="mb-3 flex items-start justify-between gap-3">
                                     <div className="min-w-0">
                                         <h1 className="text-lg font-bold tracking-[0.32em] text-[#efb768]">ПАНЕЛЬ ПИЛОТА</h1>
@@ -567,7 +814,7 @@ export default function App() {
                         )}
                     </div>
 
-                    <TorsoTwistArc twistRatio={twistRatio} maxTwist={gameState.maxTwist} />
+                    {!isTouchDevice ? <TorsoTwistArc twistRatio={twistRatio} maxTwist={gameState.maxTwist} /> : null}
 
                     <div className="pointer-events-none absolute left-1/2 top-1/2 z-30 h-10 w-10 -translate-x-1/2 -translate-y-1/2 opacity-45">
                         <div className="absolute left-0 top-1/2 h-[2px] w-3 -translate-y-1/2 bg-[#dde4e6]/40" />
@@ -623,6 +870,7 @@ export default function App() {
                         </div>
                     ) : null}
 
+                    {!isTouchDevice ? (
                     <div className="pointer-events-none absolute bottom-0 left-1/2 z-20 flex h-[248px] w-[min(1040px,96vw)] -translate-x-1/2 items-end justify-between px-8 pb-8">
                         <div className="flex w-[190px] items-end gap-4">
                             <div className="relative h-[188px] w-20 rounded-[26px] border border-[#8f6a38]/70 bg-[linear-gradient(180deg,rgba(13,13,13,0.94),rgba(28,20,15,0.96))] p-3 shadow-[inset_0_0_18px_rgba(0,0,0,0.5)]">
@@ -717,6 +965,15 @@ export default function App() {
                             </div>
                         </div>
                     </div>
+                    ) : null}
+
+                    {isTouchDevice ? (
+                        <MobileControls
+                            game={gameInstance}
+                            showPanel={showPilotPanel}
+                            onTogglePanel={() => setShowPilotPanel((current) => !current)}
+                        />
+                    ) : null}
                 </>
             ) : null}
         </div>

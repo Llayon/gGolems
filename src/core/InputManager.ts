@@ -1,3 +1,5 @@
+type VirtualAction = 'fire' | 'dash' | 'vent' | 'centerTorso' | 'stopThrottle';
+
 export class InputManager {
     keys: Record<string, boolean> = {};
     movementX = 0;
@@ -5,6 +7,15 @@ export class InputManager {
     isLocked = false;
     isMouseDown = false;
     justPressed = false;
+    virtualThrottle = 0;
+    virtualTurn = 0;
+    virtualActions: Record<VirtualAction, boolean> = {
+        fire: false,
+        dash: false,
+        vent: false,
+        centerTorso: false,
+        stopThrottle: false
+    };
 
     constructor() {
         window.addEventListener('keydown', (e) => this.keys[e.code] = true);
@@ -38,8 +49,9 @@ export class InputManager {
     }
 
     consumeClick() {
-        const clicked = this.justPressed;
+        const clicked = this.justPressed || this.virtualActions.fire;
         this.justPressed = false;
+        this.virtualActions.fire = false;
         return clicked;
     }
     
@@ -49,5 +61,25 @@ export class InputManager {
             return true;
         }
         return false;
+    }
+
+    setVirtualAxes(throttle: number, turn: number) {
+        this.virtualThrottle = Math.max(-1, Math.min(1, throttle));
+        this.virtualTurn = Math.max(-1, Math.min(1, turn));
+    }
+
+    addVirtualLook(dx: number, dy: number) {
+        this.movementX += dx;
+        this.movementY += dy;
+    }
+
+    triggerVirtualAction(action: VirtualAction) {
+        this.virtualActions[action] = true;
+    }
+
+    consumeVirtualAction(action: Exclude<VirtualAction, 'fire'>) {
+        const active = this.virtualActions[action];
+        this.virtualActions[action] = false;
+        return active;
     }
 }
