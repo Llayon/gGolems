@@ -297,6 +297,7 @@ function MobileHud(props: {
     torsoYaw: number;
     speed: number;
     maxSpeed: number;
+    isPortrait: boolean;
 }) {
     const speedRatio = clamp(props.speed / Math.max(props.maxSpeed, 0.1), 0, 1);
     const heading = wrapDegrees(Math.round(toDegrees(props.legYaw))).toString().padStart(3, '0');
@@ -316,8 +317,8 @@ function MobileHud(props: {
                 </div>
             </div>
 
-            <div className="pointer-events-none absolute inset-x-0 bottom-[154px] z-20 px-3">
-                <div className="mx-auto flex max-w-[min(96vw,560px)] items-end justify-between gap-3">
+            <div className={`pointer-events-none absolute inset-x-0 z-20 px-3 ${props.isPortrait ? 'bottom-[162px]' : 'bottom-[112px]'}`}>
+                <div className={`mx-auto flex max-w-[min(96vw,560px)] items-end justify-between gap-3 ${props.isPortrait ? '' : 'max-w-[min(88vw,760px)]'}`}>
                     <div className="min-w-[110px] rounded-2xl border border-[#8f6a38]/55 bg-[rgba(10,10,10,0.72)] px-3 py-3 shadow-[0_0_18px_rgba(0,0,0,0.3)]">
                         <div className="text-[9px] tracking-[0.28em] text-[#efb768]">ТЯГА</div>
                         <div className="mt-2 text-[11px] tracking-[0.18em] text-[#f0d8ae]">{props.throttleText}</div>
@@ -356,12 +357,31 @@ function MobileHud(props: {
     );
 }
 
-function MobileControls(props: { game: any; showPanel: boolean; onTogglePanel: () => void }) {
+function MobileControls(props: {
+    game: any;
+    showPanel: boolean;
+    onTogglePanel: () => void;
+    leftHanded: boolean;
+    isPortrait: boolean;
+    aimSensitivity: number;
+    aimPresetLabel: string;
+    onToggleHanded: () => void;
+    onCycleAimPreset: () => void;
+}) {
     const moveAreaRef = useRef<HTMLDivElement>(null);
     const movePointerIdRef = useRef<number | null>(null);
     const aimPointerIdRef = useRef<number | null>(null);
     const aimLastRef = useRef<{ x: number; y: number } | null>(null);
     const [stick, setStick] = useState({ x: 0, y: 0 });
+    const stickSize = props.isPortrait ? 132 : 144;
+    const knobOffset = props.isPortrait ? 30 : 34;
+    const moveAnchorClass = props.leftHanded ? 'right-4' : 'left-4';
+    const aimAnchorClass = props.leftHanded ? 'left-4' : 'right-4';
+    const actionAnchorClass = props.leftHanded ? 'left-4 items-start' : 'right-4 items-end';
+    const settingsAnchorClass = props.leftHanded ? 'left-4 items-start' : 'right-4 items-end';
+    const aimBottomClass = props.isPortrait ? 'bottom-28' : 'bottom-20';
+    const actionBottomClass = props.isPortrait ? 'bottom-4' : 'bottom-3';
+    const settingsTopClass = props.isPortrait ? 'top-[74px]' : 'top-4';
 
     const ensureAudio = () => {
         props.game?.sounds?.init?.();
@@ -387,10 +407,28 @@ function MobileControls(props: { game: any; showPanel: boolean; onTogglePanel: (
 
     return (
         <div className="pointer-events-none absolute inset-0 z-40 touch-none">
-            <div className="absolute bottom-4 left-4">
+            <div className={`absolute ${settingsTopClass} ${settingsAnchorClass} flex gap-2`}>
+                <button
+                    type="button"
+                    className="pointer-events-auto rounded-full border border-[#8f6a38]/60 bg-[rgba(10,10,10,0.78)] px-3 py-2 text-[10px] tracking-[0.18em] text-[#d7c5a1]"
+                    onPointerDown={props.onToggleHanded}
+                >
+                    {props.leftHanded ? 'ЛЕВША' : 'ПРАВША'}
+                </button>
+                <button
+                    type="button"
+                    className="pointer-events-auto rounded-full border border-[#8f6a38]/60 bg-[rgba(10,10,10,0.78)] px-3 py-2 text-[10px] tracking-[0.18em] text-[#d7c5a1]"
+                    onPointerDown={props.onCycleAimPreset}
+                >
+                    ЧУВ {props.aimPresetLabel}
+                </button>
+            </div>
+
+            <div className={`absolute bottom-4 ${moveAnchorClass}`}>
                 <div
                     ref={moveAreaRef}
-                    className="pointer-events-auto relative h-36 w-36 rounded-full border border-[#8f6a38]/55 bg-[radial-gradient(circle_at_center,rgba(33,26,20,0.92),rgba(10,10,10,0.55))] shadow-[0_0_18px_rgba(0,0,0,0.28)]"
+                    className="pointer-events-auto relative rounded-full border border-[#8f6a38]/55 bg-[radial-gradient(circle_at_center,rgba(33,26,20,0.92),rgba(10,10,10,0.55))] shadow-[0_0_18px_rgba(0,0,0,0.28)]"
+                    style={{ width: stickSize, height: stickSize }}
                     onPointerDown={(event) => {
                         ensureAudio();
                         movePointerIdRef.current = event.pointerId;
@@ -413,13 +451,19 @@ function MobileControls(props: { game: any; showPanel: boolean; onTogglePanel: (
                     <div className="absolute inset-x-0 top-2 text-center text-[9px] tracking-[0.28em] text-[#d1b17d]">ХОД / ПОВОРОТ</div>
                     <div
                         className="absolute left-1/2 top-1/2 h-12 w-12 rounded-full border border-[#efb768]/75 bg-[radial-gradient(circle_at_35%_35%,#efb768,#704623)] shadow-[0_0_18px_rgba(239,183,104,0.35)]"
-                        style={{ transform: `translate(calc(-50% + ${stick.x * 34}px), calc(-50% + ${stick.y * 34}px))` }}
+                        style={{ transform: `translate(calc(-50% + ${stick.x * knobOffset}px), calc(-50% + ${stick.y * knobOffset}px))` }}
                     />
                 </div>
             </div>
 
             <div
-                className="pointer-events-auto absolute bottom-20 right-4 h-44 w-[46vw] max-w-[220px] rounded-[28px] border border-[#8f6a38]/45 bg-[linear-gradient(180deg,rgba(20,18,16,0.18),rgba(10,10,10,0.04))]"
+                className={`pointer-events-auto absolute ${aimBottomClass} ${aimAnchorClass} rounded-[28px] border border-[#8f6a38]/45 bg-[linear-gradient(180deg,rgba(20,18,16,0.18),rgba(10,10,10,0.04))]`}
+                style={{
+                    width: props.isPortrait ? '44vw' : '34vw',
+                    maxWidth: props.isPortrait ? 220 : 260,
+                    minWidth: props.isPortrait ? 168 : 180,
+                    height: props.isPortrait ? 186 : 148
+                }}
                 onPointerDown={(event) => {
                     ensureAudio();
                     aimPointerIdRef.current = event.pointerId;
@@ -429,7 +473,7 @@ function MobileControls(props: { game: any; showPanel: boolean; onTogglePanel: (
                     if (aimPointerIdRef.current !== event.pointerId || !aimLastRef.current) return;
                     const dx = event.clientX - aimLastRef.current.x;
                     const dy = event.clientY - aimLastRef.current.y;
-                    props.game?.input?.addVirtualLook?.(dx * 0.95, dy * 0.95);
+                    props.game?.input?.addVirtualLook?.(dx * props.aimSensitivity, dy * props.aimSensitivity);
                     aimLastRef.current = { x: event.clientX, y: event.clientY };
                 }}
                 onPointerUp={(event) => {
@@ -447,10 +491,11 @@ function MobileControls(props: { game: any; showPanel: boolean; onTogglePanel: (
                 <div className="absolute inset-x-0 top-3 text-center text-[9px] tracking-[0.3em] text-[#8fb8c2]">ОБЗОР</div>
             </div>
 
-            <div className="absolute bottom-4 right-4 flex flex-col items-end gap-3">
+            <div className={`absolute ${actionBottomClass} ${actionAnchorClass} flex flex-col gap-3`}>
                 <button
                     type="button"
-                    className="pointer-events-auto h-20 w-20 rounded-full border border-[#7ee6f0]/65 bg-[radial-gradient(circle_at_30%_30%,rgba(126,230,240,0.72),rgba(31,72,82,0.86))] text-[11px] font-bold tracking-[0.2em] text-[#effcff] shadow-[0_0_22px_rgba(16,48,55,0.4)]"
+                    className="pointer-events-auto rounded-full border border-[#7ee6f0]/65 bg-[radial-gradient(circle_at_30%_30%,rgba(126,230,240,0.72),rgba(31,72,82,0.86))] text-[11px] font-bold tracking-[0.2em] text-[#effcff] shadow-[0_0_22px_rgba(16,48,55,0.4)]"
+                    style={{ width: props.isPortrait ? 84 : 76, height: props.isPortrait ? 84 : 76 }}
                     onPointerDown={() => {
                         ensureAudio();
                         props.game?.input?.triggerVirtualAction?.('fire');
@@ -459,7 +504,7 @@ function MobileControls(props: { game: any; showPanel: boolean; onTogglePanel: (
                     ОГОНЬ
                 </button>
 
-                <div className="flex gap-2">
+                <div className="flex max-w-[220px] flex-wrap gap-2">
                     <button
                         type="button"
                         className="pointer-events-auto rounded-2xl border border-[#8f6a38]/60 bg-[rgba(10,10,10,0.78)] px-3 py-3 text-[10px] tracking-[0.22em] text-[#efb768]"
@@ -516,6 +561,9 @@ export default function App() {
     const [loading, setLoading] = useState(false);
     const [inLobby, setInLobby] = useState(true);
     const [isTouchDevice, setIsTouchDevice] = useState(false);
+    const [isPortrait, setIsPortrait] = useState(false);
+    const [mobileLeftHanded, setMobileLeftHanded] = useState(false);
+    const [mobileAimPreset, setMobileAimPreset] = useState<'LOW' | 'MID' | 'HIGH'>('MID');
     const [hostId, setHostId] = useState('');
     const [myId, setMyId] = useState('');
     const [isHost, setIsHost] = useState(false);
@@ -593,11 +641,38 @@ export default function App() {
         const media = window.matchMedia('(pointer: coarse)');
         const updateTouchState = () => {
             setIsTouchDevice(media.matches || navigator.maxTouchPoints > 0);
+            setIsPortrait(window.innerHeight >= window.innerWidth);
         };
         updateTouchState();
         media.addEventListener?.('change', updateTouchState);
-        return () => media.removeEventListener?.('change', updateTouchState);
+        window.addEventListener('resize', updateTouchState);
+        return () => {
+            media.removeEventListener?.('change', updateTouchState);
+            window.removeEventListener('resize', updateTouchState);
+        };
     }, []);
+
+    useEffect(() => {
+        try {
+            const handed = window.localStorage.getItem('golems_mobile_handed');
+            const preset = window.localStorage.getItem('golems_mobile_aim_preset');
+            if (handed === 'left') setMobileLeftHanded(true);
+            if (preset === 'LOW' || preset === 'MID' || preset === 'HIGH') {
+                setMobileAimPreset(preset);
+            }
+        } catch {
+            // Ignore storage access issues.
+        }
+    }, []);
+
+    useEffect(() => {
+        try {
+            window.localStorage.setItem('golems_mobile_handed', mobileLeftHanded ? 'left' : 'right');
+            window.localStorage.setItem('golems_mobile_aim_preset', mobileAimPreset);
+        } catch {
+            // Ignore storage access issues.
+        }
+    }, [mobileAimPreset, mobileLeftHanded]);
 
     useEffect(() => {
         return () => {
@@ -653,6 +728,7 @@ export default function App() {
     const reticleY = Math.max(-220, Math.min(220, -gameState.aimOffsetY * 180));
     const hitConfirmRatio = clamp(gameState.hitConfirm / 0.22, 0, 1);
     const hitTargetRatio = clamp(gameState.hitTargetHp / Math.max(gameState.hitTargetMaxHp, 1), 0, 1);
+    const mobileAimSensitivity = mobileAimPreset === 'LOW' ? 0.62 : mobileAimPreset === 'HIGH' ? 1.2 : 0.9;
     const sessionLabel = sessionMode === 'solo'
         ? 'ЛОКАЛЬНЫЙ БОЙ'
         : isHost
@@ -743,6 +819,7 @@ export default function App() {
                             torsoYaw={gameState.torsoYaw}
                             speed={gameState.speed}
                             maxSpeed={gameState.maxSpeed}
+                            isPortrait={isPortrait}
                         />
                     ) : null}
 
@@ -972,6 +1049,12 @@ export default function App() {
                             game={gameInstance}
                             showPanel={showPilotPanel}
                             onTogglePanel={() => setShowPilotPanel((current) => !current)}
+                            leftHanded={mobileLeftHanded}
+                            isPortrait={isPortrait}
+                            aimSensitivity={mobileAimSensitivity}
+                            aimPresetLabel={mobileAimPreset}
+                            onToggleHanded={() => setMobileLeftHanded((current) => !current)}
+                            onCycleAimPreset={() => setMobileAimPreset((current) => current === 'LOW' ? 'MID' : current === 'MID' ? 'HIGH' : 'LOW')}
                         />
                     ) : null}
                 </>
