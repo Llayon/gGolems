@@ -449,7 +449,7 @@ export default function App() {
     const throttleRatio = clamp(gameState.throttle, -0.45, 1);
     const hpRatio = gameState.maxHp > 0 ? gameState.hp / gameState.maxHp : 0;
     const steamRatio = gameState.maxSteam > 0 ? gameState.steam / gameState.maxSteam : 0;
-    const displaySpeed = Math.round((gameState.speed / Math.max(gameState.maxSpeed, 0.1)) * 86);
+    const displaySpeed = Math.round((gameState.speed / Math.max(gameState.maxSpeed, 0.1)) * 68);
     const throttleText = throttleRatio > 0.05
         ? `ТЯГА ${Math.round(throttleRatio * 100)}%`
         : throttleRatio < -0.05
@@ -459,8 +459,8 @@ export default function App() {
         ? `ПАРОВОЙ ЗАМОК ${gameState.overheatTimer.toFixed(1)}С`
         : Math.abs(twistRatio) > 0.86
             ? 'ПРЕДЕЛ ТОРСА'
-            : Math.abs(twistRatio) > 0.6
-                ? (isTouchDevice ? 'ЦЕНТРОВАТЬ ТОРС' : 'ЦЕНТРОВАТЬ ТОРС [C]')
+            : !isTouchDevice && Math.abs(twistRatio) > 0.6
+                ? 'ЦЕНТРОВАТЬ ТОРС [C]'
                 : throttleRatio < -0.05
                     ? 'ЗАДНИЙ ХОД'
                     : throttleRatio > 0.7

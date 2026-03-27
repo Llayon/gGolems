@@ -269,16 +269,16 @@ export class GolemController {
         if (this.isLocal) {
             const torsoStep = ROTATION.torsoTurnRate.medium * dt;
             const maxTwist = ROTATION.maxTorsoTwist;
-            const throttleRamp = 1.6;
-            const brakeResponse = 12;
-            const driveResponse = 8;
+            const throttleRamp = 1.05;
+            const brakeResponse = 9;
+            const driveResponse = 5.4;
             const lateralGrip = 10;
             const legIntegrity = Math.max(
                 0.25,
                 (this.sections.leftLeg / this.maxSections.leftLeg + this.sections.rightLeg / this.maxSections.rightLeg) * 0.5
             );
             const bodyTurnStep = ROTATION.legsTurnRate.medium * dt * (0.45 + legIntegrity * 0.55);
-            const maxSpeed = GOLEM.classes.medium.speed * (0.3 + legIntegrity * 0.7);
+            const maxSpeed = GOLEM.classes.medium.speed * (0.28 + legIntegrity * 0.68);
 
             if (centerTorso) {
                 aimYawUnclamped = this.legYaw;

@@ -20,163 +20,198 @@ type MobileCombatLayoutProps = {
     onOpenSettings: () => void;
 };
 
-type StatusClusterProps = Pick<
-    MobileCombatLayoutProps,
-    'throttleText' | 'legYaw' | 'torsoYaw' | 'twistRatio' | 'hpRatio' | 'steamRatio' | 'speed' | 'maxSpeed' | 'radarContacts'
-> & {
-    variant: 'portrait' | 'landscape';
+type Variant = 'portrait' | 'landscape';
+
+type HudMetrics = {
+    chassisHeading: string;
+    torsoHeading: string;
+    twistText: string;
+    speedDisplay: number;
+    nearestContact: RadarContact | null;
+    nearestColor: string;
+    nearestText: string;
 };
 
-function StatusCluster(props: StatusClusterProps) {
-    const chassisHeading = wrapDegrees(Math.round(toDegrees(props.legYaw))).toString().padStart(3, '0');
-    const torsoHeading = wrapDegrees(Math.round(toDegrees(props.torsoYaw))).toString().padStart(3, '0');
+function buildHudMetrics(props: Pick<MobileCombatLayoutProps, 'legYaw' | 'torsoYaw' | 'twistRatio' | 'speed' | 'maxSpeed' | 'radarContacts'>): HudMetrics {
     const twistDegrees = Math.round(toDegrees(angleDiff(props.legYaw, props.torsoYaw)));
-    const twistText = `${twistDegrees > 0 ? '+' : ''}${twistDegrees}`;
-    const speedDisplay = Math.round((props.speed / Math.max(props.maxSpeed, 0.1)) * 86);
-    const torsoMarker = polarToCartesian(42, 42, 22, 270 + clamp(props.twistRatio, -1, 1) * 72);
-    const leftLimit = polarToCartesian(42, 42, 22, 198);
-    const rightLimit = polarToCartesian(42, 42, 22, 342);
     const nearestContact = props.radarContacts[0] ?? null;
     const nearestLabel = nearestContact ? (nearestContact.kind === 'bot' ? 'БОТ' : 'ВРАГ') : 'ЧИСТО';
-    const nearestColor = nearestContact?.kind === 'bot' ? '#f25c54' : '#efb768';
-    const nearestX = nearestContact ? 42 + nearestContact.x * 24 : 42;
-    const nearestY = nearestContact ? 42 - nearestContact.y * 24 : 42;
-    const nearestText = nearestContact ? `${nearestLabel} ${nearestContact.meters}М` : 'НЕТ';
 
-    const radar = (
-        <div className={`relative shrink-0 rounded-full border border-[#8f6a38]/55 bg-[radial-gradient(circle_at_center,rgba(20,18,16,0.95),rgba(7,7,7,0.88))] ${props.variant === 'portrait' ? 'h-[68px] w-[68px]' : 'h-[62px] w-[62px]'}`}>
-            <svg viewBox="0 0 84 84" className="h-full w-full">
-                <circle cx="42" cy="42" r="22" fill="none" stroke="rgba(157,119,64,0.45)" strokeWidth="2.5" />
+    return {
+        chassisHeading: wrapDegrees(Math.round(toDegrees(props.legYaw))).toString().padStart(3, '0'),
+        torsoHeading: wrapDegrees(Math.round(toDegrees(props.torsoYaw))).toString().padStart(3, '0'),
+        twistText: `${twistDegrees > 0 ? '+' : ''}${twistDegrees}`,
+        speedDisplay: Math.round((props.speed / Math.max(props.maxSpeed, 0.1)) * 68),
+        nearestContact,
+        nearestColor: nearestContact?.kind === 'bot' ? '#f25c54' : '#efb768',
+        nearestText: nearestContact ? `${nearestLabel} ${nearestContact.meters}М` : 'ЧИСТО'
+    };
+}
+
+function ValueBadge(props: { label: string; value: string | number; tone?: 'chassis' | 'torso' | 'twist' | 'speed' }) {
+    const toneClass = props.tone === 'torso'
+        ? 'text-[#7ee6f0]'
+        : props.tone === 'twist'
+            ? 'text-[#f3deb5]'
+            : props.tone === 'speed'
+                ? 'text-[#f3deb5]'
+                : 'text-[#efb768]';
+
+    return (
+        <div className="rounded-full border border-[#8f6a38]/35 bg-[rgba(9,9,9,0.78)] px-3 py-1.5 text-center shadow-[inset_0_0_10px_rgba(0,0,0,0.35)]">
+            <div className="text-[6px] tracking-[0.24em] text-[#8fb8c2]">{props.label}</div>
+            <div className={`mt-0.5 text-[11px] font-bold tracking-[0.12em] ${toneClass}`}>{props.value}</div>
+        </div>
+    );
+}
+
+function MeterBadge(props: { label: string; ratio: number; gradient: string }) {
+    return (
+        <div className="min-w-[70px] rounded-full border border-[#8f6a38]/35 bg-[rgba(9,9,9,0.78)] px-3 py-1.5 shadow-[inset_0_0_10px_rgba(0,0,0,0.35)]">
+            <div className="text-[6px] tracking-[0.24em] text-[#d0b07a]">{props.label}</div>
+            <div className="mt-1 h-1.5 rounded-full bg-[#241c16]">
+                <div className={`h-full rounded-full ${props.gradient}`} style={{ width: `${clamp(props.ratio * 100, 0, 100)}%` }} />
+            </div>
+        </div>
+    );
+}
+
+function RadarDial(props: { radarContacts: RadarContact[]; twistRatio: number; variant: Variant }) {
+    const size = props.variant === 'portrait' ? 88 : 96;
+    const center = 48;
+    const radius = 28;
+    const torsoMarker = polarToCartesian(center, center, radius, 270 + clamp(props.twistRatio, -1, 1) * 72);
+    const leftLimit = polarToCartesian(center, center, radius, 198);
+    const rightLimit = polarToCartesian(center, center, radius, 342);
+
+    return (
+        <div
+            className="relative shrink-0 rounded-full border border-[#8f6a38]/60 bg-[radial-gradient(circle_at_center,rgba(20,18,16,0.95),rgba(7,7,7,0.9))] shadow-[0_0_22px_rgba(0,0,0,0.28),inset_0_0_14px_rgba(0,0,0,0.4)]"
+            style={{ width: size, height: size }}
+        >
+            <svg viewBox="0 0 96 96" className="h-full w-full">
+                <circle cx={center} cy={center} r={radius} fill="none" stroke="rgba(157,119,64,0.42)" strokeWidth="2.5" />
+                <circle cx={center} cy={center} r={18} fill="none" stroke="rgba(157,119,64,0.22)" strokeWidth="1.2" />
                 <circle cx={leftLimit.x} cy={leftLimit.y} r="2.8" fill="#9d7740" />
                 <circle cx={rightLimit.x} cy={rightLimit.y} r="2.8" fill="#9d7740" />
-                {nearestContact ? (
-                    <>
-                        <circle cx={nearestX} cy={nearestY} r="7.2" fill="none" stroke={nearestColor} strokeWidth="1.6" opacity="0.75" />
-                        <line x1="42" y1="42" x2={nearestX} y2={nearestY} stroke={nearestColor} strokeWidth="1.2" opacity="0.45" />
-                    </>
-                ) : null}
                 {props.radarContacts.map((contact, index) => (
                     <circle
                         key={`${contact.kind}-${index}`}
-                        cx={42 + contact.x * 24}
-                        cy={42 - contact.y * 24}
-                        r={contact.kind === 'bot' ? 3.4 : 3}
+                        cx={center + contact.x * 30}
+                        cy={center - contact.y * 30}
+                        r={contact.kind === 'bot' ? 3.7 : 3.2}
                         fill={contact.kind === 'bot' ? '#f25c54' : '#efb768'}
                         opacity={1 - contact.distance * 0.35}
                     />
                 ))}
-                <circle cx={torsoMarker.x} cy={torsoMarker.y} r="4" fill="#7ee6f0" />
-                <circle cx="42" cy="42" r="3" fill="#efb768" />
+                <circle cx={torsoMarker.x} cy={torsoMarker.y} r="4.2" fill="#7ee6f0" />
+                <circle cx={center} cy={center} r="3.4" fill="#efb768" />
             </svg>
-            <div className={`absolute left-1/2 h-0 w-0 -translate-x-1/2 border-x-[5px] border-x-transparent border-b-[10px] border-b-[#efb768] ${props.variant === 'portrait' ? 'top-[9px]' : 'top-[8px]'}`} />
-            <div className={`absolute inset-x-0 text-center tracking-[0.24em] text-[#9fc4cc] ${props.variant === 'portrait' ? 'bottom-[5px] text-[7px]' : 'bottom-[4px] text-[7px]'}`}>КУРС</div>
+            <div className="absolute left-1/2 top-[10px] h-0 w-0 -translate-x-1/2 border-x-[5px] border-x-transparent border-b-[10px] border-b-[#efb768]" />
+            <div className="absolute inset-x-0 bottom-[7px] text-center text-[7px] tracking-[0.24em] text-[#9fc4cc]">РАДАР</div>
         </div>
     );
+}
 
-    if (props.variant === 'landscape') {
-        return (
-            <div className="mx-auto flex w-[min(94vw,920px)] items-center gap-2 rounded-[24px] border border-[#8f6a38]/55 bg-[linear-gradient(180deg,rgba(18,17,15,0.92),rgba(8,8,8,0.9))] px-3 py-2.5 shadow-[0_0_22px_rgba(0,0,0,0.34),inset_0_0_18px_rgba(0,0,0,0.45)]">
-                {radar}
-
-                <div className="grid min-w-[186px] flex-1 grid-cols-3 gap-2 text-center">
-                    <div className="rounded-xl border border-[#8f6a38]/35 bg-black/30 px-2 py-2">
-                        <div className="text-[7px] tracking-[0.2em] text-[#8fb8c2]">ШАССИ</div>
-                        <div className="mt-1 text-[15px] font-bold tracking-[0.12em] text-[#efb768]">{chassisHeading}</div>
-                    </div>
-                    <div className="rounded-xl border border-[#8f6a38]/35 bg-black/30 px-2 py-2">
-                        <div className="text-[7px] tracking-[0.2em] text-[#8fb8c2]">ТОРС</div>
-                        <div className="mt-1 text-[15px] font-bold tracking-[0.12em] text-[#7ee6f0]">{torsoHeading}</div>
-                    </div>
-                    <div className="rounded-xl border border-[#8f6a38]/35 bg-black/30 px-2 py-2">
-                        <div className="text-[7px] tracking-[0.2em] text-[#8fb8c2]">СДВИГ</div>
-                        <div className="mt-1 text-[15px] font-bold tracking-[0.12em]" style={{ color: Math.abs(props.twistRatio) > 0.78 ? '#ffb28c' : '#f3deb5' }}>
-                            {twistText}
-                        </div>
-                    </div>
-                </div>
-
-                <div className="min-w-[150px] rounded-xl border border-[#8f6a38]/35 bg-black/30 px-3 py-2">
-                    <div className="text-[7px] tracking-[0.22em] text-[#8fb8c2]">КОНТАКТ</div>
-                    <div className="mt-1.5 text-[10px] font-bold tracking-[0.16em]" style={{ color: nearestContact ? nearestColor : '#9fc4cc' }}>
-                        {nearestText}
-                    </div>
-                    <div className="mt-1.5 text-[8px] tracking-[0.18em] text-[#d7c5a1]">{props.throttleText}</div>
-                </div>
-
-                <div className="min-w-[190px] rounded-xl border border-[#8f6a38]/35 bg-black/30 px-3 py-2">
-                    <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
-                        <div>
-                            <div className="mb-1 text-[7px] tracking-[0.2em] text-[#d0b07a]">БРОНЯ</div>
-                            <div className="h-1.5 rounded-full bg-[#241c16]">
-                                <div className="h-full rounded-full bg-[linear-gradient(90deg,#d04838,#f0b371)]" style={{ width: `${props.hpRatio * 100}%` }} />
-                            </div>
-                        </div>
-                        <div>
-                            <div className="mb-1 text-[7px] tracking-[0.2em] text-[#d0b07a]">ПАР</div>
-                            <div className="h-1.5 rounded-full bg-[#241c16]">
-                                <div className="h-full rounded-full bg-[linear-gradient(90deg,#efb768,#7ee6f0)]" style={{ width: `${props.steamRatio * 100}%` }} />
-                            </div>
-                        </div>
-                        <div className="text-center">
-                            <div className="text-[7px] tracking-[0.2em] text-[#8fb8c2]">ХОД</div>
-                            <div className="mt-1 text-[18px] font-bold tracking-[0.12em] text-[#f3deb5]">{speedDisplay}</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
-    }
+function PortraitRadarDock(props: Pick<MobileCombatLayoutProps, 'legYaw' | 'torsoYaw' | 'twistRatio' | 'hpRatio' | 'steamRatio' | 'speed' | 'maxSpeed' | 'radarContacts'>) {
+    const metrics = buildHudMetrics(props);
 
     return (
-        <div className="mx-auto flex w-[min(90vw,332px)] items-center gap-2.5 rounded-[24px] border border-[#8f6a38]/55 bg-[linear-gradient(180deg,rgba(18,17,15,0.92),rgba(8,8,8,0.9))] px-3 py-2.5 shadow-[0_0_22px_rgba(0,0,0,0.34),inset_0_0_18px_rgba(0,0,0,0.45)]">
-            {radar}
+        <div className="pointer-events-none absolute bottom-[calc(env(safe-area-inset-bottom,0px)+14px)] left-1/2 z-20 -translate-x-1/2">
+            <div className="flex flex-col items-center gap-1.5">
+                {metrics.nearestContact ? (
+                    <div
+                        className="rounded-full border border-[#8f6a38]/45 bg-[rgba(8,8,8,0.82)] px-3 py-1 text-[8px] font-bold tracking-[0.18em] shadow-[0_0_14px_rgba(0,0,0,0.24)]"
+                        style={{ color: metrics.nearestColor }}
+                    >
+                        {metrics.nearestText}
+                    </div>
+                ) : null}
 
-            <div className="min-w-0 flex-1">
-                <div className="grid grid-cols-3 gap-1.5 text-center">
-                    <div className="rounded-xl border border-[#8f6a38]/35 bg-black/30 px-2 py-1.5">
-                        <div className="text-[7px] tracking-[0.2em] text-[#8fb8c2]">ШАССИ</div>
-                        <div className="mt-1 text-[14px] font-bold tracking-[0.12em] text-[#efb768]">{chassisHeading}</div>
-                    </div>
-                    <div className="rounded-xl border border-[#8f6a38]/35 bg-black/30 px-2 py-1.5">
-                        <div className="text-[7px] tracking-[0.2em] text-[#8fb8c2]">ТОРС</div>
-                        <div className="mt-1 text-[14px] font-bold tracking-[0.12em] text-[#7ee6f0]">{torsoHeading}</div>
-                    </div>
-                    <div className="rounded-xl border border-[#8f6a38]/35 bg-black/30 px-2 py-1.5">
-                        <div className="text-[7px] tracking-[0.2em] text-[#8fb8c2]">СДВИГ</div>
-                        <div className="mt-1 text-[14px] font-bold tracking-[0.12em]" style={{ color: Math.abs(props.twistRatio) > 0.78 ? '#ffb28c' : '#f3deb5' }}>
-                            {twistText}
-                        </div>
-                    </div>
+                <div className="flex items-center gap-1.5">
+                    <ValueBadge label="ШАССИ" value={metrics.chassisHeading} tone="chassis" />
+                    <ValueBadge label="ТОРС" value={metrics.torsoHeading} tone="torso" />
+                    <ValueBadge label="СДВИГ" value={metrics.twistText} tone="twist" />
                 </div>
 
-                <div className="mt-1.5 grid grid-cols-[1.1fr_0.7fr] gap-1.5">
-                    <div className="rounded-xl border border-[#8f6a38]/35 bg-black/30 px-2.5 py-1.5">
-                        <div className="text-[7px] tracking-[0.2em] text-[#8fb8c2]">КОНТАКТ</div>
-                        <div className="mt-1 text-[9px] font-bold tracking-[0.14em]" style={{ color: nearestContact ? nearestColor : '#9fc4cc' }}>
-                            {nearestText}
-                        </div>
-                        <div className="mt-1 text-[7px] tracking-[0.16em] text-[#d7c5a1]">{props.throttleText}</div>
-                    </div>
-                    <div className="rounded-xl border border-[#8f6a38]/35 bg-black/30 px-2 py-1.5 text-center">
-                        <div className="text-[7px] tracking-[0.2em] text-[#8fb8c2]">ХОД</div>
-                        <div className="mt-1 text-[16px] font-bold tracking-[0.12em] text-[#f3deb5]">{speedDisplay}</div>
-                    </div>
+                <RadarDial radarContacts={props.radarContacts} twistRatio={props.twistRatio} variant="portrait" />
+
+                <div className="flex items-center gap-1.5">
+                    <MeterBadge label="БРОНЯ" ratio={props.hpRatio} gradient="bg-[linear-gradient(90deg,#d04838,#f0b371)]" />
+                    <ValueBadge label="ХОД" value={metrics.speedDisplay} tone="speed" />
+                    <MeterBadge label="ПАР" ratio={props.steamRatio} gradient="bg-[linear-gradient(90deg,#efb768,#7ee6f0)]" />
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function LandscapeTopStrip(props: Pick<MobileCombatLayoutProps, 'warning' | 'legYaw' | 'torsoYaw' | 'twistRatio' | 'hpRatio' | 'steamRatio' | 'speed' | 'maxSpeed' | 'radarContacts' | 'onOpenSettings'>) {
+    const metrics = buildHudMetrics(props);
+
+    return (
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-20 px-3" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 8px)' }}>
+            <div className="mx-auto flex max-w-[min(96vw,980px)] items-center gap-2">
+                <div className="min-w-0 flex-1 rounded-full border border-[#8f6a38]/55 bg-[rgba(10,10,10,0.8)] px-4 py-2 text-[9px] tracking-[0.22em] text-[#efb768] shadow-[0_0_18px_rgba(0,0,0,0.3)]">
+                    {props.warning}
                 </div>
 
-                <div className="mt-1.5 grid grid-cols-2 gap-1.5">
-                    <div className="rounded-xl border border-[#8f6a38]/35 bg-black/30 px-2 py-1.5">
-                        <div className="mb-1 text-[7px] tracking-[0.2em] text-[#d0b07a]">БРОНЯ</div>
-                        <div className="h-1.5 rounded-full bg-[#241c16]">
-                            <div className="h-full rounded-full bg-[linear-gradient(90deg,#d04838,#f0b371)]" style={{ width: `${props.hpRatio * 100}%` }} />
-                        </div>
-                    </div>
-                    <div className="rounded-xl border border-[#8f6a38]/35 bg-black/30 px-2 py-1.5">
-                        <div className="mb-1 text-[7px] tracking-[0.2em] text-[#d0b07a]">ПАР</div>
-                        <div className="h-1.5 rounded-full bg-[#241c16]">
-                            <div className="h-full rounded-full bg-[linear-gradient(90deg,#efb768,#7ee6f0)]" style={{ width: `${props.steamRatio * 100}%` }} />
-                        </div>
-                    </div>
+                <div className="flex items-center gap-1.5">
+                    <ValueBadge label="ШАССИ" value={metrics.chassisHeading} tone="chassis" />
+                    <ValueBadge label="ТОРС" value={metrics.torsoHeading} tone="torso" />
+                    <ValueBadge label="СДВИГ" value={metrics.twistText} tone="twist" />
                 </div>
+
+                <div className="flex items-center gap-1.5">
+                    <MeterBadge label="БРОНЯ" ratio={props.hpRatio} gradient="bg-[linear-gradient(90deg,#d04838,#f0b371)]" />
+                    <MeterBadge label="ПАР" ratio={props.steamRatio} gradient="bg-[linear-gradient(90deg,#efb768,#7ee6f0)]" />
+                    <ValueBadge label="ХОД" value={metrics.speedDisplay} tone="speed" />
+                </div>
+
+                <button
+                    type="button"
+                    className="pointer-events-auto shrink-0 rounded-full border border-[#8f6a38]/60 bg-[rgba(10,10,10,0.8)] px-4 py-2 text-[9px] tracking-[0.2em] text-[#d7c5a1]"
+                    onClick={props.onOpenSettings}
+                >
+                    МЕНЮ
+                </button>
+            </div>
+        </div>
+    );
+}
+
+function LandscapeRadarDock(props: Pick<MobileCombatLayoutProps, 'radarContacts' | 'twistRatio'> & { nearestText: string; nearestColor: string; showContact: boolean }) {
+    return (
+        <div className="pointer-events-none absolute bottom-[calc(env(safe-area-inset-bottom,0px)+12px)] left-1/2 z-20 -translate-x-1/2">
+            <div className="flex flex-col items-center gap-1.5">
+                {props.showContact ? (
+                    <div
+                        className="rounded-full border border-[#8f6a38]/45 bg-[rgba(8,8,8,0.82)] px-3 py-1 text-[8px] font-bold tracking-[0.18em] shadow-[0_0_14px_rgba(0,0,0,0.24)]"
+                        style={{ color: props.nearestColor }}
+                    >
+                        {props.nearestText}
+                    </div>
+                ) : null}
+                <RadarDial radarContacts={props.radarContacts} twistRatio={props.twistRatio} variant="landscape" />
+            </div>
+        </div>
+    );
+}
+
+function PortraitTopStrip(props: Pick<MobileCombatLayoutProps, 'warning' | 'onOpenSettings'>) {
+    return (
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-20 px-3" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 8px)' }}>
+            <div className="mx-auto flex max-w-[min(96vw,420px)] items-start justify-between gap-2">
+                <div className="min-w-0 flex-1 rounded-full border border-[#8f6a38]/55 bg-[rgba(10,10,10,0.8)] px-4 py-2.5 text-center text-[9px] tracking-[0.22em] text-[#efb768] shadow-[0_0_18px_rgba(0,0,0,0.3)]">
+                    {props.warning}
+                </div>
+                <button
+                    type="button"
+                    className="pointer-events-auto shrink-0 rounded-full border border-[#8f6a38]/60 bg-[rgba(10,10,10,0.8)] px-4 py-2.5 text-[9px] tracking-[0.2em] text-[#d7c5a1]"
+                    onClick={props.onOpenSettings}
+                >
+                    МЕНЮ
+                </button>
             </div>
         </div>
     );
@@ -185,36 +220,17 @@ function StatusCluster(props: StatusClusterProps) {
 function PortraitCombatLayout(props: MobileCombatLayoutProps) {
     return (
         <>
-            <div className="pointer-events-none absolute inset-x-0 top-0 z-20 px-3" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 8px)' }}>
-                <div className="mx-auto flex max-w-[min(96vw,420px)] items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1 rounded-full border border-[#8f6a38]/55 bg-[rgba(10,10,10,0.8)] px-4 py-3 text-center text-[10px] tracking-[0.22em] text-[#efb768] shadow-[0_0_18px_rgba(0,0,0,0.3)]">
-                        {props.warning}
-                    </div>
-                    <button
-                        type="button"
-                        className="pointer-events-auto shrink-0 rounded-full border border-[#8f6a38]/60 bg-[rgba(10,10,10,0.8)] px-4 py-3 text-[10px] tracking-[0.2em] text-[#d7c5a1]"
-                        onClick={props.onOpenSettings}
-                    >
-                        МЕНЮ
-                    </button>
-                </div>
-            </div>
-
-            <div className="pointer-events-none absolute inset-x-0 z-20 px-3" style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 146px)' }}>
-                <StatusCluster
-                    variant="portrait"
-                    throttleText={props.throttleText}
-                    legYaw={props.legYaw}
-                    torsoYaw={props.torsoYaw}
-                    twistRatio={props.twistRatio}
-                    hpRatio={props.hpRatio}
-                    steamRatio={props.steamRatio}
-                    speed={props.speed}
-                    maxSpeed={props.maxSpeed}
-                    radarContacts={props.radarContacts}
-                />
-            </div>
-
+            <PortraitTopStrip warning={props.warning} onOpenSettings={props.onOpenSettings} />
+            <PortraitRadarDock
+                legYaw={props.legYaw}
+                torsoYaw={props.torsoYaw}
+                twistRatio={props.twistRatio}
+                hpRatio={props.hpRatio}
+                steamRatio={props.steamRatio}
+                speed={props.speed}
+                maxSpeed={props.maxSpeed}
+                radarContacts={props.radarContacts}
+            />
             <MobileControls
                 game={props.game}
                 leftHanded={props.leftHanded}
@@ -226,38 +242,29 @@ function PortraitCombatLayout(props: MobileCombatLayoutProps) {
 }
 
 function LandscapeCombatLayout(props: MobileCombatLayoutProps) {
+    const metrics = buildHudMetrics(props);
+
     return (
         <>
-            <div className="pointer-events-none absolute inset-x-0 top-0 z-20 px-3" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 8px)' }}>
-                <div className="mx-auto flex max-w-[min(96vw,860px)] items-center justify-between gap-3">
-                    <div className="min-w-0 rounded-full border border-[#8f6a38]/55 bg-[rgba(10,10,10,0.8)] px-4 py-3 text-[10px] tracking-[0.22em] text-[#efb768] shadow-[0_0_18px_rgba(0,0,0,0.3)]">
-                        {props.warning}
-                    </div>
-                    <button
-                        type="button"
-                        className="pointer-events-auto shrink-0 rounded-full border border-[#8f6a38]/60 bg-[rgba(10,10,10,0.8)] px-4 py-3 text-[10px] tracking-[0.2em] text-[#d7c5a1]"
-                        onClick={props.onOpenSettings}
-                    >
-                        МЕНЮ
-                    </button>
-                </div>
-            </div>
-
-            <div className="pointer-events-none absolute inset-x-0 z-20 px-3" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 52px)' }}>
-                <StatusCluster
-                    variant="landscape"
-                    throttleText={props.throttleText}
-                    legYaw={props.legYaw}
-                    torsoYaw={props.torsoYaw}
-                    twistRatio={props.twistRatio}
-                    hpRatio={props.hpRatio}
-                    steamRatio={props.steamRatio}
-                    speed={props.speed}
-                    maxSpeed={props.maxSpeed}
-                    radarContacts={props.radarContacts}
-                />
-            </div>
-
+            <LandscapeTopStrip
+                warning={props.warning}
+                legYaw={props.legYaw}
+                torsoYaw={props.torsoYaw}
+                twistRatio={props.twistRatio}
+                hpRatio={props.hpRatio}
+                steamRatio={props.steamRatio}
+                speed={props.speed}
+                maxSpeed={props.maxSpeed}
+                radarContacts={props.radarContacts}
+                onOpenSettings={props.onOpenSettings}
+            />
+            <LandscapeRadarDock
+                radarContacts={props.radarContacts}
+                twistRatio={props.twistRatio}
+                nearestText={metrics.nearestText}
+                nearestColor={metrics.nearestColor}
+                showContact={Boolean(metrics.nearestContact)}
+            />
             <MobileControls
                 game={props.game}
                 leftHanded={props.leftHanded}

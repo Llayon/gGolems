@@ -51,9 +51,9 @@ export const ROTATION = {
 
 export const GOLEM = {
     classes: {
-        light: { mass: 1.0, hp: 70, steam: 80, speed: 14 },
-        medium: { mass: 2.0, hp: 100, steam: 100, speed: 10 },
-        heavy: { mass: 3.5, hp: 150, steam: 120, speed: 6 },
+        light: { mass: 1.0, hp: 70, steam: 80, speed: 11 },
+        medium: { mass: 2.0, hp: 100, steam: 100, speed: 8 },
+        heavy: { mass: 3.5, hp: 150, steam: 120, speed: 5 },
     },
     steamRegen: 8,
     overheatThreshold: 15,

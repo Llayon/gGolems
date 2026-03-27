@@ -17,9 +17,9 @@ export function MobileControls(props: MobileControlsProps) {
     const [aimActive, setAimActive] = useState(false);
     const stickSize = props.isPortrait ? 132 : 144;
     const knobOffset = props.isPortrait ? 30 : 34;
-    const bottomInset = props.isPortrait ? 12 : 10;
+    const bottomInset = props.isPortrait ? 12 : 8;
     const sideInset = 12;
-    const actionGapSide = 14;
+    const actionGapSide = props.isPortrait ? 14 : 18;
 
     const ensureAudio = () => {
         props.game?.sounds?.init?.();
@@ -138,7 +138,7 @@ export function MobileControls(props: MobileControlsProps) {
                 <button
                     type="button"
                     className="pointer-events-auto rounded-full border border-[#7ee6f0]/65 bg-[radial-gradient(circle_at_30%_30%,rgba(126,230,240,0.72),rgba(31,72,82,0.86))] text-[11px] font-bold tracking-[0.2em] text-[#effcff] shadow-[0_0_22px_rgba(16,48,55,0.4)]"
-                    style={{ width: props.isPortrait ? 84 : 76, height: props.isPortrait ? 84 : 76 }}
+                    style={{ width: props.isPortrait ? 84 : 70, height: props.isPortrait ? 84 : 70 }}
                     onPointerDown={() => {
                         ensureAudio();
                         props.game?.input?.triggerVirtualAction?.('fire');
@@ -147,10 +147,10 @@ export function MobileControls(props: MobileControlsProps) {
                     ОГОНЬ
                 </button>
 
-                <div className="flex max-w-[220px] flex-wrap gap-2">
+                <div className={`flex gap-2 ${props.isPortrait ? 'max-w-[220px] flex-wrap' : 'w-[156px]'}`}>
                     <button
                         type="button"
-                        className="pointer-events-auto rounded-2xl border border-[#8f6a38]/60 bg-[rgba(10,10,10,0.78)] px-3 py-3 text-[10px] tracking-[0.22em] text-[#efb768]"
+                        className={`pointer-events-auto rounded-2xl border border-[#8f6a38]/60 bg-[rgba(10,10,10,0.78)] text-[10px] tracking-[0.22em] text-[#efb768] ${props.isPortrait ? 'px-3 py-3' : 'flex-1 px-3 py-2.5'}`}
                         onPointerDown={() => {
                             ensureAudio();
                             props.game?.input?.triggerVirtualAction?.('dash');
@@ -160,7 +160,7 @@ export function MobileControls(props: MobileControlsProps) {
                     </button>
                     <button
                         type="button"
-                        className="pointer-events-auto rounded-2xl border border-[#8f6a38]/60 bg-[rgba(10,10,10,0.78)] px-3 py-3 text-[10px] tracking-[0.22em] text-[#efb768]"
+                        className={`pointer-events-auto rounded-2xl border border-[#8f6a38]/60 bg-[rgba(10,10,10,0.78)] text-[10px] tracking-[0.22em] text-[#efb768] ${props.isPortrait ? 'px-3 py-3' : 'flex-1 px-3 py-2.5'}`}
                         onPointerDown={() => {
                             ensureAudio();
                             props.game?.input?.triggerVirtualAction?.('vent');
@@ -170,17 +170,17 @@ export function MobileControls(props: MobileControlsProps) {
                     </button>
                 </div>
 
-                <div className="flex max-w-[240px] flex-wrap justify-end gap-2">
+                <div className={`flex gap-2 ${props.isPortrait ? 'max-w-[240px] flex-wrap justify-end' : 'w-[176px]'}`}>
                     <button
                         type="button"
-                        className="pointer-events-auto rounded-2xl border border-[#8f6a38]/60 bg-[rgba(10,10,10,0.78)] px-3 py-2 text-[10px] tracking-[0.2em] text-[#d7c5a1]"
+                        className={`pointer-events-auto rounded-2xl border border-[#8f6a38]/60 bg-[rgba(10,10,10,0.78)] text-[10px] tracking-[0.2em] text-[#d7c5a1] ${props.isPortrait ? 'px-3 py-2' : 'flex-1 px-3 py-2.5'}`}
                         onPointerDown={() => props.game?.input?.triggerVirtualAction?.('centerTorso')}
                     >
                         ЦЕНТР ТОРС
                     </button>
                     <button
                         type="button"
-                        className="pointer-events-auto rounded-2xl border border-[#8f6a38]/60 bg-[rgba(10,10,10,0.78)] px-3 py-2 text-[10px] tracking-[0.2em] text-[#d7c5a1]"
+                        className={`pointer-events-auto rounded-2xl border border-[#8f6a38]/60 bg-[rgba(10,10,10,0.78)] text-[10px] tracking-[0.2em] text-[#d7c5a1] ${props.isPortrait ? 'px-3 py-2' : 'flex-1 px-3 py-2.5'}`}
                         onPointerDown={() => props.game?.input?.triggerVirtualAction?.('stopThrottle')}
                     >
                         СТОП ХОД
