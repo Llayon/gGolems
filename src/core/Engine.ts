@@ -18,6 +18,7 @@ const _weaponOrigin = new THREE.Vector3();
 const _weaponDir = new THREE.Vector3();
 const _aimPoint = new THREE.Vector3();
 const _botTarget = new THREE.Vector3();
+const _spawnDir = new THREE.Vector3();
 
 type SessionMode = 'solo' | 'host' | 'client';
 
@@ -38,6 +39,7 @@ export class Game {
     decals: DecalManager;
     onStateUpdate: (state: any) => void;
     sessionMode: SessionMode;
+    remoteSpawnSlots: Map<string, number> = new Map();
     
     lastTime = 0;
     isRunning = false;
@@ -76,6 +78,9 @@ export class Game {
             this.setClientMode();
         }
 
+        this.placeGolemAtSpawn(this.golem, this.getInitialLocalSpawn());
+        this.dummy.respawnRadius = this.world.spawnRadius;
+
         canvas.addEventListener('click', () => {
             canvas.requestPointerLock();
             this.sounds.init();
@@ -89,6 +94,17 @@ export class Game {
             console.log("Player connected:", id);
             const remoteGolem = new GolemController(this.renderer.scene, this.physics, false);
             this.remotePlayers.set(id, remoteGolem);
+
+            if (this.sessionMode === 'host') {
+                const spawnSlot = this.allocateRemoteSpawnSlot();
+                this.remoteSpawnSlots.set(id, spawnSlot);
+                const spawn = this.getPlayerSpawn(spawnSlot);
+                const yaw = this.getSpawnYaw(spawn);
+                this.placeGolemAtSpawn(remoteGolem, spawn, yaw);
+                this.network.sendTo(id, { type: 'respawn', x: spawn.x, y: spawn.y, z: spawn.z, yaw });
+            } else if (this.sessionMode === 'client') {
+                this.placeGolemAtSpawn(remoteGolem, this.getPlayerSpawn(0));
+            }
         };
 
         this.network.onDisconnect = (id) => {
@@ -99,6 +115,7 @@ export class Game {
                 this.physics.removeRigidBody(remoteGolem.body);
                 this.remotePlayers.delete(id);
             }
+            this.remoteSpawnSlots.delete(id);
         };
 
         this.network.onData = (id, data) => {
@@ -144,6 +161,7 @@ export class Game {
                         if (!remoteGolem) {
                             remoteGolem = new GolemController(this.renderer.scene, this.physics, false);
                             this.remotePlayers.set(pid, remoteGolem);
+                            this.placeGolemAtSpawn(remoteGolem, new THREE.Vector3(pState.x, pState.y, pState.z), pState.ly);
                         }
                         
                         remoteGolem.targetPos.set(pState.x, pState.y, pState.z);
@@ -163,6 +181,14 @@ export class Game {
                 }
             } else if (data.type === 'respawn') {
                 this.golem.body.setTranslation({ x: data.x, y: data.y, z: data.z }, true);
+                this.golem.targetPos.set(data.x, data.y, data.z);
+                if (typeof data.yaw === 'number') {
+                    this.golem.legYaw = data.yaw;
+                    this.golem.torsoYaw = data.yaw;
+                    this.golem.targetLegYaw = data.yaw;
+                    this.golem.targetTorsoYaw = data.yaw;
+                    this.mechCamera.aimYaw = data.yaw;
+                }
                 this.golem.hp = this.golem.maxHp;
                 this.mechCamera.addTrauma(1.0); // Big shake on respawn
             } else if (data.type === 'fire') {
@@ -186,6 +212,50 @@ export class Game {
         this.sessionMode = 'client';
         this.dummy.isHost = false;
         this.dummy.body.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
+    }
+
+    getInitialLocalSpawn() {
+        if (this.sessionMode === 'solo') {
+            return this.world.soloSpawn;
+        }
+        return this.getPlayerSpawn(this.sessionMode === 'client' ? 1 : 0);
+    }
+
+    getPlayerSpawn(slot: number) {
+        const spawn = this.world.playerSpawns[slot % this.world.playerSpawns.length];
+        return spawn.clone();
+    }
+
+    getSpawnYaw(spawn: THREE.Vector3) {
+        _spawnDir.set(-spawn.x, 0, -spawn.z);
+        if (_spawnDir.lengthSq() < 0.0001) return 0;
+        _spawnDir.normalize();
+        return Math.atan2(_spawnDir.x, -_spawnDir.z);
+    }
+
+    placeGolemAtSpawn(golem: GolemController, spawn: THREE.Vector3, yaw = this.getSpawnYaw(spawn)) {
+        golem.body.setTranslation({ x: spawn.x, y: spawn.y, z: spawn.z }, true);
+        golem.targetPos.copy(spawn);
+        golem.legYaw = yaw;
+        golem.torsoYaw = yaw;
+        golem.targetLegYaw = yaw;
+        golem.targetTorsoYaw = yaw;
+        golem.model.position.set(spawn.x, spawn.y - 1.5, spawn.z);
+        golem.legs.rotation.y = yaw;
+        golem.torso.rotation.y = yaw;
+
+        if (golem.isLocal && golem.gameCamera) {
+            golem.gameCamera.aimYaw = yaw;
+        }
+    }
+
+    allocateRemoteSpawnSlot() {
+        for (let slot = 1; slot < this.world.playerSpawns.length; slot++) {
+            if (![...this.remoteSpawnSlots.values()].includes(slot)) {
+                return slot;
+            }
+        }
+        return ((this.remotePlayers.size - 1) % Math.max(1, this.world.playerSpawns.length - 1)) + 1;
     }
 
     start() {
@@ -306,11 +376,7 @@ export class Game {
                     this.mechCamera.onHit(damage);
                     if (this.golem.hp <= 0) {
                         this.golem.hp = this.golem.maxHp;
-                        this.golem.body.setTranslation({
-                            x: (Math.random() - 0.5) * this.world.spawnRadius * 2,
-                            y: 5,
-                            z: (Math.random() - 0.5) * this.world.spawnRadius * 2
-                        }, true);
+                        this.placeGolemAtSpawn(this.golem, this.getInitialLocalSpawn());
                         this.mechCamera.addTrauma(1.0); // Big shake on respawn
                     }
                 } else {
@@ -319,10 +385,11 @@ export class Game {
                         p.hp -= damage;
                         if (p.hp <= 0) {
                             p.hp = p.maxHp;
-                            const rx = (Math.random() - 0.5) * this.world.spawnRadius * 2;
-                            const rz = (Math.random() - 0.5) * this.world.spawnRadius * 2;
-                            p.body.setTranslation({ x: rx, y: 5, z: rz }, true);
-                            this.network.sendTo(targetId, { type: 'respawn', x: rx, y: 5, z: rz });
+                            const spawnSlot = this.remoteSpawnSlots.get(targetId) ?? 1;
+                            const spawn = this.getPlayerSpawn(spawnSlot);
+                            const yaw = this.getSpawnYaw(spawn);
+                            this.placeGolemAtSpawn(p, spawn, yaw);
+                            this.network.sendTo(targetId, { type: 'respawn', x: spawn.x, y: spawn.y, z: spawn.z, yaw });
                         }
                     }
                 }

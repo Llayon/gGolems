@@ -7,7 +7,14 @@ export class Arena {
     propManager: PropManager;
     readonly halfSize = 78;
     readonly spawnRadius = 62;
+    readonly soloSpawn = new THREE.Vector3(0, 5, 54);
     readonly botSpawn = new THREE.Vector3(0, 5, -54);
+    readonly playerSpawns = [
+        new THREE.Vector3(-40, 5, 46),
+        new THREE.Vector3(40, 5, -46),
+        new THREE.Vector3(-46, 5, -40),
+        new THREE.Vector3(46, 5, 40)
+    ];
 
     constructor(scene: THREE.Scene, physics: RAPIER.World) {
         const arenaHalfSize = this.halfSize;
