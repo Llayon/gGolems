@@ -6,6 +6,182 @@
 import { useEffect, useRef, useState } from 'react';
 import { initGame } from './core/Engine';
 
+type GameHudState = {
+    hp: number;
+    maxHp: number;
+    steam: number;
+    maxSteam: number;
+    isOverheated: boolean;
+    overheatTimer: number;
+    legYaw: number;
+    torsoYaw: number;
+    throttle: number;
+    speed: number;
+    maxSpeed: number;
+    maxTwist: number;
+    aimOffsetX: number;
+    aimOffsetY: number;
+};
+
+const initialGameState: GameHudState = {
+    hp: 100,
+    maxHp: 100,
+    steam: 100,
+    maxSteam: 100,
+    isOverheated: false,
+    overheatTimer: 0,
+    legYaw: 0,
+    torsoYaw: 0,
+    throttle: 0,
+    speed: 0,
+    maxSpeed: 10,
+    maxTwist: 1.75,
+    aimOffsetX: 0,
+    aimOffsetY: 0
+};
+
+function clamp(value: number, min: number, max: number) {
+    return Math.max(min, Math.min(max, value));
+}
+
+function angleDiff(from: number, to: number) {
+    let diff = to - from;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    return diff;
+}
+
+function toDegrees(radians: number) {
+    return radians * (180 / Math.PI);
+}
+
+function wrapDegrees(degrees: number) {
+    let wrapped = degrees % 360;
+    if (wrapped < 0) wrapped += 360;
+    return wrapped;
+}
+
+function polarToCartesian(cx: number, cy: number, radius: number, angleDeg: number) {
+    const angleRad = ((angleDeg - 90) * Math.PI) / 180;
+    return {
+        x: cx + radius * Math.cos(angleRad),
+        y: cy + radius * Math.sin(angleRad)
+    };
+}
+
+function describeArc(cx: number, cy: number, radius: number, startAngle: number, endAngle: number) {
+    const start = polarToCartesian(cx, cy, radius, endAngle);
+    const end = polarToCartesian(cx, cy, radius, startAngle);
+    const largeArcFlag = endAngle - startAngle <= 180 ? '0' : '1';
+    return `M ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArcFlag} 0 ${end.x} ${end.y}`;
+}
+
+function HeadingTape(props: { legYaw: number; torsoYaw: number; maxTwist: number }) {
+    const { legYaw, torsoYaw, maxTwist } = props;
+    const bodyOffsetPx = clamp(angleDiff(torsoYaw, legYaw) / (maxTwist * 1.1), -1, 1) * 184;
+    const centerHeading = wrapDegrees(Math.round(toDegrees(torsoYaw)));
+    const chassisHeading = wrapDegrees(Math.round(toDegrees(legYaw)));
+    const ticks = Array.from({ length: 17 }, (_, index) => index - 8);
+
+    return (
+        <div className="relative h-24 overflow-hidden rounded-[28px] border border-[#9d7740]/70 bg-[linear-gradient(180deg,rgba(21,18,13,0.96),rgba(8,8,7,0.96))] shadow-[inset_0_0_20px_rgba(0,0,0,0.55),0_0_20px_rgba(0,0,0,0.35)]">
+            <div className="absolute inset-x-5 top-4 h-px bg-[#7f653e]/60" />
+            <div className="absolute inset-x-5 top-[36px] h-[1px] bg-[#2e9bb4]/20" />
+            {ticks.map((tick) => {
+                const left = `calc(50% + ${tick * 44}px)`;
+                const label = wrapDegrees(centerHeading + tick * 15);
+                const major = tick % 2 === 0;
+                return (
+                    <div key={tick} className="absolute top-2 bottom-2" style={{ left }}>
+                        <div className={`absolute top-4 -translate-x-1/2 rounded-full ${major ? 'h-6 w-[2px] bg-[#d0b07a]' : 'h-3 w-px bg-[#78603b]'}`} />
+                        {major ? (
+                            <div className="absolute top-11 -translate-x-1/2 text-[10px] tracking-[0.28em] text-[#c5b187]/90">
+                                {label.toString().padStart(3, '0')}
+                            </div>
+                        ) : null}
+                    </div>
+                );
+            })}
+
+            <div className="absolute left-1/2 top-[7px] -translate-x-1/2 text-[10px] font-bold tracking-[0.42em] text-[#7ee6f0]">
+                VIEW
+            </div>
+            <div className="absolute left-1/2 top-1 -translate-x-1/2">
+                <div className="h-0 w-0 border-x-[8px] border-x-transparent border-t-[14px] border-t-[#7ee6f0] drop-shadow-[0_0_8px_rgba(126,230,240,0.55)]" />
+            </div>
+
+            <div className="absolute top-[7px] text-[10px] font-bold tracking-[0.36em] text-[#efb768]" style={{ left: `calc(50% + ${bodyOffsetPx}px)`, transform: 'translateX(-50%)' }}>
+                CHASSIS
+            </div>
+            <div className="absolute top-2" style={{ left: `calc(50% + ${bodyOffsetPx}px)`, transform: 'translateX(-50%)' }}>
+                <div className="h-0 w-0 border-x-[8px] border-x-transparent border-t-[14px] border-t-[#efb768] drop-shadow-[0_0_10px_rgba(239,183,104,0.55)]" />
+            </div>
+
+            <div className="absolute left-5 bottom-2 text-[11px] tracking-[0.25em] text-[#9cb5bb]">TORSO {centerHeading.toString().padStart(3, '0')}</div>
+            <div className="absolute right-5 bottom-2 text-[11px] tracking-[0.25em] text-[#d0b07a]">BODY {chassisHeading.toString().padStart(3, '0')}</div>
+        </div>
+    );
+}
+
+function TorsoTwistArc(props: { twistRatio: number; maxTwist: number }) {
+    const { twistRatio, maxTwist } = props;
+    const clampedRatio = clamp(twistRatio, -1, 1);
+    const pipAngle = 270 + clampedRatio * 60;
+    const trackPath = describeArc(110, 110, 84, 210, 330);
+    const leftLimit = polarToCartesian(110, 110, 84, 210);
+    const rightLimit = polarToCartesian(110, 110, 84, 330);
+    const pip = polarToCartesian(110, 110, 84, pipAngle);
+    const segmentPath = clampedRatio >= 0
+        ? describeArc(110, 110, 84, 270, pipAngle)
+        : describeArc(110, 110, 84, pipAngle, 270);
+
+    return (
+        <div className="pointer-events-none absolute left-1/2 top-1/2 z-20 h-[220px] w-[220px] -translate-x-1/2 -translate-y-1/2">
+            <svg viewBox="0 0 220 220" className="h-full w-full overflow-visible">
+                <path d={trackPath} fill="none" stroke="rgba(123,104,72,0.75)" strokeWidth="6" strokeLinecap="round" />
+                <path d={segmentPath} fill="none" stroke={Math.abs(clampedRatio) > 0.78 ? '#ff9f43' : '#7ee6f0'} strokeWidth="5" strokeLinecap="round" />
+                <circle cx={pip.x} cy={pip.y} r="6.5" fill={Math.abs(clampedRatio) > 0.78 ? '#ff9f43' : '#7ee6f0'} />
+                <circle cx="110" cy="110" r="3.5" fill="#d0b07a" />
+                <circle cx={leftLimit.x} cy={leftLimit.y} r="4" fill="#9d7740" />
+                <circle cx={rightLimit.x} cy={rightLimit.y} r="4" fill="#9d7740" />
+            </svg>
+            <div className="absolute inset-x-0 bottom-[18px] text-center text-[10px] tracking-[0.46em] text-[#a0bcc3]">
+                TORSO TWIST LIMIT {Math.round(toDegrees(maxTwist))} DEG
+            </div>
+        </div>
+    );
+}
+
+function CockpitFrame(props: { warning: string; throttleLabel: string }) {
+    const { warning, throttleLabel } = props;
+
+    return (
+        <div className="pointer-events-none absolute inset-0 z-10 overflow-hidden">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,0,0,0)_0%,rgba(0,0,0,0.08)_48%,rgba(0,0,0,0.32)_100%)]" />
+            <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0)_18%,rgba(0,0,0,0)_68%,rgba(255,164,63,0.05)_100%)]" />
+
+            <div className="absolute inset-x-0 top-0 h-20 border-b border-[#7f653e]/70 bg-[linear-gradient(180deg,rgba(80,55,30,0.95),rgba(28,20,14,0.92),rgba(0,0,0,0))] shadow-[0_8px_18px_rgba(0,0,0,0.35)]" />
+            <div className="absolute left-0 top-0 bottom-0 w-28 border-r border-[#7f653e]/60 bg-[linear-gradient(90deg,rgba(54,39,24,0.96),rgba(22,17,13,0.78),rgba(0,0,0,0))]" />
+            <div className="absolute right-0 top-0 bottom-0 w-28 border-l border-[#7f653e]/60 bg-[linear-gradient(270deg,rgba(54,39,24,0.96),rgba(22,17,13,0.78),rgba(0,0,0,0))]" />
+
+            <div className="absolute left-[72px] top-12 bottom-[170px] w-5 rounded-full border border-[#9d7740]/70 bg-[linear-gradient(180deg,#5b4125,#241911)] shadow-[0_0_20px_rgba(0,0,0,0.45)]" />
+            <div className="absolute right-[72px] top-12 bottom-[170px] w-5 rounded-full border border-[#9d7740]/70 bg-[linear-gradient(180deg,#5b4125,#241911)] shadow-[0_0_20px_rgba(0,0,0,0.45)]" />
+            <div className="absolute left-[58px] top-[86px] h-3 w-14 rotate-[-18deg] rounded-full border border-[#b18c53]/60 bg-[#3d2b18]" />
+            <div className="absolute right-[58px] top-[86px] h-3 w-14 rotate-[18deg] rounded-full border border-[#b18c53]/60 bg-[#3d2b18]" />
+
+            <div className="absolute bottom-0 left-1/2 h-[248px] w-[min(1040px,96vw)] -translate-x-1/2 rounded-t-[44px] border border-[#8b6636]/80 bg-[linear-gradient(180deg,rgba(69,50,31,0.98),rgba(19,15,12,0.98))] shadow-[0_-14px_32px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,220,168,0.08)]" />
+            <div className="absolute bottom-[202px] left-1/2 h-7 w-[min(920px,84vw)] -translate-x-1/2 rounded-full border border-[#a67d47]/50 bg-[linear-gradient(180deg,rgba(94,67,37,0.92),rgba(31,24,18,0.72))]" />
+
+            <div className="absolute left-1/2 top-4 -translate-x-1/2 rounded-full border border-[#8f6a38]/70 bg-[rgba(12,10,8,0.82)] px-6 py-2 text-[11px] tracking-[0.42em] text-[#f1bd6e] shadow-[0_0_18px_rgba(0,0,0,0.4)]">
+                {warning}
+            </div>
+            <div className="absolute left-1/2 bottom-[214px] -translate-x-1/2 rounded-full border border-[#5f4d2e]/70 bg-[rgba(7,7,7,0.82)] px-5 py-2 text-[10px] tracking-[0.4em] text-[#a7c1c8]">
+                {throttleLabel}
+            </div>
+        </div>
+    );
+}
+
 export default function App() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [loading, setLoading] = useState(false);
@@ -14,21 +190,19 @@ export default function App() {
     const [myId, setMyId] = useState('');
     const [isHost, setIsHost] = useState(false);
     const [gameInstance, setGameInstance] = useState<any>(null);
-    const [gameState, setGameState] = useState({
-        hp: 100, maxHp: 100, steam: 100, maxSteam: 100, isOverheated: false, overheatTimer: 0, aimOffsetX: 0, aimOffsetY: 0
-    });
+    const [gameState, setGameState] = useState<GameHudState>(initialGameState);
 
     const startGame = async (mode: 'host' | 'client', targetHostId?: string) => {
         if (!canvasRef.current) return;
         setInLobby(false);
         setLoading(true);
-        
-        const game = await initGame(canvasRef.current, (state: any) => {
-            setGameState({...state});
+
+        const game = await initGame(canvasRef.current, (state: GameHudState) => {
+            setGameState({ ...state });
         });
-        
+
         setGameInstance(game);
-        
+
         if (mode === 'host') {
             game.network.initAsHost((id: string) => {
                 setMyId(id);
@@ -43,7 +217,7 @@ export default function App() {
                 setLoading(false);
             }, (err: any) => {
                 console.error(err);
-                alert("Ошибка подключения: " + err);
+                alert(`Connection error: ${err}`);
                 setInLobby(true);
                 setLoading(false);
             });
@@ -56,119 +230,230 @@ export default function App() {
         };
     }, [gameInstance]);
 
+    const torsoOffset = angleDiff(gameState.legYaw, gameState.torsoYaw);
+    const twistRatio = gameState.maxTwist > 0 ? clamp(torsoOffset / gameState.maxTwist, -1, 1) : 0;
+    const throttleRatio = clamp(gameState.throttle, -0.45, 1);
+    const hpRatio = gameState.maxHp > 0 ? gameState.hp / gameState.maxHp : 0;
+    const steamRatio = gameState.maxSteam > 0 ? gameState.steam / gameState.maxSteam : 0;
+    const displaySpeed = Math.round((gameState.speed / Math.max(gameState.maxSpeed, 0.1)) * 86);
+    const throttleText = throttleRatio > 0.05
+        ? `THROTTLE ${Math.round(throttleRatio * 100)}%`
+        : throttleRatio < -0.05
+            ? `REVERSE ${Math.round(-throttleRatio * 100)}%`
+            : 'THROTTLE IDLE';
+    const warningText = gameState.isOverheated
+        ? `STEAM LOCK ${gameState.overheatTimer.toFixed(1)}S`
+        : Math.abs(twistRatio) > 0.86
+            ? 'TORSO LIMIT'
+            : Math.abs(twistRatio) > 0.6
+                ? 'CENTER TORSO [C]'
+                : throttleRatio < -0.05
+                    ? 'REVERSE THRUST'
+                    : throttleRatio > 0.7
+                        ? 'FULL AHEAD'
+                        : 'CRUISE STABLE';
+
+    const zeroLineTop = 69;
+    const forwardFillHeight = `${Math.max(0, throttleRatio) * zeroLineTop}%`;
+    const reverseFillHeight = `${Math.max(0, -throttleRatio / 0.45) * (100 - zeroLineTop)}%`;
+    const reticleX = Math.max(-320, Math.min(320, gameState.aimOffsetX * 320));
+    const reticleY = Math.max(-220, Math.min(220, -gameState.aimOffsetY * 180));
+
     return (
-        <div className="w-full h-screen overflow-hidden bg-[#1a1a2e] relative font-mono">
-            <canvas ref={canvasRef} className={`w-full h-full block ${inLobby ? 'hidden' : ''}`} />
-            
-            {inLobby && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#1a1a2e] z-50 text-white">
-                    <h1 className="text-4xl font-bold text-orange-400 mb-8 tracking-wider drop-shadow-[0_0_10px_rgba(255,165,0,0.8)]">ПАРОМАГИЧЕСКИЕ ГОЛЕМЫ</h1>
-                    
-                    <div className="bg-black/50 p-8 rounded-lg border border-orange-500/30 backdrop-blur-sm flex flex-col gap-6 w-96">
-                        <button 
+        <div className="relative h-screen w-full overflow-hidden bg-[#100d0b] font-mono text-[#f2ddb1]">
+            <canvas ref={canvasRef} className={`block h-full w-full ${inLobby ? 'hidden' : ''}`} />
+
+            {inLobby ? (
+                <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[radial-gradient(circle_at_center,#2a1c12_0%,#130e0b_60%,#090807_100%)] text-white">
+                    <h1 className="mb-8 text-4xl font-bold tracking-[0.35em] text-[#efb768] drop-shadow-[0_0_14px_rgba(239,183,104,0.45)]">
+                        STEAMGOLEM COCKPIT
+                    </h1>
+
+                    <div className="flex w-96 flex-col gap-6 rounded-2xl border border-[#8f6a38]/40 bg-black/45 p-8 backdrop-blur-sm">
+                        <button
                             onClick={() => startGame('host')}
-                            className="w-full py-3 bg-orange-600 hover:bg-orange-500 text-white font-bold rounded transition-colors shadow-[0_0_15px_rgba(255,100,0,0.5)]"
+                            className="rounded bg-[#b0622d] py-3 font-bold tracking-[0.22em] text-white shadow-[0_0_15px_rgba(176,98,45,0.35)] transition-colors hover:bg-[#ca7240]"
                         >
-                            СОЗДАТЬ ИГРУ (ХОСТ)
+                            HOST MISSION
                         </button>
-                        
+
                         <div className="flex items-center gap-4">
-                            <div className="h-px bg-orange-500/30 flex-1"></div>
-                            <span className="text-orange-300/50 text-sm">ИЛИ</span>
-                            <div className="h-px bg-orange-500/30 flex-1"></div>
+                            <div className="h-px flex-1 bg-[#8f6a38]/30" />
+                            <span className="text-sm tracking-[0.35em] text-[#d2b78d]/60">OR</span>
+                            <div className="h-px flex-1 bg-[#8f6a38]/30" />
                         </div>
-                        
+
                         <div className="flex flex-col gap-2">
-                            <input 
-                                type="text" 
-                                placeholder="ID Хоста" 
+                            <input
+                                type="text"
+                                placeholder="HOST ID"
                                 value={hostId}
-                                onChange={e => setHostId(e.target.value)}
-                                className="w-full px-4 py-2 bg-black/80 border border-orange-500/50 rounded text-orange-200 focus:outline-none focus:border-orange-400"
+                                onChange={(e) => setHostId(e.target.value)}
+                                className="rounded border border-[#8f6a38]/40 bg-black/65 px-4 py-2 text-[#f5dba8] outline-none focus:border-[#efb768]"
                             />
-                            <button 
+                            <button
                                 onClick={() => startGame('client', hostId)}
                                 disabled={!hostId}
-                                className="w-full py-3 bg-cyan-700 hover:bg-cyan-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded transition-colors shadow-[0_0_15px_rgba(0,170,255,0.3)]"
+                                className="rounded bg-[#24677e] py-3 font-bold tracking-[0.22em] text-white shadow-[0_0_15px_rgba(36,103,126,0.35)] transition-colors hover:bg-[#2f7d99] disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                                ПОДКЛЮЧИТЬСЯ
+                                JOIN COCKPIT
                             </button>
                         </div>
                     </div>
                 </div>
-            )}
+            ) : null}
 
-            {loading && !inLobby && (
-                <div className="absolute inset-0 flex items-center justify-center bg-[#1a1a2e] z-50">
-                    <div className="text-orange-400 text-2xl animate-pulse">Загрузка парового котла...</div>
+            {loading && !inLobby ? (
+                <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#130e0b]/95">
+                    <div className="rounded-full border border-[#8f6a38]/50 bg-black/55 px-8 py-4 text-xl tracking-[0.35em] text-[#efb768]">
+                        PRESSURIZING COCKPIT
+                    </div>
                 </div>
-            )}
+            ) : null}
 
-            {!loading && !inLobby && (
+            {!loading && !inLobby ? (
                 <>
-                    <div className="absolute top-4 left-4 text-white/80 text-sm pointer-events-none select-none">
-                        <h1 className="text-2xl font-bold text-orange-400 mb-2 tracking-wider drop-shadow-[0_0_5px_rgba(255,165,0,0.8)]">ПАРОМАГИЧЕСКИЕ ГОЛЕМЫ</h1>
-                        <div className="bg-black/50 p-4 rounded border border-orange-500/30 backdrop-blur-sm mb-2">
-                            <p className="mb-2 text-orange-300 font-bold">ФАЗА 2: МУЛЬТИПЛЕЕР</p>
-                            <p className="text-xs text-gray-400 mb-2">
-                                {isHost ? 'Вы — ХОСТ' : 'Вы — КЛИЕНТ'} <br/>
-                                Ваш ID: <span className="text-white select-all pointer-events-auto">{myId}</span>
-                            </p>
-                            <ul className="space-y-1">
-                                <li><span className="text-orange-400">ЛКМ</span> — Рунный болт (-5 пара)</li>
-                                <li><span className="text-orange-400">SHIFT</span> — Рывок (-30 пара)</li>
-                                <li><span className="text-orange-400">SPACE</span> — Сброс пара (AoE)</li>
-                                <li><span className="text-orange-400">ESC</span> — Освободить мышь</li>
-                            </ul>
-                        </div>
+                    <CockpitFrame warning={warningText} throttleLabel={throttleText} />
+
+                    <div className="pointer-events-none absolute left-4 top-4 z-20 max-w-[280px] rounded-2xl border border-[#8f6a38]/35 bg-[rgba(10,10,10,0.62)] p-4 text-sm text-[#d7c5a1] shadow-[0_0_20px_rgba(0,0,0,0.38)] backdrop-blur-sm">
+                        <h1 className="mb-2 text-lg font-bold tracking-[0.32em] text-[#efb768]">PILOT HUD</h1>
+                        <p className="mb-3 text-xs tracking-[0.22em] text-[#8fb8c2]">
+                            {isHost ? 'HOST LINK' : 'CLIENT LINK'} | ID {myId || 'SYNCING'}
+                        </p>
+                        <ul className="space-y-1 text-[11px] tracking-[0.18em] text-[#b9c7c8]">
+                            <li><span className="text-[#efb768]">MOUSE</span> torso aim</li>
+                            <li><span className="text-[#efb768]">W / S</span> throttle up / down</li>
+                            <li><span className="text-[#efb768]">A / D</span> turn chassis</li>
+                            <li><span className="text-[#efb768]">C</span> center torso</li>
+                            <li><span className="text-[#efb768]">X</span> cut throttle</li>
+                            <li><span className="text-[#efb768]">LMB</span> fire bolt</li>
+                            <li><span className="text-[#efb768]">SHIFT</span> dash burst</li>
+                            <li><span className="text-[#efb768]">SPACE</span> vent steam</li>
+                        </ul>
                     </div>
 
-                    <div className="absolute bottom-8 left-1/2 -translate-x-1/2 w-[400px] pointer-events-none select-none flex flex-col gap-2">
-                        <div className="relative h-6 bg-black/60 border border-red-900/50 rounded overflow-hidden">
-                            <div 
-                                className="absolute top-0 left-0 h-full bg-red-600 transition-all duration-200"
-                                style={{ width: `${(gameState.hp / gameState.maxHp) * 100}%` }}
-                            />
-                            <div className="absolute inset-0 flex items-center justify-center text-xs font-bold text-white drop-shadow-md">
-                                БРОНЯ: {Math.ceil(gameState.hp)} / {gameState.maxHp}
-                            </div>
-                        </div>
+                    <TorsoTwistArc twistRatio={twistRatio} maxTwist={gameState.maxTwist} />
 
-                        <div className={`relative h-6 bg-black/60 border rounded overflow-hidden transition-colors ${gameState.isOverheated ? 'border-red-500 animate-pulse' : 'border-orange-900/50'}`}>
-                            <div 
-                                className={`absolute top-0 left-0 h-full transition-all duration-100 ${gameState.isOverheated ? 'bg-red-500' : 'bg-orange-500'}`}
-                                style={{ width: `${(gameState.steam / gameState.maxSteam) * 100}%` }}
-                            />
-                            <div className="absolute inset-0 flex items-center justify-center text-xs font-bold text-white drop-shadow-md">
-                                {gameState.isOverheated 
-                                    ? `ПЕРЕГРЕВ! (${gameState.overheatTimer.toFixed(1)}с)` 
-                                    : `ПАР: ${Math.ceil(gameState.steam)} / ${gameState.maxSteam}`
-                                }
-                            </div>
-                        </div>
+                    <div className="pointer-events-none absolute left-1/2 top-1/2 z-30 h-10 w-10 -translate-x-1/2 -translate-y-1/2 opacity-45">
+                        <div className="absolute left-0 top-1/2 h-[2px] w-3 -translate-y-1/2 bg-[#dde4e6]/40" />
+                        <div className="absolute right-0 top-1/2 h-[2px] w-3 -translate-y-1/2 bg-[#dde4e6]/40" />
+                        <div className="absolute left-1/2 top-0 h-3 w-[2px] -translate-x-1/2 bg-[#dde4e6]/40" />
+                        <div className="absolute bottom-0 left-1/2 h-3 w-[2px] -translate-x-1/2 bg-[#dde4e6]/40" />
                     </div>
 
-                    <div className="absolute top-1/2 left-1/2 w-8 h-8 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-70">
-                        <div className="absolute top-1/2 left-0 w-3 h-[2px] -translate-y-1/2 bg-white/30"></div>
-                        <div className="absolute top-1/2 right-0 w-3 h-[2px] -translate-y-1/2 bg-white/30"></div>
-                        <div className="absolute top-0 left-1/2 w-[2px] h-3 -translate-x-1/2 bg-white/30"></div>
-                        <div className="absolute bottom-0 left-1/2 w-[2px] h-3 -translate-x-1/2 bg-white/30"></div>
-                    </div>
-
-                    <div 
-                        className="absolute top-1/2 left-1/2 w-8 h-8 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-90 transition-transform duration-75"
+                    <div
+                        className="pointer-events-none absolute left-1/2 top-1/2 z-30 h-8 w-8 opacity-95"
                         style={{
-                            transform: `translate(calc(-50% + ${Math.max(-320, Math.min(320, gameState.aimOffsetX * 320))}px), calc(-50% + ${Math.max(-220, Math.min(220, -gameState.aimOffsetY * 180))}px))`
+                            transform: `translate(calc(-50% + ${reticleX}px), calc(-50% + ${reticleY}px))`
                         }}
                     >
-                        <div className={`absolute top-1/2 left-0 w-3 h-[2px] -translate-y-1/2 shadow-[0_0_8px_currentColor] transition-colors ${(Math.abs(gameState.aimOffsetX) > 0.05 || Math.abs(gameState.aimOffsetY) > 0.05) ? 'bg-orange-500 text-orange-500' : 'bg-cyan-400 text-cyan-400'}`}></div>
-                        <div className={`absolute top-1/2 right-0 w-3 h-[2px] -translate-y-1/2 shadow-[0_0_8px_currentColor] transition-colors ${(Math.abs(gameState.aimOffsetX) > 0.05 || Math.abs(gameState.aimOffsetY) > 0.05) ? 'bg-orange-500 text-orange-500' : 'bg-cyan-400 text-cyan-400'}`}></div>
-                        <div className={`absolute top-0 left-1/2 w-[2px] h-3 -translate-x-1/2 shadow-[0_0_8px_currentColor] transition-colors ${(Math.abs(gameState.aimOffsetX) > 0.05 || Math.abs(gameState.aimOffsetY) > 0.05) ? 'bg-orange-500 text-orange-500' : 'bg-cyan-400 text-cyan-400'}`}></div>
-                        <div className={`absolute bottom-0 left-1/2 w-[2px] h-3 -translate-x-1/2 shadow-[0_0_8px_currentColor] transition-colors ${(Math.abs(gameState.aimOffsetX) > 0.05 || Math.abs(gameState.aimOffsetY) > 0.05) ? 'bg-orange-500 text-orange-500' : 'bg-cyan-400 text-cyan-400'}`}></div>
-                        <div className={`absolute top-1/2 left-1/2 w-1 h-1 rounded-full -translate-x-1/2 -translate-y-1/2 shadow-[0_0_8px_currentColor] transition-colors ${(Math.abs(gameState.aimOffsetX) > 0.05 || Math.abs(gameState.aimOffsetY) > 0.05) ? 'bg-orange-500 text-orange-500' : 'bg-cyan-400 text-cyan-400'}`}></div>
+                        <div className="absolute left-0 top-1/2 h-[2px] w-3 -translate-y-1/2 bg-[#7ee6f0] shadow-[0_0_10px_currentColor]" />
+                        <div className="absolute right-0 top-1/2 h-[2px] w-3 -translate-y-1/2 bg-[#7ee6f0] shadow-[0_0_10px_currentColor]" />
+                        <div className="absolute left-1/2 top-0 h-3 w-[2px] -translate-x-1/2 bg-[#7ee6f0] shadow-[0_0_10px_currentColor]" />
+                        <div className="absolute bottom-0 left-1/2 h-3 w-[2px] -translate-x-1/2 bg-[#7ee6f0] shadow-[0_0_10px_currentColor]" />
+                        <div className="absolute left-1/2 top-1/2 h-1 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#efb768] shadow-[0_0_10px_rgba(239,183,104,0.8)]" />
+                    </div>
+
+                    {Math.abs(twistRatio) > 0.55 ? (
+                        <div className="pointer-events-none absolute left-1/2 top-[58%] z-30 -translate-x-1/2 rounded-full border border-[#8f6a38]/60 bg-black/55 px-4 py-2 text-[11px] tracking-[0.36em] text-[#efb768]">
+                            ALIGN CHASSIS [C]
+                        </div>
+                    ) : null}
+
+                    <div className="pointer-events-none absolute bottom-0 left-1/2 z-20 flex h-[248px] w-[min(1040px,96vw)] -translate-x-1/2 items-end justify-between px-8 pb-8">
+                        <div className="flex w-[190px] items-end gap-4">
+                            <div className="relative h-[188px] w-20 rounded-[26px] border border-[#8f6a38]/70 bg-[linear-gradient(180deg,rgba(13,13,13,0.94),rgba(28,20,15,0.96))] p-3 shadow-[inset_0_0_18px_rgba(0,0,0,0.5)]">
+                                <div className="mb-2 text-center text-[10px] tracking-[0.42em] text-[#efb768]">THR</div>
+                                <div className="relative mx-auto h-[136px] w-7 rounded-full border border-[#6c5330]/70 bg-[#060606]/80">
+                                    <div className="absolute inset-x-[4px] top-[69%] h-px bg-[#d1b17d]/75" />
+                                    <div
+                                        className="absolute bottom-[31%] left-[4px] right-[4px] rounded-b-full bg-[linear-gradient(180deg,#ffcc7e,#b6652f)] shadow-[0_0_12px_rgba(255,163,76,0.38)]"
+                                        style={{ height: forwardFillHeight }}
+                                    />
+                                    <div
+                                        className="absolute left-[4px] right-[4px] top-[69%] rounded-t-full bg-[linear-gradient(180deg,#7ee6f0,#2e829a)] shadow-[0_0_12px_rgba(46,130,154,0.3)]"
+                                        style={{ height: reverseFillHeight }}
+                                    />
+                                </div>
+                                <div className="absolute left-3 top-[44px] text-[9px] tracking-[0.32em] text-[#b8a17a]">FWD</div>
+                                <div className="absolute left-3 top-[112px] text-[9px] tracking-[0.32em] text-[#b8a17a]">0</div>
+                                <div className="absolute left-3 bottom-[18px] text-[9px] tracking-[0.32em] text-[#9dc2cc]">REV</div>
+                            </div>
+
+                            <div className="flex-1 rounded-[26px] border border-[#8f6a38]/70 bg-[linear-gradient(180deg,rgba(13,13,13,0.94),rgba(28,20,15,0.96))] p-4 shadow-[inset_0_0_18px_rgba(0,0,0,0.5)]">
+                                <div className="text-[10px] tracking-[0.4em] text-[#efb768]">DRIVE</div>
+                                <div className="mt-3 text-3xl font-bold tracking-[0.2em] text-[#f3deb5]">
+                                    {Math.round(throttleRatio * 100)}
+                                </div>
+                                <div className="mt-1 text-[11px] tracking-[0.28em] text-[#a5bcc2]">
+                                    {throttleRatio > 0.05 ? 'AHEAD' : throttleRatio < -0.05 ? 'REVERSE' : 'IDLE'}
+                                </div>
+                                <div className="mt-4 text-[10px] tracking-[0.32em] text-[#8db0b7]">
+                                    TORSO OFFSET {Math.round(toDegrees(torsoOffset)).toString().padStart(3, ' ')} DEG
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="mx-6 flex min-w-0 flex-1 flex-col items-center gap-4">
+                            <HeadingTape legYaw={gameState.legYaw} torsoYaw={gameState.torsoYaw} maxTwist={gameState.maxTwist} />
+
+                            <div className="grid w-full grid-cols-3 gap-3 text-center">
+                                <div className="rounded-2xl border border-[#8f6a38]/60 bg-black/35 px-4 py-3">
+                                    <div className="text-[10px] tracking-[0.4em] text-[#a1bdc4]">BODY</div>
+                                    <div className="mt-1 text-xl font-bold tracking-[0.22em] text-[#efb768]">
+                                        {wrapDegrees(Math.round(toDegrees(gameState.legYaw))).toString().padStart(3, '0')}
+                                    </div>
+                                </div>
+                                <div className="rounded-2xl border border-[#8f6a38]/60 bg-black/35 px-4 py-3">
+                                    <div className="text-[10px] tracking-[0.4em] text-[#a1bdc4]">TORSO</div>
+                                    <div className="mt-1 text-xl font-bold tracking-[0.22em] text-[#7ee6f0]">
+                                        {wrapDegrees(Math.round(toDegrees(gameState.torsoYaw))).toString().padStart(3, '0')}
+                                    </div>
+                                </div>
+                                <div className="rounded-2xl border border-[#8f6a38]/60 bg-black/35 px-4 py-3">
+                                    <div className="text-[10px] tracking-[0.4em] text-[#a1bdc4]">TWIST</div>
+                                    <div className="mt-1 text-xl font-bold tracking-[0.18em] text-[#f3deb5]">
+                                        {Math.round(toDegrees(torsoOffset))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex w-[250px] gap-4">
+                            <div className="flex-1 rounded-[26px] border border-[#8f6a38]/70 bg-[linear-gradient(180deg,rgba(13,13,13,0.94),rgba(28,20,15,0.96))] p-4 shadow-[inset_0_0_18px_rgba(0,0,0,0.5)]">
+                                <div className="text-[10px] tracking-[0.4em] text-[#efb768]">MOTION</div>
+                                <div className="mt-3 text-4xl font-bold tracking-[0.18em] text-[#f3deb5]">
+                                    {displaySpeed}
+                                </div>
+                                <div className="mt-1 text-[11px] tracking-[0.32em] text-[#a5bcc2]">KPH</div>
+                                <div className="mt-4 h-2 rounded-full bg-[#241c16]">
+                                    <div className="h-full rounded-full bg-[linear-gradient(90deg,#7ee6f0,#efb768)]" style={{ width: `${clamp((gameState.speed / Math.max(gameState.maxSpeed, 0.1)) * 100, 0, 100)}%` }} />
+                                </div>
+                            </div>
+
+                            <div className="flex w-[112px] flex-col gap-3">
+                                <div className="rounded-[24px] border border-[#8f6a38]/70 bg-[linear-gradient(180deg,rgba(13,13,13,0.94),rgba(28,20,15,0.96))] p-3 shadow-[inset_0_0_18px_rgba(0,0,0,0.5)]">
+                                    <div className="text-[9px] tracking-[0.36em] text-[#efb768]">ARMOR</div>
+                                    <div className="mt-2 h-2 rounded-full bg-[#241c16]">
+                                        <div className="h-full rounded-full bg-[linear-gradient(90deg,#d04838,#f0b371)]" style={{ width: `${clamp(hpRatio * 100, 0, 100)}%` }} />
+                                    </div>
+                                    <div className="mt-2 text-xs tracking-[0.16em] text-[#f3deb5]">{Math.ceil(gameState.hp)} / {gameState.maxHp}</div>
+                                </div>
+
+                                <div className={`rounded-[24px] border p-3 shadow-[inset_0_0_18px_rgba(0,0,0,0.5)] ${gameState.isOverheated ? 'border-[#f25c54]/70 bg-[linear-gradient(180deg,rgba(64,18,18,0.94),rgba(28,12,12,0.96))]' : 'border-[#8f6a38]/70 bg-[linear-gradient(180deg,rgba(13,13,13,0.94),rgba(28,20,15,0.96))]'}`}>
+                                    <div className="text-[9px] tracking-[0.36em] text-[#efb768]">PRESSURE</div>
+                                    <div className="mt-2 h-2 rounded-full bg-[#241c16]">
+                                        <div className={`h-full rounded-full ${gameState.isOverheated ? 'bg-[linear-gradient(90deg,#ff8855,#f25c54)]' : 'bg-[linear-gradient(90deg,#efb768,#7ee6f0)]'}`} style={{ width: `${clamp(steamRatio * 100, 0, 100)}%` }} />
+                                    </div>
+                                    <div className="mt-2 text-xs tracking-[0.14em] text-[#f3deb5]">
+                                        {gameState.isOverheated ? `VENT ${gameState.overheatTimer.toFixed(1)}S` : `${Math.ceil(gameState.steam)} / ${gameState.maxSteam}`}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </>
-            )}
+            ) : null}
         </div>
     );
 }

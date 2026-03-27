@@ -12,6 +12,7 @@ import { ParticleManager } from '../fx/ParticleManager';
 import { DecalManager } from '../fx/DecalManager';
 import { ProjectileManager } from '../combat/ProjectileManager';
 import { MechCamera } from '../camera/MechCamera';
+import { GOLEM, ROTATION } from '../utils/constants';
 
 const _weaponOrigin = new THREE.Vector3();
 const _weaponDir = new THREE.Vector3();
@@ -356,6 +357,12 @@ export class Game {
             maxSteam: this.golem.maxSteam,
             isOverheated: this.golem.isOverheated,
             overheatTimer: this.golem.overheatTimer,
+            legYaw: golemState.legYaw,
+            torsoYaw: golemState.torsoYaw,
+            throttle: golemState.throttle,
+            speed: golemState.currentSpeed,
+            maxSpeed: GOLEM.classes.medium.speed,
+            maxTwist: ROTATION.maxTorsoTwist,
             aimOffsetX: aimScreenX,
             aimOffsetY: aimScreenY
         });

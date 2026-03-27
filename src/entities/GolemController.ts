@@ -22,6 +22,7 @@ export interface GolemState {
     pos: THREE.Vector3;
     legYaw: number;
     torsoYaw: number;
+    throttle: number;
     hp: number;
     maxHp: number;
     steam: number;
@@ -302,6 +303,7 @@ export class GolemController {
             pos: new THREE.Vector3(pos.x, pos.y, pos.z),
             legYaw: this.legYaw,
             torsoYaw: this.torsoYaw,
+            throttle: this.throttle,
             hp: this.hp,
             maxHp: this.maxHp,
             steam: this.steam,
