@@ -18,7 +18,6 @@ export function MobileControls(props: MobileControlsProps) {
     const stickSize = props.isPortrait ? 132 : 144;
     const knobOffset = props.isPortrait ? 30 : 34;
     const bottomInset = props.isPortrait ? 12 : 10;
-    const lookBottomInset = props.isPortrait ? 116 : 82;
     const sideInset = 12;
     const actionGapSide = 14;
 
@@ -44,19 +43,63 @@ export function MobileControls(props: MobileControlsProps) {
         props.game?.input?.setVirtualAxes?.(0, 0);
     };
 
+    const beginAim = (pointerId: number, clientX: number, clientY: number, target: HTMLDivElement) => {
+        ensureAudio();
+        aimPointerIdRef.current = pointerId;
+        aimLastRef.current = { x: clientX, y: clientY };
+        setAimActive(true);
+        target.setPointerCapture?.(pointerId);
+    };
+
+    const updateAim = (clientX: number, clientY: number) => {
+        if (!aimLastRef.current) return;
+        const dx = clientX - aimLastRef.current.x;
+        const dy = clientY - aimLastRef.current.y;
+        props.game?.input?.addVirtualLook?.(dx * props.aimSensitivity, dy * props.aimSensitivity);
+        aimLastRef.current = { x: clientX, y: clientY };
+    };
+
+    const endAim = (pointerId: number, target: HTMLDivElement) => {
+        if (aimPointerIdRef.current !== pointerId) return;
+        aimPointerIdRef.current = null;
+        aimLastRef.current = null;
+        setAimActive(false);
+        if (target.hasPointerCapture?.(pointerId)) {
+            target.releasePointerCapture(pointerId);
+        }
+    };
+
     const moveAnchorStyle = props.leftHanded
         ? { right: `calc(env(safe-area-inset-right, 0px) + ${sideInset}px)` }
         : { left: `calc(env(safe-area-inset-left, 0px) + ${sideInset}px)` };
-    const lookAnchorStyle = props.leftHanded
-        ? { left: `calc(env(safe-area-inset-left, 0px) + ${sideInset}px)` }
-        : { right: `calc(env(safe-area-inset-right, 0px) + ${sideInset}px)` };
     const actionAnchorStyle = props.leftHanded
         ? { left: `calc(env(safe-area-inset-left, 0px) + ${actionGapSide}px)` }
         : { right: `calc(env(safe-area-inset-right, 0px) + ${actionGapSide}px)` };
 
     return (
         <div className="pointer-events-none absolute inset-0 z-40 touch-none">
-            <div className="absolute" style={{ bottom: `calc(env(safe-area-inset-bottom, 0px) + ${bottomInset}px)`, ...moveAnchorStyle }}>
+            <div
+                className="pointer-events-auto absolute inset-0"
+                onPointerDown={(event) => {
+                    beginAim(event.pointerId, event.clientX, event.clientY, event.currentTarget);
+                }}
+                onPointerMove={(event) => {
+                    if (aimPointerIdRef.current !== event.pointerId) return;
+                    updateAim(event.clientX, event.clientY);
+                }}
+                onPointerUp={(event) => {
+                    endAim(event.pointerId, event.currentTarget);
+                }}
+                onPointerCancel={(event) => {
+                    endAim(event.pointerId, event.currentTarget);
+                }}
+            >
+                {aimActive ? (
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(126,230,240,0.05),rgba(0,0,0,0))]" />
+                ) : null}
+            </div>
+
+            <div className="absolute z-10" style={{ bottom: `calc(env(safe-area-inset-bottom, 0px) + ${bottomInset}px)`, ...moveAnchorStyle }}>
                 <div
                     ref={moveAreaRef}
                     className="pointer-events-auto relative rounded-full border border-[#8f6a38]/55 bg-[radial-gradient(circle_at_center,rgba(33,26,20,0.92),rgba(10,10,10,0.55))] shadow-[0_0_18px_rgba(0,0,0,0.28)]"
@@ -89,51 +132,7 @@ export function MobileControls(props: MobileControlsProps) {
             </div>
 
             <div
-                className="pointer-events-auto absolute rounded-[28px] border border-[#8f6a38]/45 bg-[linear-gradient(180deg,rgba(20,18,16,0.18),rgba(10,10,10,0.04))]"
-                style={{
-                    ...lookAnchorStyle,
-                    bottom: `calc(env(safe-area-inset-bottom, 0px) + ${lookBottomInset}px)`,
-                    width: props.isPortrait ? '40vw' : '28vw',
-                    maxWidth: props.isPortrait ? 192 : 220,
-                    minWidth: props.isPortrait ? 146 : 150,
-                    height: props.isPortrait ? 164 : 118
-                }}
-                onPointerDown={(event) => {
-                    ensureAudio();
-                    aimPointerIdRef.current = event.pointerId;
-                    aimLastRef.current = { x: event.clientX, y: event.clientY };
-                    setAimActive(true);
-                }}
-                onPointerMove={(event) => {
-                    if (aimPointerIdRef.current !== event.pointerId || !aimLastRef.current) return;
-                    const dx = event.clientX - aimLastRef.current.x;
-                    const dy = event.clientY - aimLastRef.current.y;
-                    props.game?.input?.addVirtualLook?.(dx * props.aimSensitivity, dy * props.aimSensitivity);
-                    aimLastRef.current = { x: event.clientX, y: event.clientY };
-                }}
-                onPointerUp={(event) => {
-                    if (aimPointerIdRef.current !== event.pointerId) return;
-                    aimPointerIdRef.current = null;
-                    aimLastRef.current = null;
-                    setAimActive(false);
-                }}
-                onPointerCancel={(event) => {
-                    if (aimPointerIdRef.current !== event.pointerId) return;
-                    aimPointerIdRef.current = null;
-                    aimLastRef.current = null;
-                    setAimActive(false);
-                }}
-            >
-                {aimActive ? (
-                    <>
-                        <div className="absolute inset-0 rounded-[28px] border border-[#8f6a38]/35 bg-[radial-gradient(circle_at_center,rgba(126,230,240,0.08),rgba(0,0,0,0))]" />
-                        <div className="absolute inset-x-0 top-3 text-center text-[8px] tracking-[0.24em] text-[#8fb8c2]">ОБЗОР</div>
-                    </>
-                ) : null}
-            </div>
-
-            <div
-                className={`absolute flex flex-col gap-3 ${props.leftHanded ? 'items-start' : 'items-end'}`}
+                className={`absolute z-10 flex flex-col gap-3 ${props.leftHanded ? 'items-start' : 'items-end'}`}
                 style={{ bottom: `calc(env(safe-area-inset-bottom, 0px) + ${bottomInset}px)`, ...actionAnchorStyle }}
             >
                 <button
