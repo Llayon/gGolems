@@ -37,6 +37,7 @@ type RadarContact = {
     y: number;
     kind: 'enemy' | 'bot';
     distance: number;
+    meters: number;
 };
 
 export class Game {
@@ -379,7 +380,8 @@ export class Game {
                 x: Number(x.toFixed(3)),
                 y: Number(y.toFixed(3)),
                 kind,
-                distance: Number((distance / maxRange).toFixed(3))
+                distance: Number((distance / maxRange).toFixed(3)),
+                meters: Math.round(distance)
             });
         };
 

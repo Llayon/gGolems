@@ -14,6 +14,7 @@ type RadarContact = {
     y: number;
     kind: 'enemy' | 'bot';
     distance: number;
+    meters: number;
 };
 
 type GameHudState = {
@@ -384,6 +385,15 @@ function MobileCombatOverlay(props: {
     const torsoMarker = polarToCartesian(42, 42, 22, 270 + clamp(props.twistRatio, -1, 1) * 72);
     const leftLimit = polarToCartesian(42, 42, 22, 198);
     const rightLimit = polarToCartesian(42, 42, 22, 342);
+    const nearestContact = props.radarContacts[0] ?? null;
+    const nearestLabel = nearestContact
+        ? nearestContact.kind === 'bot'
+            ? '\u0411\u041e\u0422'
+            : '\u0412\u0420\u0410\u0413'
+        : '\u0427\u0418\u0421\u0422\u041e';
+    const nearestColor = nearestContact?.kind === 'bot' ? '#f25c54' : '#efb768';
+    const nearestX = nearestContact ? 42 + nearestContact.x * 24 : 42;
+    const nearestY = nearestContact ? 42 - nearestContact.y * 24 : 42;
 
     return (
         <div className={`pointer-events-none absolute inset-x-0 z-20 px-3 ${props.isPortrait ? 'bottom-[266px]' : 'bottom-[178px]'}`}>
@@ -393,6 +403,12 @@ function MobileCombatOverlay(props: {
                         <circle cx="42" cy="42" r="22" fill="none" stroke="rgba(157,119,64,0.45)" strokeWidth="2.5" />
                         <circle cx={leftLimit.x} cy={leftLimit.y} r="2.8" fill="#9d7740" />
                         <circle cx={rightLimit.x} cy={rightLimit.y} r="2.8" fill="#9d7740" />
+                        {nearestContact ? (
+                            <>
+                                <circle cx={nearestX} cy={nearestY} r="7.2" fill="none" stroke={nearestColor} strokeWidth="1.6" opacity="0.75" />
+                                <line x1="42" y1="42" x2={nearestX} y2={nearestY} stroke={nearestColor} strokeWidth="1.2" opacity="0.45" />
+                            </>
+                        ) : null}
                         {props.radarContacts.map((contact, index) => (
                             <circle
                                 key={`${contact.kind}-${index}`}
@@ -427,6 +443,15 @@ function MobileCombatOverlay(props: {
                             <div className="mt-1 text-sm font-bold tracking-[0.14em]" style={{ color: Math.abs(props.twistRatio) > 0.78 ? '#ffb28c' : '#f3deb5' }}>
                                 {twistText}
                             </div>
+                        </div>
+                    </div>
+
+                    <div className="mt-2 flex items-center justify-between gap-2 rounded-2xl border border-[#8f6a38]/35 bg-black/30 px-3 py-2">
+                        <div className="text-[8px] tracking-[0.26em] text-[#8fb8c2]">
+                            {nearestContact ? '\u0411\u041b\u0418\u0416\u041d\u0418\u0419 \u041a\u041e\u041d\u0422\u0410\u041a\u0422' : '\u0421\u0415\u041a\u0422\u041e\u0420 \u0427\u0418\u0421\u0422'}
+                        </div>
+                        <div className="text-[10px] font-bold tracking-[0.18em]" style={{ color: nearestContact ? nearestColor : '#9fc4cc' }}>
+                            {nearestContact ? `${nearestLabel} ${nearestContact.meters}\u041c` : '\u041d\u0415\u0422'}
                         </div>
                     </div>
 
