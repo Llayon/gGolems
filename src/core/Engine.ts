@@ -23,12 +23,21 @@ const _botTarget = new THREE.Vector3();
 const _spawnDir = new THREE.Vector3();
 const _propFxPos = new THREE.Vector3();
 const _listenerPos = new THREE.Vector3();
+const _radarDelta = new THREE.Vector3();
+const _radarRight = new THREE.Vector3();
+const _radarForward = new THREE.Vector3();
 
 function clamp(value: number, min: number, max: number) {
     return Math.max(min, Math.min(max, value));
 }
 
 type SessionMode = 'solo' | 'host' | 'client';
+type RadarContact = {
+    x: number;
+    y: number;
+    kind: 'enemy' | 'bot';
+    distance: number;
+};
 
 export class Game {
     renderer: Renderer;
@@ -344,6 +353,49 @@ export class Game {
         }
     }
 
+    buildRadarContacts(): RadarContact[] {
+        const localPos = this.golem.body.translation();
+        const maxRange = 90;
+        const contacts: RadarContact[] = [];
+        const yaw = this.golem.legYaw;
+
+        _radarRight.set(Math.cos(yaw), 0, Math.sin(yaw));
+        _radarForward.set(Math.sin(yaw), 0, -Math.cos(yaw));
+
+        const pushContact = (worldX: number, worldZ: number, kind: 'enemy' | 'bot') => {
+            _radarDelta.set(worldX - localPos.x, 0, worldZ - localPos.z);
+            const distance = _radarDelta.length();
+            if (distance < 0.001 || distance > maxRange) return;
+
+            let x = _radarDelta.dot(_radarRight) / maxRange;
+            let y = _radarDelta.dot(_radarForward) / maxRange;
+            const radial = Math.hypot(x, y);
+            if (radial > 1) {
+                x /= radial;
+                y /= radial;
+            }
+
+            contacts.push({
+                x: Number(x.toFixed(3)),
+                y: Number(y.toFixed(3)),
+                kind,
+                distance: Number((distance / maxRange).toFixed(3))
+            });
+        };
+
+        this.remotePlayers.forEach((player) => {
+            const pos = player.body.translation();
+            pushContact(pos.x, pos.z, 'enemy');
+        });
+
+        if (this.sessionMode === 'solo' && this.dummy.hp > 0) {
+            pushContact(this.dummy.mesh.position.x, this.dummy.mesh.position.z, 'bot');
+        }
+
+        contacts.sort((left, right) => left.distance - right.distance);
+        return contacts.slice(0, 6);
+    }
+
     start() {
         this.isRunning = true;
         this.lastTime = performance.now();
@@ -574,7 +626,8 @@ export class Game {
             hitTargetHp: this.hitTargetHp,
             hitTargetMaxHp: this.hitTargetMaxHp,
             sections: { ...golemState.sections },
-            maxSections: { ...golemState.maxSections }
+            maxSections: { ...golemState.maxSections },
+            radarContacts: this.buildRadarContacts()
         });
 
         this.renderer.render();

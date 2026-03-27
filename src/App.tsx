@@ -9,6 +9,12 @@ import { initGame } from './core/Engine';
 type SessionMode = 'solo' | 'host' | 'client';
 type SectionName = 'head' | 'centerTorso' | 'leftTorso' | 'rightTorso' | 'leftArm' | 'rightArm' | 'leftLeg' | 'rightLeg';
 type SectionState = Record<SectionName, number>;
+type RadarContact = {
+    x: number;
+    y: number;
+    kind: 'enemy' | 'bot';
+    distance: number;
+};
 
 type GameHudState = {
     hp: number;
@@ -30,6 +36,7 @@ type GameHudState = {
     hitTargetMaxHp: number;
     sections: SectionState;
     maxSections: SectionState;
+    radarContacts: RadarContact[];
 };
 
 const defaultSections: SectionState = {
@@ -62,7 +69,8 @@ const initialGameState: GameHudState = {
     hitTargetHp: 0,
     hitTargetMaxHp: 100,
     sections: { ...defaultSections },
-    maxSections: { ...defaultSections }
+    maxSections: { ...defaultSections },
+    radarContacts: []
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -366,6 +374,7 @@ function MobileCombatOverlay(props: {
     speed: number;
     maxSpeed: number;
     isPortrait: boolean;
+    radarContacts: RadarContact[];
 }) {
     const chassisHeading = wrapDegrees(Math.round(toDegrees(props.legYaw))).toString().padStart(3, '0');
     const torsoHeading = wrapDegrees(Math.round(toDegrees(props.torsoYaw))).toString().padStart(3, '0');
@@ -384,6 +393,16 @@ function MobileCombatOverlay(props: {
                         <circle cx="42" cy="42" r="22" fill="none" stroke="rgba(157,119,64,0.45)" strokeWidth="2.5" />
                         <circle cx={leftLimit.x} cy={leftLimit.y} r="2.8" fill="#9d7740" />
                         <circle cx={rightLimit.x} cy={rightLimit.y} r="2.8" fill="#9d7740" />
+                        {props.radarContacts.map((contact, index) => (
+                            <circle
+                                key={`${contact.kind}-${index}`}
+                                cx={42 + contact.x * 24}
+                                cy={42 - contact.y * 24}
+                                r={contact.kind === 'bot' ? 3.4 : 3}
+                                fill={contact.kind === 'bot' ? '#f25c54' : '#efb768'}
+                                opacity={1 - contact.distance * 0.35}
+                            />
+                        ))}
                         <circle cx={torsoMarker.x} cy={torsoMarker.y} r="4" fill="#7ee6f0" />
                         <circle cx="42" cy="42" r="3" fill="#efb768" />
                     </svg>
@@ -919,6 +938,7 @@ export default function App() {
                             speed={gameState.speed}
                             maxSpeed={gameState.maxSpeed}
                             isPortrait={isPortrait}
+                            radarContacts={gameState.radarContacts}
                         />
                     ) : null}
 
