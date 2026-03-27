@@ -5,6 +5,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { initGame } from './core/Engine';
+import { CombatOverlayCore } from './ui/mobile/CombatOverlayCore';
+import { MobileCombatLayout } from './ui/mobile/MobileCombatLayout';
+import { MobileSettingsOverlay } from './ui/mobile/MobileSettingsOverlay';
 
 type SessionMode = 'solo' | 'host' | 'client';
 type SectionName = 'head' | 'centerTorso' | 'leftTorso' | 'rightTorso' | 'leftArm' | 'rightArm' | 'leftLeg' | 'rightLeg';
@@ -296,387 +299,6 @@ function SectionArmorDisplay(props: { sections: SectionState; maxSections: Secti
     );
 }
 
-function MobileHud(props: {
-    warning: string;
-    throttleText: string;
-    twistRatio: number;
-    hpRatio: number;
-    steamRatio: number;
-    legYaw: number;
-    torsoYaw: number;
-    speed: number;
-    maxSpeed: number;
-    isPortrait: boolean;
-}) {
-    const speedRatio = clamp(props.speed / Math.max(props.maxSpeed, 0.1), 0, 1);
-    const heading = wrapDegrees(Math.round(toDegrees(props.legYaw))).toString().padStart(3, '0');
-    const torso = wrapDegrees(Math.round(toDegrees(props.torsoYaw))).toString().padStart(3, '0');
-
-    return (
-        <>
-            <div className="pointer-events-none absolute inset-x-0 top-0 z-20 bg-[linear-gradient(180deg,rgba(15,12,10,0.92),rgba(15,12,10,0.18),rgba(15,12,10,0))] px-3 pb-8 pt-3">
-                <div className="mx-auto flex max-w-[min(96vw,540px)] items-start justify-between gap-2">
-                    <div className="min-w-0 rounded-2xl border border-[#8f6a38]/55 bg-[rgba(10,10,10,0.72)] px-3 py-2 shadow-[0_0_18px_rgba(0,0,0,0.3)]">
-                        <div className="text-[9px] tracking-[0.28em] text-[#8fb8c2]">ШАССИ {heading}</div>
-                        <div className="mt-1 text-[9px] tracking-[0.28em] text-[#7ee6f0]">ТОРС {torso}</div>
-                    </div>
-                    <div className="min-w-0 rounded-full border border-[#8f6a38]/55 bg-[rgba(10,10,10,0.72)] px-4 py-2 text-center text-[10px] tracking-[0.22em] text-[#efb768] shadow-[0_0_18px_rgba(0,0,0,0.3)]">
-                        {props.warning}
-                    </div>
-                </div>
-            </div>
-
-            <div className={`pointer-events-none absolute inset-x-0 z-20 px-3 ${props.isPortrait ? 'bottom-[162px]' : 'bottom-[112px]'}`}>
-                <div className={`mx-auto flex max-w-[min(96vw,560px)] items-end justify-between gap-3 ${props.isPortrait ? '' : 'max-w-[min(88vw,760px)]'}`}>
-                    <div className="min-w-[110px] rounded-2xl border border-[#8f6a38]/55 bg-[rgba(10,10,10,0.72)] px-3 py-3 shadow-[0_0_18px_rgba(0,0,0,0.3)]">
-                        <div className="text-[9px] tracking-[0.28em] text-[#efb768]">ТЯГА</div>
-                        <div className="mt-2 text-[11px] tracking-[0.18em] text-[#f0d8ae]">{props.throttleText}</div>
-                        <div className="mt-3 h-2 rounded-full bg-[#241c16]">
-                            <div className="h-full rounded-full bg-[linear-gradient(90deg,#efb768,#7ee6f0)]" style={{ width: `${speedRatio * 100}%` }} />
-                        </div>
-                    </div>
-
-                    <div className="rounded-2xl border border-[#8f6a38]/55 bg-[rgba(10,10,10,0.72)] px-4 py-3 text-center shadow-[0_0_18px_rgba(0,0,0,0.3)]">
-                        <div className="text-[9px] tracking-[0.28em] text-[#8fb8c2]">СКОРОСТЬ</div>
-                        <div className="mt-1 text-2xl font-bold tracking-[0.18em] text-[#f3deb5]">
-                            {Math.round((props.speed / Math.max(props.maxSpeed, 0.1)) * 86)}
-                        </div>
-                    </div>
-
-                    <div className="min-w-[110px] rounded-2xl border border-[#8f6a38]/55 bg-[rgba(10,10,10,0.72)] px-3 py-3 shadow-[0_0_18px_rgba(0,0,0,0.3)]">
-                        <div className="text-[9px] tracking-[0.28em] text-[#efb768]">СКРУТКА</div>
-                        <div className="mt-2 h-2 rounded-full bg-[#241c16]">
-                            <div
-                                className={`h-full rounded-full ${Math.abs(props.twistRatio) > 0.78 ? 'bg-[linear-gradient(90deg,#f25c54,#efb768)]' : 'bg-[linear-gradient(90deg,#7ee6f0,#efb768)]'}`}
-                                style={{ width: `${Math.abs(props.twistRatio) * 100}%`, marginLeft: props.twistRatio < 0 ? `${(1 - Math.abs(props.twistRatio)) * 100}%` : '0%' }}
-                            />
-                        </div>
-                        <div className="mt-3 flex gap-2">
-                            <div className="h-2 flex-1 rounded-full bg-[#241c16]">
-                                <div className="h-full rounded-full bg-[linear-gradient(90deg,#d04838,#f0b371)]" style={{ width: `${props.hpRatio * 100}%` }} />
-                            </div>
-                            <div className="h-2 flex-1 rounded-full bg-[#241c16]">
-                                <div className="h-full rounded-full bg-[linear-gradient(90deg,#efb768,#7ee6f0)]" style={{ width: `${props.steamRatio * 100}%` }} />
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </>
-    );
-}
-
-function MobileCombatOverlay(props: {
-    legYaw: number;
-    torsoYaw: number;
-    twistRatio: number;
-    hpRatio: number;
-    steamRatio: number;
-    speed: number;
-    maxSpeed: number;
-    isPortrait: boolean;
-    radarContacts: RadarContact[];
-}) {
-    const chassisHeading = wrapDegrees(Math.round(toDegrees(props.legYaw))).toString().padStart(3, '0');
-    const torsoHeading = wrapDegrees(Math.round(toDegrees(props.torsoYaw))).toString().padStart(3, '0');
-    const twistDegrees = Math.round(toDegrees(angleDiff(props.legYaw, props.torsoYaw)));
-    const twistText = `${twistDegrees > 0 ? '+' : ''}${twistDegrees}`;
-    const speedDisplay = Math.round((props.speed / Math.max(props.maxSpeed, 0.1)) * 86);
-    const torsoMarker = polarToCartesian(42, 42, 22, 270 + clamp(props.twistRatio, -1, 1) * 72);
-    const leftLimit = polarToCartesian(42, 42, 22, 198);
-    const rightLimit = polarToCartesian(42, 42, 22, 342);
-    const nearestContact = props.radarContacts[0] ?? null;
-    const nearestLabel = nearestContact
-        ? nearestContact.kind === 'bot'
-            ? '\u0411\u041e\u0422'
-            : '\u0412\u0420\u0410\u0413'
-        : '\u0427\u0418\u0421\u0422\u041e';
-    const nearestColor = nearestContact?.kind === 'bot' ? '#f25c54' : '#efb768';
-    const nearestX = nearestContact ? 42 + nearestContact.x * 24 : 42;
-    const nearestY = nearestContact ? 42 - nearestContact.y * 24 : 42;
-
-    return (
-        <div className={`pointer-events-none absolute inset-x-0 z-20 px-3 ${props.isPortrait ? 'bottom-[266px]' : 'bottom-[178px]'}`}>
-            <div className="mx-auto flex w-[min(92vw,360px)] items-center gap-3 rounded-[28px] border border-[#8f6a38]/55 bg-[linear-gradient(180deg,rgba(18,17,15,0.92),rgba(8,8,8,0.9))] px-3 py-3 shadow-[0_0_22px_rgba(0,0,0,0.34),inset_0_0_18px_rgba(0,0,0,0.45)]">
-                <div className="relative h-[84px] w-[84px] shrink-0 rounded-full border border-[#8f6a38]/55 bg-[radial-gradient(circle_at_center,rgba(20,18,16,0.95),rgba(7,7,7,0.88))]">
-                    <svg viewBox="0 0 84 84" className="h-full w-full">
-                        <circle cx="42" cy="42" r="22" fill="none" stroke="rgba(157,119,64,0.45)" strokeWidth="2.5" />
-                        <circle cx={leftLimit.x} cy={leftLimit.y} r="2.8" fill="#9d7740" />
-                        <circle cx={rightLimit.x} cy={rightLimit.y} r="2.8" fill="#9d7740" />
-                        {nearestContact ? (
-                            <>
-                                <circle cx={nearestX} cy={nearestY} r="7.2" fill="none" stroke={nearestColor} strokeWidth="1.6" opacity="0.75" />
-                                <line x1="42" y1="42" x2={nearestX} y2={nearestY} stroke={nearestColor} strokeWidth="1.2" opacity="0.45" />
-                            </>
-                        ) : null}
-                        {props.radarContacts.map((contact, index) => (
-                            <circle
-                                key={`${contact.kind}-${index}`}
-                                cx={42 + contact.x * 24}
-                                cy={42 - contact.y * 24}
-                                r={contact.kind === 'bot' ? 3.4 : 3}
-                                fill={contact.kind === 'bot' ? '#f25c54' : '#efb768'}
-                                opacity={1 - contact.distance * 0.35}
-                            />
-                        ))}
-                        <circle cx={torsoMarker.x} cy={torsoMarker.y} r="4" fill="#7ee6f0" />
-                        <circle cx="42" cy="42" r="3" fill="#efb768" />
-                    </svg>
-                    <div className="absolute left-1/2 top-[11px] h-0 w-0 -translate-x-1/2 border-x-[5px] border-x-transparent border-b-[10px] border-b-[#efb768]" />
-                    <div className="absolute inset-x-0 bottom-[8px] text-center text-[8px] tracking-[0.26em] text-[#9fc4cc]">
-                        {'\u041a\u0423\u0420\u0421'}
-                    </div>
-                </div>
-
-                <div className="min-w-0 flex-1">
-                    <div className="grid grid-cols-3 gap-2 text-center">
-                        <div className="rounded-2xl border border-[#8f6a38]/35 bg-black/30 px-2 py-2">
-                            <div className="text-[8px] tracking-[0.22em] text-[#8fb8c2]">{'\u0428\u0410\u0421\u0421\u0418'}</div>
-                            <div className="mt-1 text-sm font-bold tracking-[0.14em] text-[#efb768]">{chassisHeading}</div>
-                        </div>
-                        <div className="rounded-2xl border border-[#8f6a38]/35 bg-black/30 px-2 py-2">
-                            <div className="text-[8px] tracking-[0.22em] text-[#8fb8c2]">{'\u0422\u041e\u0420\u0421'}</div>
-                            <div className="mt-1 text-sm font-bold tracking-[0.14em] text-[#7ee6f0]">{torsoHeading}</div>
-                        </div>
-                        <div className="rounded-2xl border border-[#8f6a38]/35 bg-black/30 px-2 py-2">
-                            <div className="text-[8px] tracking-[0.22em] text-[#8fb8c2]">{'\u0421\u0414\u0412\u0418\u0413'}</div>
-                            <div className="mt-1 text-sm font-bold tracking-[0.14em]" style={{ color: Math.abs(props.twistRatio) > 0.78 ? '#ffb28c' : '#f3deb5' }}>
-                                {twistText}
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="mt-2 flex items-center justify-between gap-2 rounded-2xl border border-[#8f6a38]/35 bg-black/30 px-3 py-2">
-                        <div className="text-[8px] tracking-[0.26em] text-[#8fb8c2]">
-                            {nearestContact ? '\u0411\u041b\u0418\u0416\u041d\u0418\u0419 \u041a\u041e\u041d\u0422\u0410\u041a\u0422' : '\u0421\u0415\u041a\u0422\u041e\u0420 \u0427\u0418\u0421\u0422'}
-                        </div>
-                        <div className="text-[10px] font-bold tracking-[0.18em]" style={{ color: nearestContact ? nearestColor : '#9fc4cc' }}>
-                            {nearestContact ? `${nearestLabel} ${nearestContact.meters}\u041c` : '\u041d\u0415\u0422'}
-                        </div>
-                    </div>
-
-                    <div className="mt-2 grid grid-cols-[0.9fr_0.9fr_0.7fr] gap-2">
-                        <div className="rounded-2xl border border-[#8f6a38]/35 bg-black/30 px-2 py-2">
-                            <div className="mb-1 text-[8px] tracking-[0.22em] text-[#d0b07a]">{'\u0411\u0420\u041e\u041d\u042f'}</div>
-                            <div className="h-2 rounded-full bg-[#241c16]">
-                                <div className="h-full rounded-full bg-[linear-gradient(90deg,#d04838,#f0b371)]" style={{ width: `${props.hpRatio * 100}%` }} />
-                            </div>
-                        </div>
-                        <div className="rounded-2xl border border-[#8f6a38]/35 bg-black/30 px-2 py-2">
-                            <div className="mb-1 text-[8px] tracking-[0.22em] text-[#d0b07a]">{'\u041f\u0410\u0420'}</div>
-                            <div className="h-2 rounded-full bg-[#241c16]">
-                                <div className="h-full rounded-full bg-[linear-gradient(90deg,#efb768,#7ee6f0)]" style={{ width: `${props.steamRatio * 100}%` }} />
-                            </div>
-                        </div>
-                        <div className="rounded-2xl border border-[#8f6a38]/35 bg-black/30 px-2 py-2 text-center">
-                            <div className="text-[8px] tracking-[0.22em] text-[#8fb8c2]">{'\u0425\u041e\u0414'}</div>
-                            <div className="mt-1 text-sm font-bold tracking-[0.14em] text-[#f3deb5]">{speedDisplay}</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-function MobileControls(props: {
-    game: any;
-    showPanel: boolean;
-    onTogglePanel: () => void;
-    leftHanded: boolean;
-    isPortrait: boolean;
-    aimSensitivity: number;
-    aimPresetLabel: string;
-    onToggleHanded: () => void;
-    onCycleAimPreset: () => void;
-}) {
-    const moveAreaRef = useRef<HTMLDivElement>(null);
-    const movePointerIdRef = useRef<number | null>(null);
-    const aimPointerIdRef = useRef<number | null>(null);
-    const aimLastRef = useRef<{ x: number; y: number } | null>(null);
-    const [stick, setStick] = useState({ x: 0, y: 0 });
-    const stickSize = props.isPortrait ? 132 : 144;
-    const knobOffset = props.isPortrait ? 30 : 34;
-    const moveAnchorClass = props.leftHanded ? 'right-4' : 'left-4';
-    const aimAnchorClass = props.leftHanded ? 'left-4' : 'right-4';
-    const actionAnchorClass = props.leftHanded ? 'left-4 items-start' : 'right-4 items-end';
-    const settingsAnchorClass = props.leftHanded ? 'left-4 items-start' : 'right-4 items-end';
-    const aimBottomClass = props.isPortrait ? 'bottom-28' : 'bottom-20';
-    const actionBottomClass = props.isPortrait ? 'bottom-4' : 'bottom-3';
-    const settingsTopClass = props.isPortrait ? 'top-[74px]' : 'top-4';
-
-    const ensureAudio = () => {
-        props.game?.sounds?.init?.();
-    };
-
-    const updateStick = (clientX: number, clientY: number) => {
-        const area = moveAreaRef.current;
-        if (!area) return;
-        const rect = area.getBoundingClientRect();
-        const centerX = rect.left + rect.width / 2;
-        const centerY = rect.top + rect.height / 2;
-        const normalizedX = clamp((clientX - centerX) / (rect.width * 0.32), -1, 1);
-        const normalizedY = clamp((clientY - centerY) / (rect.height * 0.32), -1, 1);
-        setStick({ x: normalizedX, y: normalizedY });
-        props.game?.input?.setVirtualAxes?.(-normalizedY, normalizedX);
-    };
-
-    const resetStick = () => {
-        movePointerIdRef.current = null;
-        setStick({ x: 0, y: 0 });
-        props.game?.input?.setVirtualAxes?.(0, 0);
-    };
-
-    return (
-        <div className="pointer-events-none absolute inset-0 z-40 touch-none">
-            <div className={`absolute ${settingsTopClass} ${settingsAnchorClass} flex gap-2`}>
-                <button
-                    type="button"
-                    className="pointer-events-auto rounded-full border border-[#8f6a38]/60 bg-[rgba(10,10,10,0.78)] px-3 py-2 text-[10px] tracking-[0.18em] text-[#d7c5a1]"
-                    onPointerDown={props.onToggleHanded}
-                >
-                    {props.leftHanded ? 'ЛЕВША' : 'ПРАВША'}
-                </button>
-                <button
-                    type="button"
-                    className="pointer-events-auto rounded-full border border-[#8f6a38]/60 bg-[rgba(10,10,10,0.78)] px-3 py-2 text-[10px] tracking-[0.18em] text-[#d7c5a1]"
-                    onPointerDown={props.onCycleAimPreset}
-                >
-                    ЧУВ {props.aimPresetLabel}
-                </button>
-            </div>
-
-            <div className={`absolute bottom-4 ${moveAnchorClass}`}>
-                <div
-                    ref={moveAreaRef}
-                    className="pointer-events-auto relative rounded-full border border-[#8f6a38]/55 bg-[radial-gradient(circle_at_center,rgba(33,26,20,0.92),rgba(10,10,10,0.55))] shadow-[0_0_18px_rgba(0,0,0,0.28)]"
-                    style={{ width: stickSize, height: stickSize }}
-                    onPointerDown={(event) => {
-                        ensureAudio();
-                        movePointerIdRef.current = event.pointerId;
-                        updateStick(event.clientX, event.clientY);
-                    }}
-                    onPointerMove={(event) => {
-                        if (movePointerIdRef.current !== event.pointerId) return;
-                        updateStick(event.clientX, event.clientY);
-                    }}
-                    onPointerUp={(event) => {
-                        if (movePointerIdRef.current !== event.pointerId) return;
-                        resetStick();
-                    }}
-                    onPointerCancel={(event) => {
-                        if (movePointerIdRef.current !== event.pointerId) return;
-                        resetStick();
-                    }}
-                >
-                    <div className="absolute inset-5 rounded-full border border-[#6f5631]/40" />
-                    <div className="absolute inset-x-0 top-2 text-center text-[9px] tracking-[0.28em] text-[#d1b17d]">ХОД / ПОВОРОТ</div>
-                    <div
-                        className="absolute left-1/2 top-1/2 h-12 w-12 rounded-full border border-[#efb768]/75 bg-[radial-gradient(circle_at_35%_35%,#efb768,#704623)] shadow-[0_0_18px_rgba(239,183,104,0.35)]"
-                        style={{ transform: `translate(calc(-50% + ${stick.x * knobOffset}px), calc(-50% + ${stick.y * knobOffset}px))` }}
-                    />
-                </div>
-            </div>
-
-            <div
-                className={`pointer-events-auto absolute ${aimBottomClass} ${aimAnchorClass} rounded-[28px] border border-[#8f6a38]/45 bg-[linear-gradient(180deg,rgba(20,18,16,0.18),rgba(10,10,10,0.04))]`}
-                style={{
-                    width: props.isPortrait ? '44vw' : '34vw',
-                    maxWidth: props.isPortrait ? 220 : 260,
-                    minWidth: props.isPortrait ? 168 : 180,
-                    height: props.isPortrait ? 186 : 148
-                }}
-                onPointerDown={(event) => {
-                    ensureAudio();
-                    aimPointerIdRef.current = event.pointerId;
-                    aimLastRef.current = { x: event.clientX, y: event.clientY };
-                }}
-                onPointerMove={(event) => {
-                    if (aimPointerIdRef.current !== event.pointerId || !aimLastRef.current) return;
-                    const dx = event.clientX - aimLastRef.current.x;
-                    const dy = event.clientY - aimLastRef.current.y;
-                    props.game?.input?.addVirtualLook?.(dx * props.aimSensitivity, dy * props.aimSensitivity);
-                    aimLastRef.current = { x: event.clientX, y: event.clientY };
-                }}
-                onPointerUp={(event) => {
-                    if (aimPointerIdRef.current !== event.pointerId) return;
-                    aimPointerIdRef.current = null;
-                    aimLastRef.current = null;
-                }}
-                onPointerCancel={(event) => {
-                    if (aimPointerIdRef.current !== event.pointerId) return;
-                    aimPointerIdRef.current = null;
-                    aimLastRef.current = null;
-                }}
-            >
-                <div className="absolute inset-0 rounded-[28px] bg-[radial-gradient(circle_at_center,rgba(126,230,240,0.08),rgba(0,0,0,0))]" />
-                <div className="absolute inset-x-0 top-3 text-center text-[9px] tracking-[0.3em] text-[#8fb8c2]">ОБЗОР</div>
-            </div>
-
-            <div className={`absolute ${actionBottomClass} ${actionAnchorClass} flex flex-col gap-3`}>
-                <button
-                    type="button"
-                    className="pointer-events-auto rounded-full border border-[#7ee6f0]/65 bg-[radial-gradient(circle_at_30%_30%,rgba(126,230,240,0.72),rgba(31,72,82,0.86))] text-[11px] font-bold tracking-[0.2em] text-[#effcff] shadow-[0_0_22px_rgba(16,48,55,0.4)]"
-                    style={{ width: props.isPortrait ? 84 : 76, height: props.isPortrait ? 84 : 76 }}
-                    onPointerDown={() => {
-                        ensureAudio();
-                        props.game?.input?.triggerVirtualAction?.('fire');
-                    }}
-                >
-                    ОГОНЬ
-                </button>
-
-                <div className="flex max-w-[220px] flex-wrap gap-2">
-                    <button
-                        type="button"
-                        className="pointer-events-auto rounded-2xl border border-[#8f6a38]/60 bg-[rgba(10,10,10,0.78)] px-3 py-3 text-[10px] tracking-[0.22em] text-[#efb768]"
-                        onPointerDown={() => {
-                            ensureAudio();
-                            props.game?.input?.triggerVirtualAction?.('dash');
-                        }}
-                    >
-                        РЫВОК
-                    </button>
-                    <button
-                        type="button"
-                        className="pointer-events-auto rounded-2xl border border-[#8f6a38]/60 bg-[rgba(10,10,10,0.78)] px-3 py-3 text-[10px] tracking-[0.22em] text-[#efb768]"
-                        onPointerDown={() => {
-                            ensureAudio();
-                            props.game?.input?.triggerVirtualAction?.('vent');
-                        }}
-                    >
-                        ПАР
-                    </button>
-                </div>
-
-                <div className="flex gap-2">
-                    <button
-                        type="button"
-                        className="pointer-events-auto rounded-2xl border border-[#8f6a38]/60 bg-[rgba(10,10,10,0.78)] px-3 py-2 text-[10px] tracking-[0.2em] text-[#d7c5a1]"
-                        onPointerDown={() => props.game?.input?.triggerVirtualAction?.('centerTorso')}
-                    >
-                        ЦЕНТР ТОРС
-                    </button>
-                    <button
-                        type="button"
-                        className="pointer-events-auto rounded-2xl border border-[#8f6a38]/60 bg-[rgba(10,10,10,0.78)] px-3 py-2 text-[10px] tracking-[0.2em] text-[#d7c5a1]"
-                        onPointerDown={() => props.game?.input?.triggerVirtualAction?.('stopThrottle')}
-                    >
-                        СТОП ХОД
-                    </button>
-                    <button
-                        type="button"
-                        className="pointer-events-auto rounded-2xl border border-[#8f6a38]/60 bg-[rgba(10,10,10,0.78)] px-3 py-2 text-[10px] tracking-[0.2em] text-[#d7c5a1]"
-                        onPointerDown={props.onTogglePanel}
-                    >
-                        {props.showPanel ? 'СКРЫТЬ' : 'ПАНЕЛЬ'}
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-}
-
 export default function App() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const copyResetRef = useRef<number | null>(null);
@@ -691,6 +313,7 @@ export default function App() {
     const [isHost, setIsHost] = useState(false);
     const [sessionMode, setSessionMode] = useState<SessionMode>('solo');
     const [showPilotPanel, setShowPilotPanel] = useState(true);
+    const [showMobileSettings, setShowMobileSettings] = useState(false);
     const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
     const [gameInstance, setGameInstance] = useState<any>(null);
     const [gameState, setGameState] = useState<GameHudState>(initialGameState);
@@ -717,6 +340,7 @@ export default function App() {
         setInLobby(false);
         setLoading(true);
         setShowPilotPanel(!isTouchDevice);
+        setShowMobileSettings(false);
         setSessionMode(mode);
         setCopyState('idle');
 
@@ -807,7 +431,7 @@ export default function App() {
 
     useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {
-            if (inLobby || loading || event.repeat || event.code !== 'KeyH') return;
+            if (isTouchDevice || inLobby || loading || event.repeat || event.code !== 'KeyH') return;
 
             const target = event.target;
             if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
@@ -818,7 +442,7 @@ export default function App() {
 
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
-    }, [inLobby, loading]);
+    }, [inLobby, isTouchDevice, loading]);
 
     const torsoOffset = angleDiff(gameState.legYaw, gameState.torsoYaw);
     const twistRatio = gameState.maxTwist > 0 ? clamp(torsoOffset / gameState.maxTwist, -1, 1) : 0;
@@ -862,15 +486,11 @@ export default function App() {
             ? 'НЕ УДАЛОСЬ'
             : 'КОПИРОВАТЬ';
 
-    const hostBadgeClass = isTouchDevice
-        ? 'pointer-events-auto absolute left-1/2 top-3 z-30 flex w-[min(88vw,320px)] -translate-x-1/2 items-center justify-between gap-3 rounded-2xl border border-[#8f6a38]/45 bg-[rgba(10,10,10,0.78)] px-3 py-2 text-[#e1cea7] shadow-[0_0_22px_rgba(0,0,0,0.32)] backdrop-blur-sm'
-        : 'pointer-events-auto absolute right-4 top-4 z-30 flex items-center gap-3 rounded-2xl border border-[#8f6a38]/45 bg-[rgba(10,10,10,0.78)] px-4 py-3 text-[#e1cea7] shadow-[0_0_22px_rgba(0,0,0,0.32)] backdrop-blur-sm';
-    const pilotPanelAnchorClass = isTouchDevice
-        ? `left-3 ${sessionMode === 'host' && myId && !showPilotPanel ? 'top-[64px]' : sessionMode === 'host' && myId ? 'top-[122px]' : 'top-[74px]'}`
-        : 'left-4 top-4';
-    const pilotPanelHideLabel = isTouchDevice ? '\u0421\u041a\u0420\u042b\u0422\u042c' : '\u0421\u041a\u0420\u042b\u0422\u042c [H]';
-    const pilotPanelShowLabel = isTouchDevice ? '\u041f\u0410\u041d\u0415\u041b\u042c' : '\u041f\u0410\u041d\u0415\u041b\u042c [H]';
-    const alignPromptLabel = isTouchDevice ? '\u0412\u042b\u0420\u041e\u0412\u041d\u042f\u0422\u042c \u0428\u0410\u0421\u0421\u0418' : '\u0412\u042b\u0420\u041e\u0412\u041D\u042F\u0422\u042C \u0428\u0410\u0421\u0421\u0418 [C]';
+    const hostBadgeClass = 'pointer-events-auto absolute right-4 top-4 z-30 flex items-center gap-3 rounded-2xl border border-[#8f6a38]/45 bg-[rgba(10,10,10,0.78)] px-4 py-3 text-[#e1cea7] shadow-[0_0_22px_rgba(0,0,0,0.32)] backdrop-blur-sm';
+    const pilotPanelAnchorClass = 'left-4 top-4';
+    const pilotPanelHideLabel = 'СКРЫТЬ [H]';
+    const pilotPanelShowLabel = 'ПАНЕЛЬ [H]';
+    const alignPromptLabel = isTouchDevice ? 'ВЫРОВНЯТЬ ШАССИ' : 'ВЫРОВНЯТЬ ШАССИ [C]';
     return (
         <div className="relative h-[100dvh] w-full overflow-hidden bg-[#100d0b] font-mono text-[#f2ddb1]">
             <canvas ref={canvasRef} className={`block h-full w-full ${inLobby ? 'hidden' : ''}`} />
@@ -940,21 +560,9 @@ export default function App() {
                 <>
                     {!isTouchDevice ? <CockpitFrame warning={warningText} throttleLabel={throttleText} /> : null}
                     {isTouchDevice ? (
-                        <MobileHud
+                        <MobileCombatLayout
                             warning={warningText}
                             throttleText={throttleText}
-                            twistRatio={twistRatio}
-                            hpRatio={hpRatio}
-                            steamRatio={steamRatio}
-                            legYaw={gameState.legYaw}
-                            torsoYaw={gameState.torsoYaw}
-                            speed={gameState.speed}
-                            maxSpeed={gameState.maxSpeed}
-                            isPortrait={isPortrait}
-                        />
-                    ) : null}
-                    {isTouchDevice ? (
-                        <MobileCombatOverlay
                             legYaw={gameState.legYaw}
                             torsoYaw={gameState.torsoYaw}
                             twistRatio={twistRatio}
@@ -962,12 +570,16 @@ export default function App() {
                             steamRatio={steamRatio}
                             speed={gameState.speed}
                             maxSpeed={gameState.maxSpeed}
-                            isPortrait={isPortrait}
                             radarContacts={gameState.radarContacts}
+                            isPortrait={isPortrait}
+                            leftHanded={mobileLeftHanded}
+                            aimSensitivity={mobileAimSensitivity}
+                            game={gameInstance}
+                            onOpenSettings={() => setShowMobileSettings(true)}
                         />
                     ) : null}
 
-                    {sessionMode === 'host' && myId && (!isTouchDevice || !showPilotPanel) ? (
+                    {sessionMode === 'host' && myId && !isTouchDevice ? (
                         <div className={hostBadgeClass}>
                             <div className="min-w-0">
                                 <div className="text-[10px] tracking-[0.34em] text-[#8fb8c2]">ID ХОСТА</div>
@@ -984,6 +596,7 @@ export default function App() {
                         </div>
                     ) : null}
 
+                    {!isTouchDevice ? (
                     <div className={`absolute z-20 ${pilotPanelAnchorClass}`}>
                         {showPilotPanel ? (
                             <div className={`pointer-events-auto rounded-2xl border border-[#8f6a38]/35 bg-[rgba(10,10,10,0.62)] p-4 text-sm text-[#d7c5a1] shadow-[0_0_20px_rgba(0,0,0,0.38)] backdrop-blur-sm ${isTouchDevice ? 'max-w-[220px] text-xs' : 'max-w-[280px]'}`}>
@@ -1034,62 +647,18 @@ export default function App() {
                             </button>
                         ) : null}
                     </div>
+                    ) : null}
 
                     {!isTouchDevice ? <TorsoTwistArc twistRatio={twistRatio} maxTwist={gameState.maxTwist} /> : null}
 
-                    <div className="pointer-events-none absolute left-1/2 top-1/2 z-30 h-10 w-10 -translate-x-1/2 -translate-y-1/2 opacity-45">
-                        <div className="absolute left-0 top-1/2 h-[2px] w-3 -translate-y-1/2 bg-[#dde4e6]/40" />
-                        <div className="absolute right-0 top-1/2 h-[2px] w-3 -translate-y-1/2 bg-[#dde4e6]/40" />
-                        <div className="absolute left-1/2 top-0 h-3 w-[2px] -translate-x-1/2 bg-[#dde4e6]/40" />
-                        <div className="absolute bottom-0 left-1/2 h-3 w-[2px] -translate-x-1/2 bg-[#dde4e6]/40" />
-                    </div>
-
-                    <div
-                        className="pointer-events-none absolute left-1/2 top-1/2 z-30 h-8 w-8 opacity-95"
-                        style={{
-                            transform: `translate(calc(-50% + ${reticleX}px), calc(-50% + ${reticleY}px))`
-                        }}
-                    >
-                        <div className="absolute left-0 top-1/2 h-[2px] w-3 -translate-y-1/2 bg-[#7ee6f0] shadow-[0_0_10px_currentColor]" />
-                        <div className="absolute right-0 top-1/2 h-[2px] w-3 -translate-y-1/2 bg-[#7ee6f0] shadow-[0_0_10px_currentColor]" />
-                        <div className="absolute left-1/2 top-0 h-3 w-[2px] -translate-x-1/2 bg-[#7ee6f0] shadow-[0_0_10px_currentColor]" />
-                        <div className="absolute bottom-0 left-1/2 h-3 w-[2px] -translate-x-1/2 bg-[#7ee6f0] shadow-[0_0_10px_currentColor]" />
-                        <div className="absolute left-1/2 top-1/2 h-1 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#efb768] shadow-[0_0_10px_rgba(239,183,104,0.8)]" />
-                        {hitConfirmRatio > 0 ? (
-                            <>
-                                <div className="absolute left-[1px] top-[1px] h-[2px] w-3 rotate-[-45deg] bg-[#fff0c9]" style={{ opacity: hitConfirmRatio }} />
-                                <div className="absolute right-[1px] top-[1px] h-[2px] w-3 rotate-[45deg] bg-[#fff0c9]" style={{ opacity: hitConfirmRatio }} />
-                                <div className="absolute bottom-[1px] left-[1px] h-[2px] w-3 rotate-[45deg] bg-[#fff0c9]" style={{ opacity: hitConfirmRatio }} />
-                                <div className="absolute bottom-[1px] right-[1px] h-[2px] w-3 rotate-[-45deg] bg-[#fff0c9]" style={{ opacity: hitConfirmRatio }} />
-                            </>
-                        ) : null}
-                    </div>
-
-                    {hitConfirmRatio > 0 ? (
-                        <div
-                            className="pointer-events-none absolute left-1/2 top-1/2 z-30"
-                            style={{
-                                transform: `translate(calc(-50% + ${reticleX}px), calc(-50% + ${reticleY - 48}px))`,
-                                opacity: hitConfirmRatio
-                            }}
-                        >
-                            <div className="rounded-full border border-[#8f6a38]/60 bg-[rgba(8,8,8,0.84)] px-4 py-2 shadow-[0_0_18px_rgba(0,0,0,0.28)]">
-                                <div className="text-center text-[10px] tracking-[0.34em] text-[#fff0c9]">ПОПАДАНИЕ</div>
-                                <div className="mt-2 h-1.5 w-28 rounded-full bg-[#2b231d]">
-                                    <div
-                                        className="h-full rounded-full bg-[linear-gradient(90deg,#f25c54,#efb768,#7ee6f0)]"
-                                        style={{ width: `${hitTargetRatio * 100}%` }}
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    ) : null}
-
-                    {Math.abs(twistRatio) > 0.55 ? (
-                        <div className="pointer-events-none absolute left-1/2 top-[58%] z-30 -translate-x-1/2 rounded-full border border-[#8f6a38]/60 bg-black/55 px-4 py-2 text-[11px] tracking-[0.36em] text-[#efb768]">
-                            {alignPromptLabel}
-                        </div>
-                    ) : null}
+                    <CombatOverlayCore
+                        reticleX={reticleX}
+                        reticleY={reticleY}
+                        hitConfirmRatio={hitConfirmRatio}
+                        hitTargetRatio={hitTargetRatio}
+                        showAlignPrompt={Math.abs(twistRatio) > 0.55}
+                        alignPromptLabel={alignPromptLabel}
+                    />
 
                     {!isTouchDevice ? (
                     <div className="pointer-events-none absolute bottom-0 left-1/2 z-20 flex h-[248px] w-[min(1040px,96vw)] -translate-x-1/2 items-end justify-between px-8 pb-8">
@@ -1189,14 +758,17 @@ export default function App() {
                     ) : null}
 
                     {isTouchDevice ? (
-                        <MobileControls
-                            game={gameInstance}
-                            showPanel={showPilotPanel}
-                            onTogglePanel={() => setShowPilotPanel((current) => !current)}
-                            leftHanded={mobileLeftHanded}
+                        <MobileSettingsOverlay
+                            open={showMobileSettings}
                             isPortrait={isPortrait}
-                            aimSensitivity={mobileAimSensitivity}
-                            aimPresetLabel={mobileAimPreset}
+                            sessionMode={sessionMode}
+                            sessionLabel={sessionLabel}
+                            myId={myId}
+                            copyLabel={copyLabel}
+                            leftHanded={mobileLeftHanded}
+                            aimPreset={mobileAimPreset}
+                            onClose={() => setShowMobileSettings(false)}
+                            onCopyHostId={copyHostId}
                             onToggleHanded={() => setMobileLeftHanded((current) => !current)}
                             onCycleAimPreset={() => setMobileAimPreset((current) => current === 'LOW' ? 'MID' : current === 'MID' ? 'HIGH' : 'LOW')}
                         />
