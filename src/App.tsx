@@ -104,21 +104,21 @@ function HeadingTape(props: { legYaw: number; torsoYaw: number; maxTwist: number
             })}
 
             <div className="absolute left-1/2 top-[7px] -translate-x-1/2 text-[10px] font-bold tracking-[0.42em] text-[#7ee6f0]">
-                VIEW
+                ВЗГЛЯД
             </div>
             <div className="absolute left-1/2 top-1 -translate-x-1/2">
                 <div className="h-0 w-0 border-x-[8px] border-x-transparent border-t-[14px] border-t-[#7ee6f0] drop-shadow-[0_0_8px_rgba(126,230,240,0.55)]" />
             </div>
 
             <div className="absolute top-[7px] text-[10px] font-bold tracking-[0.36em] text-[#efb768]" style={{ left: `calc(50% + ${bodyOffsetPx}px)`, transform: 'translateX(-50%)' }}>
-                CHASSIS
+                ШАССИ
             </div>
             <div className="absolute top-2" style={{ left: `calc(50% + ${bodyOffsetPx}px)`, transform: 'translateX(-50%)' }}>
                 <div className="h-0 w-0 border-x-[8px] border-x-transparent border-t-[14px] border-t-[#efb768] drop-shadow-[0_0_10px_rgba(239,183,104,0.55)]" />
             </div>
 
-            <div className="absolute left-5 bottom-2 text-[11px] tracking-[0.25em] text-[#9cb5bb]">TORSO {centerHeading.toString().padStart(3, '0')}</div>
-            <div className="absolute right-5 bottom-2 text-[11px] tracking-[0.25em] text-[#d0b07a]">BODY {chassisHeading.toString().padStart(3, '0')}</div>
+            <div className="absolute left-5 bottom-2 text-[11px] tracking-[0.22em] text-[#9cb5bb]">ТОРС {centerHeading.toString().padStart(3, '0')}</div>
+            <div className="absolute right-5 bottom-2 text-[11px] tracking-[0.22em] text-[#d0b07a]">КОРПУС {chassisHeading.toString().padStart(3, '0')}</div>
         </div>
     );
 }
@@ -146,7 +146,7 @@ function TorsoTwistArc(props: { twistRatio: number; maxTwist: number }) {
                 <circle cx={rightLimit.x} cy={rightLimit.y} r="4" fill="#9d7740" />
             </svg>
             <div className="absolute inset-x-0 bottom-[18px] text-center text-[10px] tracking-[0.46em] text-[#a0bcc3]">
-                TORSO TWIST LIMIT {Math.round(toDegrees(maxTwist))} DEG
+                ПРЕДЕЛ СКРУТКИ {Math.round(toDegrees(maxTwist))} ГР
             </div>
         </div>
     );
@@ -159,6 +159,7 @@ function CockpitFrame(props: { warning: string; throttleLabel: string }) {
         <div className="pointer-events-none absolute inset-0 z-10 overflow-hidden">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,0,0,0)_0%,rgba(0,0,0,0.08)_48%,rgba(0,0,0,0.32)_100%)]" />
             <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0)_18%,rgba(0,0,0,0)_68%,rgba(255,164,63,0.05)_100%)]" />
+            <div className="absolute inset-0 bg-[linear-gradient(105deg,rgba(255,255,255,0.045),rgba(255,255,255,0)_22%,rgba(255,255,255,0)_76%,rgba(255,255,255,0.03))]" />
 
             <div className="absolute inset-x-0 top-0 h-20 border-b border-[#7f653e]/70 bg-[linear-gradient(180deg,rgba(80,55,30,0.95),rgba(28,20,14,0.92),rgba(0,0,0,0))] shadow-[0_8px_18px_rgba(0,0,0,0.35)]" />
             <div className="absolute left-0 top-0 bottom-0 w-28 border-r border-[#7f653e]/60 bg-[linear-gradient(90deg,rgba(54,39,24,0.96),rgba(22,17,13,0.78),rgba(0,0,0,0))]" />
@@ -171,6 +172,20 @@ function CockpitFrame(props: { warning: string; throttleLabel: string }) {
 
             <div className="absolute bottom-0 left-1/2 h-[248px] w-[min(1040px,96vw)] -translate-x-1/2 rounded-t-[44px] border border-[#8b6636]/80 bg-[linear-gradient(180deg,rgba(69,50,31,0.98),rgba(19,15,12,0.98))] shadow-[0_-14px_32px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,220,168,0.08)]" />
             <div className="absolute bottom-[202px] left-1/2 h-7 w-[min(920px,84vw)] -translate-x-1/2 rounded-full border border-[#a67d47]/50 bg-[linear-gradient(180deg,rgba(94,67,37,0.92),rgba(31,24,18,0.72))]" />
+            <div className="absolute left-1/2 top-[52px] flex -translate-x-1/2 gap-3">
+                {['#efb768', '#7ee6f0', '#efb768', '#f36f58', '#efb768'].map((color, index) => (
+                    <div
+                        key={`${color}-${index}`}
+                        className="h-2.5 w-8 rounded-full border border-black/30 shadow-[0_0_12px_rgba(0,0,0,0.35)]"
+                        style={{ backgroundColor: color, opacity: index === 3 ? 0.92 : 0.72 }}
+                    />
+                ))}
+            </div>
+            <div className="absolute bottom-[226px] left-1/2 flex w-[min(860px,78vw)] -translate-x-1/2 justify-between px-8">
+                {Array.from({ length: 9 }, (_, index) => (
+                    <div key={index} className="h-3 w-3 rounded-full border border-[#2c2014] bg-[linear-gradient(180deg,#c89a58,#5f4425)] shadow-[inset_0_1px_1px_rgba(255,236,196,0.3)]" />
+                ))}
+            </div>
 
             <div className="absolute left-1/2 top-4 -translate-x-1/2 rounded-full border border-[#8f6a38]/70 bg-[rgba(12,10,8,0.82)] px-6 py-2 text-[11px] tracking-[0.42em] text-[#f1bd6e] shadow-[0_0_18px_rgba(0,0,0,0.4)]">
                 {warning}
@@ -217,7 +232,7 @@ export default function App() {
                 setLoading(false);
             }, (err: any) => {
                 console.error(err);
-                alert(`Connection error: ${err}`);
+                alert(`Ошибка подключения: ${err}`);
                 setInLobby(true);
                 setLoading(false);
             });
@@ -237,21 +252,21 @@ export default function App() {
     const steamRatio = gameState.maxSteam > 0 ? gameState.steam / gameState.maxSteam : 0;
     const displaySpeed = Math.round((gameState.speed / Math.max(gameState.maxSpeed, 0.1)) * 86);
     const throttleText = throttleRatio > 0.05
-        ? `THROTTLE ${Math.round(throttleRatio * 100)}%`
+        ? `ТЯГА ${Math.round(throttleRatio * 100)}%`
         : throttleRatio < -0.05
-            ? `REVERSE ${Math.round(-throttleRatio * 100)}%`
-            : 'THROTTLE IDLE';
+            ? `РЕВЕРС ${Math.round(-throttleRatio * 100)}%`
+            : 'ТЯГА НОЛЬ';
     const warningText = gameState.isOverheated
-        ? `STEAM LOCK ${gameState.overheatTimer.toFixed(1)}S`
+        ? `ПАРОВОЙ ЗАМОК ${gameState.overheatTimer.toFixed(1)}С`
         : Math.abs(twistRatio) > 0.86
-            ? 'TORSO LIMIT'
+            ? 'ПРЕДЕЛ ТОРСА'
             : Math.abs(twistRatio) > 0.6
-                ? 'CENTER TORSO [C]'
+                ? 'ЦЕНТРОВАТЬ ТОРС [C]'
                 : throttleRatio < -0.05
-                    ? 'REVERSE THRUST'
+                    ? 'ЗАДНИЙ ХОД'
                     : throttleRatio > 0.7
-                        ? 'FULL AHEAD'
-                        : 'CRUISE STABLE';
+                        ? 'ПОЛНЫЙ ХОД'
+                        : 'КРЕЙСЕРСКИЙ ХОД';
 
     const zeroLineTop = 69;
     const forwardFillHeight = `${Math.max(0, throttleRatio) * zeroLineTop}%`;
@@ -266,7 +281,7 @@ export default function App() {
             {inLobby ? (
                 <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[radial-gradient(circle_at_center,#2a1c12_0%,#130e0b_60%,#090807_100%)] text-white">
                     <h1 className="mb-8 text-4xl font-bold tracking-[0.35em] text-[#efb768] drop-shadow-[0_0_14px_rgba(239,183,104,0.45)]">
-                        STEAMGOLEM COCKPIT
+                        ПАРОМАГИЧЕСКИЙ КОКПИТ
                     </h1>
 
                     <div className="flex w-96 flex-col gap-6 rounded-2xl border border-[#8f6a38]/40 bg-black/45 p-8 backdrop-blur-sm">
@@ -274,19 +289,19 @@ export default function App() {
                             onClick={() => startGame('host')}
                             className="rounded bg-[#b0622d] py-3 font-bold tracking-[0.22em] text-white shadow-[0_0_15px_rgba(176,98,45,0.35)] transition-colors hover:bg-[#ca7240]"
                         >
-                            HOST MISSION
+                            СОЗДАТЬ СЕССИЮ
                         </button>
 
                         <div className="flex items-center gap-4">
                             <div className="h-px flex-1 bg-[#8f6a38]/30" />
-                            <span className="text-sm tracking-[0.35em] text-[#d2b78d]/60">OR</span>
+                            <span className="text-sm tracking-[0.35em] text-[#d2b78d]/60">ИЛИ</span>
                             <div className="h-px flex-1 bg-[#8f6a38]/30" />
                         </div>
 
                         <div className="flex flex-col gap-2">
                             <input
                                 type="text"
-                                placeholder="HOST ID"
+                                placeholder="ID ХОСТА"
                                 value={hostId}
                                 onChange={(e) => setHostId(e.target.value)}
                                 className="rounded border border-[#8f6a38]/40 bg-black/65 px-4 py-2 text-[#f5dba8] outline-none focus:border-[#efb768]"
@@ -296,7 +311,7 @@ export default function App() {
                                 disabled={!hostId}
                                 className="rounded bg-[#24677e] py-3 font-bold tracking-[0.22em] text-white shadow-[0_0_15px_rgba(36,103,126,0.35)] transition-colors hover:bg-[#2f7d99] disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                                JOIN COCKPIT
+                                ПОДКЛЮЧИТЬСЯ
                             </button>
                         </div>
                     </div>
@@ -306,7 +321,7 @@ export default function App() {
             {loading && !inLobby ? (
                 <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#130e0b]/95">
                     <div className="rounded-full border border-[#8f6a38]/50 bg-black/55 px-8 py-4 text-xl tracking-[0.35em] text-[#efb768]">
-                        PRESSURIZING COCKPIT
+                        ГЕРМЕТИЗАЦИЯ КАБИНЫ
                     </div>
                 </div>
             ) : null}
@@ -316,19 +331,19 @@ export default function App() {
                     <CockpitFrame warning={warningText} throttleLabel={throttleText} />
 
                     <div className="pointer-events-none absolute left-4 top-4 z-20 max-w-[280px] rounded-2xl border border-[#8f6a38]/35 bg-[rgba(10,10,10,0.62)] p-4 text-sm text-[#d7c5a1] shadow-[0_0_20px_rgba(0,0,0,0.38)] backdrop-blur-sm">
-                        <h1 className="mb-2 text-lg font-bold tracking-[0.32em] text-[#efb768]">PILOT HUD</h1>
+                        <h1 className="mb-2 text-lg font-bold tracking-[0.32em] text-[#efb768]">ПАНЕЛЬ ПИЛОТА</h1>
                         <p className="mb-3 text-xs tracking-[0.22em] text-[#8fb8c2]">
-                            {isHost ? 'HOST LINK' : 'CLIENT LINK'} | ID {myId || 'SYNCING'}
+                            {isHost ? 'КАНАЛ ХОСТА' : 'КАНАЛ КЛИЕНТА'} | ID {myId || 'СИНХРОНИЗАЦИЯ'}
                         </p>
                         <ul className="space-y-1 text-[11px] tracking-[0.18em] text-[#b9c7c8]">
-                            <li><span className="text-[#efb768]">MOUSE</span> torso aim</li>
-                            <li><span className="text-[#efb768]">W / S</span> throttle up / down</li>
-                            <li><span className="text-[#efb768]">A / D</span> turn chassis</li>
-                            <li><span className="text-[#efb768]">C</span> center torso</li>
-                            <li><span className="text-[#efb768]">X</span> cut throttle</li>
-                            <li><span className="text-[#efb768]">LMB</span> fire bolt</li>
-                            <li><span className="text-[#efb768]">SHIFT</span> dash burst</li>
-                            <li><span className="text-[#efb768]">SPACE</span> vent steam</li>
+                            <li><span className="text-[#efb768]">МЫШЬ</span> наводка торса</li>
+                            <li><span className="text-[#efb768]">W / S</span> поднять / сбросить тягу</li>
+                            <li><span className="text-[#efb768]">A / D</span> повернуть шасси</li>
+                            <li><span className="text-[#efb768]">C</span> центрировать торс</li>
+                            <li><span className="text-[#efb768]">X</span> отсечь тягу</li>
+                            <li><span className="text-[#efb768]">ЛКМ</span> рунный болт</li>
+                            <li><span className="text-[#efb768]">SHIFT</span> рывок</li>
+                            <li><span className="text-[#efb768]">SPACE</span> сброс пара</li>
                         </ul>
                     </div>
 
@@ -356,14 +371,14 @@ export default function App() {
 
                     {Math.abs(twistRatio) > 0.55 ? (
                         <div className="pointer-events-none absolute left-1/2 top-[58%] z-30 -translate-x-1/2 rounded-full border border-[#8f6a38]/60 bg-black/55 px-4 py-2 text-[11px] tracking-[0.36em] text-[#efb768]">
-                            ALIGN CHASSIS [C]
+                            ВЫРОВНЯТЬ ШАССИ [C]
                         </div>
                     ) : null}
 
                     <div className="pointer-events-none absolute bottom-0 left-1/2 z-20 flex h-[248px] w-[min(1040px,96vw)] -translate-x-1/2 items-end justify-between px-8 pb-8">
                         <div className="flex w-[190px] items-end gap-4">
                             <div className="relative h-[188px] w-20 rounded-[26px] border border-[#8f6a38]/70 bg-[linear-gradient(180deg,rgba(13,13,13,0.94),rgba(28,20,15,0.96))] p-3 shadow-[inset_0_0_18px_rgba(0,0,0,0.5)]">
-                                <div className="mb-2 text-center text-[10px] tracking-[0.42em] text-[#efb768]">THR</div>
+                                <div className="mb-2 text-center text-[10px] tracking-[0.42em] text-[#efb768]">ТЯГА</div>
                                 <div className="relative mx-auto h-[136px] w-7 rounded-full border border-[#6c5330]/70 bg-[#060606]/80">
                                     <div className="absolute inset-x-[4px] top-[69%] h-px bg-[#d1b17d]/75" />
                                     <div
@@ -375,21 +390,21 @@ export default function App() {
                                         style={{ height: reverseFillHeight }}
                                     />
                                 </div>
-                                <div className="absolute left-3 top-[44px] text-[9px] tracking-[0.32em] text-[#b8a17a]">FWD</div>
+                                <div className="absolute left-3 top-[44px] text-[9px] tracking-[0.28em] text-[#b8a17a]">ВПР</div>
                                 <div className="absolute left-3 top-[112px] text-[9px] tracking-[0.32em] text-[#b8a17a]">0</div>
-                                <div className="absolute left-3 bottom-[18px] text-[9px] tracking-[0.32em] text-[#9dc2cc]">REV</div>
+                                <div className="absolute left-3 bottom-[18px] text-[9px] tracking-[0.28em] text-[#9dc2cc]">НАЗ</div>
                             </div>
 
                             <div className="flex-1 rounded-[26px] border border-[#8f6a38]/70 bg-[linear-gradient(180deg,rgba(13,13,13,0.94),rgba(28,20,15,0.96))] p-4 shadow-[inset_0_0_18px_rgba(0,0,0,0.5)]">
-                                <div className="text-[10px] tracking-[0.4em] text-[#efb768]">DRIVE</div>
+                                <div className="text-[10px] tracking-[0.34em] text-[#efb768]">ХОД</div>
                                 <div className="mt-3 text-3xl font-bold tracking-[0.2em] text-[#f3deb5]">
                                     {Math.round(throttleRatio * 100)}
                                 </div>
                                 <div className="mt-1 text-[11px] tracking-[0.28em] text-[#a5bcc2]">
-                                    {throttleRatio > 0.05 ? 'AHEAD' : throttleRatio < -0.05 ? 'REVERSE' : 'IDLE'}
+                                    {throttleRatio > 0.05 ? 'ВПЕРЕД' : throttleRatio < -0.05 ? 'РЕВЕРС' : 'СТОП'}
                                 </div>
                                 <div className="mt-4 text-[10px] tracking-[0.32em] text-[#8db0b7]">
-                                    TORSO OFFSET {Math.round(toDegrees(torsoOffset)).toString().padStart(3, ' ')} DEG
+                                    УВОД ТОРСА {Math.round(toDegrees(torsoOffset)).toString().padStart(3, ' ')} ГР
                                 </div>
                             </div>
                         </div>
@@ -399,19 +414,19 @@ export default function App() {
 
                             <div className="grid w-full grid-cols-3 gap-3 text-center">
                                 <div className="rounded-2xl border border-[#8f6a38]/60 bg-black/35 px-4 py-3">
-                                    <div className="text-[10px] tracking-[0.4em] text-[#a1bdc4]">BODY</div>
+                                    <div className="text-[10px] tracking-[0.34em] text-[#a1bdc4]">КОРПУС</div>
                                     <div className="mt-1 text-xl font-bold tracking-[0.22em] text-[#efb768]">
                                         {wrapDegrees(Math.round(toDegrees(gameState.legYaw))).toString().padStart(3, '0')}
                                     </div>
                                 </div>
                                 <div className="rounded-2xl border border-[#8f6a38]/60 bg-black/35 px-4 py-3">
-                                    <div className="text-[10px] tracking-[0.4em] text-[#a1bdc4]">TORSO</div>
+                                    <div className="text-[10px] tracking-[0.34em] text-[#a1bdc4]">ТОРС</div>
                                     <div className="mt-1 text-xl font-bold tracking-[0.22em] text-[#7ee6f0]">
                                         {wrapDegrees(Math.round(toDegrees(gameState.torsoYaw))).toString().padStart(3, '0')}
                                     </div>
                                 </div>
                                 <div className="rounded-2xl border border-[#8f6a38]/60 bg-black/35 px-4 py-3">
-                                    <div className="text-[10px] tracking-[0.4em] text-[#a1bdc4]">TWIST</div>
+                                    <div className="text-[10px] tracking-[0.34em] text-[#a1bdc4]">СКРУТКА</div>
                                     <div className="mt-1 text-xl font-bold tracking-[0.18em] text-[#f3deb5]">
                                         {Math.round(toDegrees(torsoOffset))}
                                     </div>
@@ -421,11 +436,11 @@ export default function App() {
 
                         <div className="flex w-[250px] gap-4">
                             <div className="flex-1 rounded-[26px] border border-[#8f6a38]/70 bg-[linear-gradient(180deg,rgba(13,13,13,0.94),rgba(28,20,15,0.96))] p-4 shadow-[inset_0_0_18px_rgba(0,0,0,0.5)]">
-                                <div className="text-[10px] tracking-[0.4em] text-[#efb768]">MOTION</div>
+                                <div className="text-[10px] tracking-[0.34em] text-[#efb768]">СКОРОСТЬ</div>
                                 <div className="mt-3 text-4xl font-bold tracking-[0.18em] text-[#f3deb5]">
                                     {displaySpeed}
                                 </div>
-                                <div className="mt-1 text-[11px] tracking-[0.32em] text-[#a5bcc2]">KPH</div>
+                                <div className="mt-1 text-[11px] tracking-[0.28em] text-[#a5bcc2]">КМ/Ч</div>
                                 <div className="mt-4 h-2 rounded-full bg-[#241c16]">
                                     <div className="h-full rounded-full bg-[linear-gradient(90deg,#7ee6f0,#efb768)]" style={{ width: `${clamp((gameState.speed / Math.max(gameState.maxSpeed, 0.1)) * 100, 0, 100)}%` }} />
                                 </div>
@@ -433,7 +448,7 @@ export default function App() {
 
                             <div className="flex w-[112px] flex-col gap-3">
                                 <div className="rounded-[24px] border border-[#8f6a38]/70 bg-[linear-gradient(180deg,rgba(13,13,13,0.94),rgba(28,20,15,0.96))] p-3 shadow-[inset_0_0_18px_rgba(0,0,0,0.5)]">
-                                    <div className="text-[9px] tracking-[0.36em] text-[#efb768]">ARMOR</div>
+                                    <div className="text-[9px] tracking-[0.3em] text-[#efb768]">БРОНЯ</div>
                                     <div className="mt-2 h-2 rounded-full bg-[#241c16]">
                                         <div className="h-full rounded-full bg-[linear-gradient(90deg,#d04838,#f0b371)]" style={{ width: `${clamp(hpRatio * 100, 0, 100)}%` }} />
                                     </div>
@@ -441,12 +456,12 @@ export default function App() {
                                 </div>
 
                                 <div className={`rounded-[24px] border p-3 shadow-[inset_0_0_18px_rgba(0,0,0,0.5)] ${gameState.isOverheated ? 'border-[#f25c54]/70 bg-[linear-gradient(180deg,rgba(64,18,18,0.94),rgba(28,12,12,0.96))]' : 'border-[#8f6a38]/70 bg-[linear-gradient(180deg,rgba(13,13,13,0.94),rgba(28,20,15,0.96))]'}`}>
-                                    <div className="text-[9px] tracking-[0.36em] text-[#efb768]">PRESSURE</div>
+                                    <div className="text-[9px] tracking-[0.28em] text-[#efb768]">ДАВЛЕНИЕ</div>
                                     <div className="mt-2 h-2 rounded-full bg-[#241c16]">
                                         <div className={`h-full rounded-full ${gameState.isOverheated ? 'bg-[linear-gradient(90deg,#ff8855,#f25c54)]' : 'bg-[linear-gradient(90deg,#efb768,#7ee6f0)]'}`} style={{ width: `${clamp(steamRatio * 100, 0, 100)}%` }} />
                                     </div>
                                     <div className="mt-2 text-xs tracking-[0.14em] text-[#f3deb5]">
-                                        {gameState.isOverheated ? `VENT ${gameState.overheatTimer.toFixed(1)}S` : `${Math.ceil(gameState.steam)} / ${gameState.maxSteam}`}
+                                        {gameState.isOverheated ? `СБРОС ${gameState.overheatTimer.toFixed(1)}С` : `${Math.ceil(gameState.steam)} / ${gameState.maxSteam}`}
                                     </div>
                                 </div>
                             </div>
