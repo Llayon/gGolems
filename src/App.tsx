@@ -748,7 +748,7 @@ export default function App() {
                 setMyId(createdHostId);
                 setIsHost(true);
                 if (firebaseLobbyStatus.enabled) {
-                    firebaseLobbyRef.current = await registerFirebaseLobby(createdHostId);
+                    firebaseLobbyRef.current = await registerFirebaseLobby(createdHostId, requestedMode);
                 }
                 setLoading(false);
                 return;
@@ -909,6 +909,12 @@ export default function App() {
     const copyTextLabel = translateMessage(t, copyMessage);
     const cameraModeLabel = translateMessage(t, cameraModeMessage);
     const terrainDebugLabel = translateMessage(t, terrainDebugMessage);
+    const directJoinRoom = firebaseRooms.find((room) => room.hostPeerId.trim().toLowerCase() === hostId.trim().toLowerCase());
+    const directJoinModeKey = directJoinRoom
+        ? directJoinRoom.gameMode === 'tdm'
+            ? 'lobby.mode.tdm'
+            : 'lobby.mode.control'
+        : null;
     const sessionSummaryLabel = t(
         sessionMode === 'solo' ? 'pilot.summary.base' : 'pilot.summary.withId',
         sessionMode === 'solo'
@@ -1019,6 +1025,15 @@ export default function App() {
                             >
                                 {t('lobby.connect')}
                             </button>
+                            {hostId.trim() ? (
+                                <div className="text-center text-[11px] tracking-[0.14em] text-[#d7c5a1]">
+                                    {directJoinModeKey
+                                        ? t('lobby.directJoinResolved', { mode: t(directJoinModeKey) })
+                                        : firebaseLobbyStatus.enabled
+                                            ? t('lobby.directJoinUnknown')
+                                            : t('lobby.directJoinHint')}
+                                </div>
+                            ) : null}
                             <div className="text-center text-[11px] tracking-[0.12em] text-[#b9c7c8]">
                                 {t('lobby.directJoinHint')}
                             </div>
@@ -1035,12 +1050,18 @@ export default function App() {
                                                 type="button"
                                                 onClick={() => {
                                                     setHostId(room.hostPeerId);
-                                                    void startGame('client', room.hostPeerId);
+                                                    setSelectedGameMode(room.gameMode);
+                                                    void startGame('client', room.hostPeerId, room.gameMode);
                                                 }}
                                                 className="rounded-xl border border-[#8f6a38]/35 bg-black/35 px-4 py-3 text-left transition-colors hover:border-[#efb768]/60"
                                             >
                                                 <div className="text-[10px] tracking-[0.26em] text-[#8fb8c2]">{t('lobby.roomCode')}</div>
-                                                <div className="mt-1 font-bold tracking-[0.22em] text-[#efb768]">{room.shortCode}</div>
+                                                <div className="mt-1 flex items-center justify-between gap-3">
+                                                    <div className="font-bold tracking-[0.22em] text-[#efb768]">{room.shortCode}</div>
+                                                    <div className="rounded-full border border-[#8f6a38]/45 bg-black/30 px-2 py-1 text-[9px] tracking-[0.18em] text-[#d7c5a1]">
+                                                        {t(room.gameMode === 'tdm' ? 'lobby.mode.tdm' : 'lobby.mode.control')}
+                                                    </div>
+                                                </div>
                                                 <div className="mt-1 truncate text-[11px] tracking-[0.16em] text-[#d7c5a1]">{room.hostPeerId}</div>
                                             </button>
                                         ))}

@@ -21,6 +21,8 @@ const en = {
     'lobby.connect': 'CONNECT',
     'lobby.directJoinTitle': 'DIRECT HOST ID',
     'lobby.directJoinHint': 'Direct join by host ID works even without Firebase.',
+    'lobby.directJoinResolved': 'MODE {{mode}}',
+    'lobby.directJoinUnknown': 'MODE UNKNOWN UNTIL CONNECT',
     'lobby.hostIdPlaceholder': 'HOST ID',
     'lobby.availableRooms': 'OPEN LOBBIES',
     'lobby.roomCode': 'ROOM CODE',

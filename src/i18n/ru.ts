@@ -21,6 +21,8 @@ const ru: typeof en = {
     'lobby.connect': 'ПОДКЛЮЧИТЬСЯ',
     'lobby.directJoinTitle': 'ПРЯМОЙ ID ХОСТА',
     'lobby.directJoinHint': 'Прямое подключение по ID хоста работает и без Firebase.',
+    'lobby.directJoinResolved': 'РЕЖИМ {{mode}}',
+    'lobby.directJoinUnknown': 'РЕЖИМ НЕИЗВЕСТЕН ДО ПОДКЛЮЧЕНИЯ',
     'lobby.hostIdPlaceholder': 'ID ХОСТА',
     'lobby.availableRooms': 'ОТКРЫТЫЕ ЛОББИ',
     'lobby.roomCode': 'КОД КОМНАТЫ',

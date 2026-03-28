@@ -10,6 +10,7 @@ import {
     type Database
 } from 'firebase/database';
 import { getFirebaseDatabase } from './client';
+import type { GameMode } from '../gameplay/types';
 
 const HEARTBEAT_INTERVAL_MS = 15000;
 const ROOM_TTL_MS = 45000;
@@ -19,6 +20,7 @@ export type FirebaseLobbyRoom = {
     id: string;
     shortCode: string;
     hostPeerId: string;
+    gameMode: GameMode;
     status: 'open';
     createdAt: number;
     updatedAt: number;
@@ -33,6 +35,7 @@ export type FirebaseLobbyRegistration = {
 type LobbySnapshotValue = {
     shortCode?: string;
     hostPeerId?: string;
+    gameMode?: GameMode;
     status?: 'open';
     createdAt?: number;
     updatedAt?: number;
@@ -47,7 +50,7 @@ export function isFirebaseLobbyEnabled() {
     return Boolean(getLobbyDatabase());
 }
 
-export async function registerFirebaseLobby(hostPeerId: string): Promise<FirebaseLobbyRegistration | null> {
+export async function registerFirebaseLobby(hostPeerId: string, gameMode: GameMode): Promise<FirebaseLobbyRegistration | null> {
     const database = getLobbyDatabase();
     if (!database || !hostPeerId) return null;
 
@@ -61,6 +64,7 @@ export async function registerFirebaseLobby(hostPeerId: string): Promise<Firebas
     const payload = {
         shortCode: roomId.slice(-6).toUpperCase(),
         hostPeerId,
+        gameMode,
         status: 'open' as const,
         createdAt: now,
         updatedAt: now,
@@ -120,6 +124,7 @@ export function subscribeFirebaseLobbies(onRooms: (rooms: FirebaseLobbyRoom[]) =
                 id: child.key ?? '',
                 shortCode: value.shortCode ?? (child.key ?? '').slice(-6).toUpperCase(),
                 hostPeerId: value.hostPeerId,
+                gameMode: value.gameMode === 'tdm' ? 'tdm' : 'control',
                 status: 'open',
                 createdAt: typeof value.createdAt === 'number' ? value.createdAt : 0,
                 updatedAt: typeof value.updatedAt === 'number' ? value.updatedAt : 0,
