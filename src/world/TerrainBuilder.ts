@@ -49,6 +49,8 @@ export class TerrainBuilder {
     scene: THREE.Scene;
     physics: RAPIER.World;
     halfSize: number;
+    groundRows = 97;
+    groundCols = 97;
 
     constructor(scene: THREE.Scene, physics: RAPIER.World, halfSize: number) {
         this.scene = scene;
@@ -68,38 +70,45 @@ export class TerrainBuilder {
         const nz = z / this.halfSize;
         const radial = Math.sqrt(nx * nx + nz * nz);
 
-        const centerBowl = Math.max(0, 1 - radial / 0.58) * 0.12;
-        const subtleWave = Math.sin(x * 0.028) * Math.cos(z * 0.024) * 0.1;
-        const flankChannel = Math.exp(-Math.pow((x + z * 0.24) / 42, 2)) * 0.08;
+        const centerBowl = Math.max(0, 1 - radial / 0.6) * 0.18;
+        const subtleWave = Math.sin(x * 0.021) * Math.cos(z * 0.018) * 0.22;
+        const flankChannel = Math.exp(-Math.pow((x + z * 0.24) / 42, 2)) * 0.18;
+        const westChannel = Math.exp(-Math.pow((x + 84) / 26, 2) - Math.pow((z - 4) / 84, 2)) * 0.42;
+        const northRise = Math.exp(-Math.pow((z - 94) / 24, 2)) * Math.exp(-Math.pow(x / 76, 2)) * 0.46;
         const eastShelf = Math.max(0, 1 - Math.abs(x - this.halfSize * 0.58) / (this.halfSize * 0.24))
             * Math.max(0, 1 - Math.abs(z) / (this.halfSize * 0.86))
-            * 0.3;
-        const perimeterLift = smoothstep(0.74, 0.98, radial) * 2.9;
+            * 0.62;
+        const perimeterLift = smoothstep(0.74, 0.98, radial) * 4.6;
 
-        return Math.max(0, 0.06 + centerBowl + subtleWave + flankChannel + eastShelf + perimeterLift);
+        return Math.max(0, 0.04 + centerBowl + subtleWave + flankChannel + westChannel + northRise + eastShelf + perimeterLift);
     }
 
     buildGround() {
         const size = this.halfSize * 2;
-        const geometry = new THREE.PlaneGeometry(size, size, 96, 96);
+        const geometry = new THREE.PlaneGeometry(size, size, this.groundCols - 1, this.groundRows - 1);
         geometry.rotateX(-Math.PI / 2);
 
         const positions = geometry.attributes.position as THREE.BufferAttribute;
+        const heights = new Float32Array(this.groundRows * this.groundCols);
         const colors: number[] = [];
 
-        for (let index = 0; index < positions.count; index++) {
-            const x = positions.getX(index);
-            const z = positions.getZ(index);
-            const y = this.sampleHeight(x, z);
-            positions.setY(index, y);
+        for (let row = 0; row < this.groundRows; row++) {
+            const z = -this.halfSize + (row / (this.groundRows - 1)) * size;
+            for (let col = 0; col < this.groundCols; col++) {
+                const x = -this.halfSize + (col / (this.groundCols - 1)) * size;
+                const y = this.sampleHeight(x, z);
+                const vertexIndex = row * this.groundCols + col;
+                positions.setY(vertexIndex, y);
+                heights[col * this.groundRows + row] = y;
 
-            const ridgeFactor = clamp(y / 3.2, 0, 1);
-            _color.setRGB(
-                THREE.MathUtils.lerp(0.17, 0.34, ridgeFactor),
-                THREE.MathUtils.lerp(0.14, 0.28, ridgeFactor),
-                THREE.MathUtils.lerp(0.15, 0.22, ridgeFactor)
-            );
-            colors.push(_color.r, _color.g, _color.b);
+                const ridgeFactor = clamp(y / 4.8, 0, 1);
+                _color.setRGB(
+                    THREE.MathUtils.lerp(0.17, 0.36, ridgeFactor),
+                    THREE.MathUtils.lerp(0.14, 0.29, ridgeFactor),
+                    THREE.MathUtils.lerp(0.15, 0.23, ridgeFactor)
+                );
+                colors.push(_color.r, _color.g, _color.b);
+            }
         }
 
         geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
@@ -118,7 +127,12 @@ export class TerrainBuilder {
         this.collisionMeshes.push(ground);
 
         const groundBody = this.physics.createRigidBody(RAPIER.RigidBodyDesc.fixed());
-        const groundCollider = RAPIER.ColliderDesc.cuboid(this.halfSize, 0.1, this.halfSize);
+        const groundCollider = RAPIER.ColliderDesc.heightfield(
+            this.groundRows,
+            this.groundCols,
+            heights,
+            { x: size, y: 1, z: size }
+        );
         this.physics.createCollider(groundCollider, groundBody);
     }
 
@@ -161,7 +175,7 @@ export class TerrainBuilder {
             roughness: config.roughness ?? 0.95
         });
         const mesh = new THREE.Mesh(geometry, material);
-        mesh.position.set(config.x, config.y, config.z);
+        mesh.position.set(config.x, this.sampleHeight(config.x, config.z) + config.y, config.z);
         mesh.rotation.set(config.rotationX ?? 0, config.rotationY ?? 0, config.rotationZ ?? 0);
         markShadows(mesh);
         this.scene.add(mesh);
@@ -185,7 +199,7 @@ export class TerrainBuilder {
             roughness: config.roughness ?? 0.96
         });
         const mesh = new THREE.Mesh(geometry, material);
-        mesh.position.set(config.x, config.y, config.z);
+        mesh.position.set(config.x, this.sampleHeight(config.x, config.z) + config.y, config.z);
         mesh.rotation.y = config.rotationY ?? 0;
         markShadows(mesh);
         this.scene.add(mesh);

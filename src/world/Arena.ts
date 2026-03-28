@@ -49,11 +49,15 @@ export class Arena {
         this.createRockArch(scene, physics, 92, -88, -0.16, 1.14);
         this.createPressureTower(scene, physics, 6, 108, 1.0);
 
-        this.propManager = new PropManager(scene, physics);
+        this.propManager = new PropManager(scene, physics, this.surfaceY.bind(this));
     }
 
     getCollisionMeshes() {
         return [...this.terrain.getCollisionMeshes(), ...this.meshes, ...this.propManager.getCollisionMeshes()];
+    }
+
+    surfaceY(x: number, z: number) {
+        return this.terrain.sampleHeight(x, z);
     }
 
     createCombatCover(scene: THREE.Scene, physics: RAPIER.World) {
@@ -86,7 +90,7 @@ export class Arena {
 
     createSteamYard(scene: THREE.Scene, physics: RAPIER.World, x: number, z: number, rotationY = 0, scale = 1) {
         const root = new THREE.Group();
-        root.position.set(x, 0, z);
+        root.position.set(x, this.surfaceY(x, z), z);
         root.rotation.y = rotationY;
         scene.add(root);
 
@@ -148,7 +152,7 @@ export class Arena {
 
     createRuinQuarter(scene: THREE.Scene, physics: RAPIER.World, x: number, z: number, rotationY = 0, scale = 1) {
         const root = new THREE.Group();
-        root.position.set(x, 0.2, z);
+        root.position.set(x, this.surfaceY(x, z) + 0.2, z);
         root.rotation.y = rotationY;
         scene.add(root);
 
@@ -212,7 +216,7 @@ export class Arena {
 
     createRockArch(scene: THREE.Scene, physics: RAPIER.World, x: number, z: number, rotationY = 0, scale = 1) {
         const root = new THREE.Group();
-        root.position.set(x, 0.6, z);
+        root.position.set(x, this.surfaceY(x, z) + 0.6, z);
         root.rotation.y = rotationY;
         scene.add(root);
 
@@ -264,7 +268,7 @@ export class Arena {
 
     createPressureTower(scene: THREE.Scene, physics: RAPIER.World, x: number, z: number, scale = 1) {
         const root = new THREE.Group();
-        root.position.set(x, 0.4, z);
+        root.position.set(x, this.surfaceY(x, z) + 0.4, z);
         scene.add(root);
 
         const ironMaterial = new THREE.MeshStandardMaterial({ color: 0x4e4035, roughness: 0.95 });
@@ -327,7 +331,7 @@ export class Arena {
         const geo = new THREE.BoxGeometry(config.w, config.h, config.d);
         const mat = new THREE.MeshStandardMaterial({ color: config.color, roughness: 0.94 });
         const mesh = new THREE.Mesh(geo, mat);
-        mesh.position.set(config.x, config.yOffset ?? config.h / 2, config.z);
+        mesh.position.set(config.x, this.surfaceY(config.x, config.z) + (config.yOffset ?? config.h / 2), config.z);
         mesh.rotation.y = config.rotationY ?? 0;
         mesh.castShadow = true;
         mesh.receiveShadow = true;

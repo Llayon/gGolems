@@ -122,10 +122,12 @@ export class PropManager {
     fxEvents: PropFxEvent[] = [];
     scene: THREE.Scene;
     physics: RAPIER.World;
+    heightAt: (x: number, z: number) => number;
 
-    constructor(scene: THREE.Scene, physics: RAPIER.World) {
+    constructor(scene: THREE.Scene, physics: RAPIER.World, heightAt?: (x: number, z: number) => number) {
         this.scene = scene;
         this.physics = physics;
+        this.heightAt = heightAt ?? (() => 0);
         this.addScaleObjects();
     }
 
@@ -138,7 +140,7 @@ export class PropManager {
     addHouses() {
         HOUSE_LAYOUT.forEach((layout, index) => {
             const root = new THREE.Group();
-            root.position.set(layout.x, 0, layout.z);
+            root.position.set(layout.x, this.heightAt(layout.x, layout.z), layout.z);
             root.rotation.y = layout.rot ?? 0;
             this.scene.add(root);
 
@@ -261,7 +263,7 @@ export class PropManager {
                 new THREE.CapsuleGeometry(0.15, 0.5, 2, 4),
                 new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 1 })
             );
-            person.position.set(layout.x, 0.4, layout.z);
+            person.position.set(layout.x, this.heightAt(layout.x, layout.z) + 0.4, layout.z);
             person.castShadow = true;
             this.scene.add(person);
         }
@@ -271,7 +273,7 @@ export class PropManager {
         TREE_LAYOUT.forEach((layout, index) => {
             const scale = layout.scale ?? 1;
             const root = new THREE.Group();
-            root.position.set(layout.x, 0, layout.z);
+            root.position.set(layout.x, this.heightAt(layout.x, layout.z), layout.z);
             this.scene.add(root);
 
             const barkMat = new THREE.MeshStandardMaterial({ color: 0x4a3728, roughness: 1 });
@@ -322,7 +324,7 @@ export class PropManager {
 
             markShadows(root);
 
-            const bodyDesc = RAPIER.RigidBodyDesc.fixed().setTranslation(layout.x, 1.7 * scale, layout.z);
+            const bodyDesc = RAPIER.RigidBodyDesc.fixed().setTranslation(layout.x, root.position.y + 1.7 * scale, layout.z);
             const body = this.physics.createRigidBody(bodyDesc);
             const colliderDesc = RAPIER.ColliderDesc.cylinder(1.7 * scale, 0.42 * scale);
             this.physics.createCollider(colliderDesc, body);
@@ -351,7 +353,7 @@ export class PropManager {
     createHouseBody(position: THREE.Vector3, rotationY: number) {
         const houseRotation = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rotationY);
         const bodyDesc = RAPIER.RigidBodyDesc.fixed()
-            .setTranslation(position.x, 1.6, position.z)
+            .setTranslation(position.x, position.y + 1.6, position.z)
             .setRotation({
                 x: houseRotation.x,
                 y: houseRotation.y,
