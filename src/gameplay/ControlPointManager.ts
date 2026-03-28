@@ -9,10 +9,23 @@ type UnitPresence = {
 
 type ControlPointRecord = ControlPointView & {
     position: THREE.Vector3;
-    ring: THREE.Mesh;
+    outerRing: THREE.Mesh;
+    fill: THREE.Mesh;
+    progressRing: THREE.Mesh;
     beacon: THREE.Mesh;
+    beaconCap: THREE.Mesh;
     label: THREE.Sprite;
+    contested: boolean;
+    blueInside: number;
+    redInside: number;
 };
+
+const ARC_START = -Math.PI / 2;
+
+function createProgressGeometry(progress: number) {
+    const clamped = Math.max(0.001, Math.min(1, progress));
+    return new THREE.RingGeometry(8.55, 10.75, 48, 1, ARC_START, Math.PI * 2 * clamped);
+}
 
 function colorForOwner(owner: ControlOwner) {
     switch (owner) {
@@ -62,23 +75,54 @@ export class ControlPointManager {
     scoreTickInterval = 1;
     scorePerOwnedPoint = 1;
     scoreTimer = 0;
+    time = 0;
 
     constructor(scene: THREE.Scene, positions: Record<ControlPointId, THREE.Vector3>) {
         this.points = (Object.entries(positions) as Array<[ControlPointId, THREE.Vector3]>).map(([id, position]) => {
-            const ring = new THREE.Mesh(
-                new THREE.RingGeometry(9.6, 12.6, 48),
+            const outerRing = new THREE.Mesh(
+                new THREE.RingGeometry(11.15, 12.75, 56),
                 new THREE.MeshBasicMaterial({
                     color: 0xe0b36c,
                     transparent: true,
-                    opacity: 0.32,
+                    opacity: 0.38,
                     side: THREE.DoubleSide,
                     depthWrite: false
                 })
             );
-            ring.rotation.x = -Math.PI / 2;
-            ring.position.copy(position);
-            ring.position.y += 0.22;
-            scene.add(ring);
+            outerRing.rotation.x = -Math.PI / 2;
+            outerRing.position.copy(position);
+            outerRing.position.y += 0.2;
+            scene.add(outerRing);
+
+            const fill = new THREE.Mesh(
+                new THREE.CircleGeometry(8.45, 44),
+                new THREE.MeshBasicMaterial({
+                    color: 0xe0b36c,
+                    transparent: true,
+                    opacity: 0.08,
+                    side: THREE.DoubleSide,
+                    depthWrite: false
+                })
+            );
+            fill.rotation.x = -Math.PI / 2;
+            fill.position.copy(position);
+            fill.position.y += 0.16;
+            scene.add(fill);
+
+            const progressRing = new THREE.Mesh(
+                createProgressGeometry(0.02),
+                new THREE.MeshBasicMaterial({
+                    color: 0xe0b36c,
+                    transparent: true,
+                    opacity: 0.52,
+                    side: THREE.DoubleSide,
+                    depthWrite: false
+                })
+            );
+            progressRing.rotation.x = -Math.PI / 2;
+            progressRing.position.copy(position);
+            progressRing.position.y += 0.24;
+            scene.add(progressRing);
 
             const beacon = new THREE.Mesh(
                 new THREE.CylinderGeometry(0.34, 0.34, 9.6, 10),
@@ -95,9 +139,24 @@ export class ControlPointManager {
             beacon.castShadow = true;
             scene.add(beacon);
 
+            const beaconCap = new THREE.Mesh(
+                new THREE.SphereGeometry(0.9, 12, 12),
+                new THREE.MeshStandardMaterial({
+                    color: 0x7c6042,
+                    emissive: 0xe0b36c,
+                    emissiveIntensity: 0.9,
+                    roughness: 0.34,
+                    metalness: 0.12
+                })
+            );
+            beaconCap.position.copy(position);
+            beaconCap.position.y += 9.6;
+            beaconCap.castShadow = true;
+            scene.add(beaconCap);
+
             const label = createLabelSprite(id);
             label.position.copy(position);
-            label.position.y += 10.4;
+            label.position.y += 11.6;
             scene.add(label);
 
             return {
@@ -106,9 +165,16 @@ export class ControlPointManager {
                 capture: 0,
                 radius: 12.6,
                 position: position.clone(),
-                ring,
+                outerRing,
+                fill,
+                progressRing,
                 beacon,
+                beaconCap,
                 label
+                ,
+                contested: false,
+                blueInside: 0,
+                redInside: 0
             };
         });
     }
@@ -128,6 +194,7 @@ export class ControlPointManager {
     }
 
     update(dt: number, units: UnitPresence[]) {
+        this.time += dt;
         for (const point of this.points) {
             let blueInside = 0;
             let redInside = 0;
@@ -139,6 +206,10 @@ export class ControlPointManager {
                 if (unit.team === 'blue') blueInside++;
                 else redInside++;
             }
+
+            point.blueInside = blueInside;
+            point.redInside = redInside;
+            point.contested = blueInside > 0 && redInside > 0;
 
             if (blueInside > 0 && redInside === 0) {
                 point.capture = Math.min(1, point.capture + this.captureRate * dt);
@@ -174,20 +245,46 @@ export class ControlPointManager {
     }
 
     applyVisual(point: ControlPointRecord) {
-        const owner = point.owner !== 'neutral'
+        const owner = point.contested
+            ? 'neutral'
+            : point.owner !== 'neutral'
             ? point.owner
             : point.capture > 0.04
                 ? 'blue'
                 : point.capture < -0.04
                     ? 'red'
                     : 'neutral';
-        const color = colorForOwner(owner);
+        const displayOwner = point.contested ? 'neutral' : owner;
+        const color = point.contested ? new THREE.Color(0xf2bc63) : colorForOwner(displayOwner);
         const progress = Math.min(1, Math.abs(point.capture));
-        (point.ring.material as THREE.MeshBasicMaterial).color.copy(color);
-        (point.ring.material as THREE.MeshBasicMaterial).opacity = 0.22 + progress * 0.34;
+        const pulse = 0.82 + Math.sin(this.time * 2.8 + point.position.x * 0.04 + point.position.z * 0.03) * 0.18;
+        const outerRingMat = point.outerRing.material as THREE.MeshBasicMaterial;
+        outerRingMat.color.copy(color);
+        outerRingMat.opacity = point.contested ? 0.5 + Math.sin(this.time * 6) * 0.12 : 0.24 + progress * 0.22 * pulse;
+
+        const fillMat = point.fill.material as THREE.MeshBasicMaterial;
+        fillMat.color.copy(color);
+        fillMat.opacity = point.contested ? 0.14 : 0.04 + progress * 0.16;
+
+        const progressMat = point.progressRing.material as THREE.MeshBasicMaterial;
+        progressMat.color.copy(color);
+        progressMat.opacity = progress > 0.02 ? (point.contested ? 0.48 : 0.38 + progress * 0.34) : 0;
+        const nextGeometry = createProgressGeometry(progress > 0.02 ? progress : 0.02);
+        point.progressRing.geometry.dispose();
+        point.progressRing.geometry = nextGeometry;
+
         const beaconMat = point.beacon.material as THREE.MeshStandardMaterial;
         beaconMat.emissive.copy(color);
-        beaconMat.emissiveIntensity = 0.45 + progress * 1.1;
+        beaconMat.emissiveIntensity = (0.45 + progress * 1.1) * pulse;
+        beaconMat.color.set(point.contested ? 0x6d4e34 : 0x4e4035);
+
+        const capMat = point.beaconCap.material as THREE.MeshStandardMaterial;
+        capMat.emissive.copy(color);
+        capMat.color.set(point.contested ? 0xd39957 : color.offsetHSL(0, 0.02, -0.16));
+        capMat.emissiveIntensity = (0.8 + progress * 1.4) * pulse;
+        point.beaconCap.scale.setScalar(point.contested ? 1.08 : 0.92 + progress * 0.2);
+
         point.label.material.color = color;
+        point.label.position.y = point.position.y + 11.4 + progress * 0.6;
     }
 }
