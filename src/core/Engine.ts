@@ -652,7 +652,9 @@ export class Game {
             hitTargetMaxHp: this.hitTargetMaxHp,
             sections: { ...golemState.sections },
             maxSections: { ...golemState.maxSections },
-            radarContacts: this.buildRadarContacts()
+            radarContacts: this.buildRadarContacts(),
+            terrainColliderMode: this.world.terrain.groundColliderMode,
+            terrainColliderError: this.world.terrain.groundColliderError
         });
 
         this.renderer.render();

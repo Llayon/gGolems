@@ -42,6 +42,8 @@ type GameHudState = {
     sections: SectionState;
     maxSections: SectionState;
     radarContacts: RadarContact[];
+    terrainColliderMode: 'heightfield' | 'trimeshFallback';
+    terrainColliderError: string;
 };
 
 const defaultSections: SectionState = {
@@ -76,7 +78,9 @@ const initialGameState: GameHudState = {
     hitTargetMaxHp: 100,
     sections: { ...defaultSections },
     maxSections: { ...defaultSections },
-    radarContacts: []
+    radarContacts: [],
+    terrainColliderMode: 'heightfield',
+    terrainColliderError: ''
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -549,6 +553,15 @@ export default function App() {
             : 'КОПИРОВАТЬ';
 
     const cameraModeLabel = gameState.cameraMode === 'thirdPerson' ? 'VIEW 3P' : 'VIEW FP';
+    const terrainDebugLabel = gameState.terrainColliderMode === 'heightfield'
+        ? 'ГРУНТ HF'
+        : 'ГРУНТ TM FALLBACK';
+    const terrainDebugTone = gameState.terrainColliderMode === 'heightfield'
+        ? 'text-[#8fb8c2]'
+        : 'text-[#f3b56c]';
+    const terrainDebugError = gameState.terrainColliderError
+        ? gameState.terrainColliderError.slice(0, 72)
+        : '';
     const showCockpitDecor = !isTouchDevice && gameState.cameraMode === 'cockpit';
     const hostBadgeClass = 'pointer-events-auto absolute right-4 top-4 z-30 flex items-center gap-3 rounded-2xl border border-[#8f6a38]/45 bg-[rgba(10,10,10,0.78)] px-4 py-3 text-[#e1cea7] shadow-[0_0_22px_rgba(0,0,0,0.32)] backdrop-blur-sm';
     const pilotPanelAnchorClass = 'left-4 top-4';
@@ -670,6 +683,10 @@ export default function App() {
                                         <p className="mt-2 text-xs tracking-[0.22em] text-[#8fb8c2]">
                                             {sessionMode === 'solo' ? `${sessionLabel} | ${cameraModeLabel}` : `${sessionLabel} | ${cameraModeLabel} | ID ${myId || 'СИНХРОНИЗАЦИЯ'}`}
                                         </p>
+                                        <div className={`mt-2 text-[10px] tracking-[0.24em] ${terrainDebugTone}`}>
+                                            {terrainDebugLabel}
+                                            {terrainDebugError ? ` | ${terrainDebugError}` : ''}
+                                        </div>
                                         {sessionMode === 'host' && myId ? (
                                             <button
                                                 type="button"

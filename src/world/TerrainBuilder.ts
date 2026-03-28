@@ -51,6 +51,8 @@ export class TerrainBuilder {
     halfSize: number;
     groundRows = 97;
     groundCols = 97;
+    groundColliderMode: 'heightfield' | 'trimeshFallback' = 'heightfield';
+    groundColliderError = '';
 
     constructor(scene: THREE.Scene, physics: RAPIER.World, halfSize: number) {
         this.scene = scene;
@@ -139,7 +141,11 @@ export class TerrainBuilder {
             );
             const groundBody = this.physics.createRigidBody(RAPIER.RigidBodyDesc.fixed());
             this.physics.createCollider(groundCollider, groundBody);
+            this.groundColliderMode = 'heightfield';
+            this.groundColliderError = '';
         } catch (error) {
+            this.groundColliderMode = 'trimeshFallback';
+            this.groundColliderError = error instanceof Error ? error.message : String(error);
             console.warn('Heightfield collider failed, falling back to trimesh ground.', error);
 
             const positionAttr = geometry.attributes.position;
