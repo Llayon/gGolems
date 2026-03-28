@@ -69,7 +69,23 @@ Expected result:
 - if Firebase env is valid, the lobby screen also shows public rooms
 - hosted rooms publish a heartbeat and disappear from the public list after TTL expiry
 
-## 6. Recommended next step
+## 6. Enable Firebase on GitHub Pages
+
+If you want the public lobby list to work on `GitHub Pages`, add the same values in:
+
+- `GitHub repository -> Settings -> Secrets and variables -> Actions`
+
+Create either repository `Variables` or `Secrets` for:
+
+- `VITE_FIREBASE_API_KEY`
+- `VITE_FIREBASE_AUTH_DOMAIN`
+- `VITE_FIREBASE_DATABASE_URL`
+- `VITE_FIREBASE_PROJECT_ID`
+- `VITE_FIREBASE_APP_ID`
+
+The Pages workflow is already wired to read them during `npm run build`.
+
+## 7. Recommended next step
 
 After the first successful connection:
 

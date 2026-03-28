@@ -43,6 +43,9 @@ Hosted rooms publish a small heartbeat and expire from the visible public list a
 Full setup guide:
 - [docs/firebase-lobby-setup.md](docs/firebase-lobby-setup.md)
 
+To enable Firebase on GitHub Pages too, add the same `VITE_FIREBASE_*` values in GitHub repository `Settings -> Secrets and variables -> Actions`.
+The workflow prefers repository `Variables` and falls back to `Secrets`.
+
 ## GitHub Pages
 
 This repo is configured to deploy to GitHub Pages from the `main` branch using GitHub Actions.
