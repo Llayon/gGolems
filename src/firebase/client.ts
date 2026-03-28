@@ -6,6 +6,8 @@ type FirebaseLobbyStatus = {
     missingKeys: string[];
 };
 
+const isDev = Boolean((import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV);
+
 const env = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env ?? {};
 
 const config = {
@@ -31,6 +33,8 @@ let database: Database | null = null;
 if (status.enabled) {
     app = getApps().length > 0 ? getApp() : initializeApp(config as Record<string, string>);
     database = getDatabase(app);
+} else if (isDev && typeof console !== 'undefined') {
+    console.info('[firebase] Lobby registry disabled. Missing env keys:', status.missingKeys.join(', '));
 }
 
 export function getFirebaseLobbyStatus() {
@@ -40,4 +44,3 @@ export function getFirebaseLobbyStatus() {
 export function getFirebaseDatabase() {
     return database;
 }
-

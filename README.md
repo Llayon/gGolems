@@ -40,6 +40,9 @@ If these variables are left empty, the game still works, but the public lobby li
 
 Hosted rooms publish a small heartbeat and expire from the visible public list automatically if they stop updating.
 
+Full setup guide:
+- [docs/firebase-lobby-setup.md](docs/firebase-lobby-setup.md)
+
 ## GitHub Pages
 
 This repo is configured to deploy to GitHub Pages from the `main` branch using GitHub Actions.
