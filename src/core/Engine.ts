@@ -272,8 +272,7 @@ export class Game {
                 // Host sent state to client
                 if (data.dummy) {
                     if (this.dummy.hp > data.dummy.hp) {
-                        this.dummy.mat.emissive.setHex(0xffffff);
-                        this.dummy.damageTimer = 0.1;
+                        this.dummy.flashDamage();
                     }
                     this.dummy.hp = data.dummy.hp;
                     this.dummy.targetPos.set(data.dummy.x, data.dummy.y, data.dummy.z);
