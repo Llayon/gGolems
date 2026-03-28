@@ -6,6 +6,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { initGame } from './core/Engine';
 import type { NetworkStartupErrorCode } from './network/NetworkManager';
+import { getFirebaseLobbyStatus } from './firebase/client';
+import { registerFirebaseLobby, subscribeFirebaseLobbies, type FirebaseLobbyRegistration, type FirebaseLobbyRoom } from './firebase/lobbyRegistry';
 import { CombatOverlayCore } from './ui/mobile/CombatOverlayCore';
 import { MobileCombatLayout } from './ui/mobile/MobileCombatLayout';
 import { MobileSettingsOverlay } from './ui/mobile/MobileSettingsOverlay';
@@ -421,6 +423,7 @@ function SectionArmorDisplay(props: { sections: SectionState; maxSections: Secti
 export default function App() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const copyResetRef = useRef<number | null>(null);
+    const firebaseLobbyRef = useRef<FirebaseLobbyRegistration | null>(null);
     const [locale, setLocale] = useState<Locale>(() => getInitialLocale());
     const [loading, setLoading] = useState(false);
     const [inLobby, setInLobby] = useState(true);
@@ -437,7 +440,9 @@ export default function App() {
     const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
     const [gameInstance, setGameInstance] = useState<any>(null);
     const [gameState, setGameState] = useState<GameHudState>(initialGameState);
+    const [firebaseRooms, setFirebaseRooms] = useState<FirebaseLobbyRoom[]>([]);
     const t = createTranslator(locale);
+    const firebaseLobbyStatus = getFirebaseLobbyStatus();
 
     const showCopyState = (nextState: 'copied' | 'error') => {
         setCopyState(nextState);
@@ -471,6 +476,8 @@ export default function App() {
             if (game) {
                 game.stop();
             }
+            void firebaseLobbyRef.current?.unregister();
+            firebaseLobbyRef.current = null;
             setGameInstance(null);
             setSessionMode('solo');
             setIsHost(false);
@@ -514,6 +521,9 @@ export default function App() {
                 );
                 setMyId(createdHostId);
                 setIsHost(true);
+                if (firebaseLobbyStatus.enabled) {
+                    firebaseLobbyRef.current = await registerFirebaseLobby(createdHostId);
+                }
                 setLoading(false);
                 return;
             }
@@ -570,6 +580,22 @@ export default function App() {
     useEffect(() => {
         saveLocale(locale);
     }, [locale]);
+
+    useEffect(() => {
+        if (!inLobby || !firebaseLobbyStatus.enabled) {
+            setFirebaseRooms([]);
+            return;
+        }
+
+        return subscribeFirebaseLobbies(setFirebaseRooms);
+    }, [firebaseLobbyStatus.enabled, inLobby]);
+
+    useEffect(() => {
+        return () => {
+            void firebaseLobbyRef.current?.unregister();
+            firebaseLobbyRef.current = null;
+        };
+    }, []);
 
     useEffect(() => {
         try {
@@ -731,6 +757,39 @@ export default function App() {
                                 {t('lobby.connect')}
                             </button>
                         </div>
+
+                        {firebaseLobbyStatus.enabled ? (
+                            <div className="flex flex-col gap-2 border-t border-[#8f6a38]/30 pt-4">
+                                <div className="text-center text-xs tracking-[0.28em] text-[#8fb8c2]">{t('lobby.availableRooms')}</div>
+                                {firebaseRooms.length > 0 ? (
+                                    <div className="flex max-h-56 flex-col gap-2 overflow-y-auto pr-1">
+                                        {firebaseRooms.slice(0, 8).map((room) => (
+                                            <button
+                                                key={room.id}
+                                                type="button"
+                                                onClick={() => {
+                                                    setHostId(room.hostPeerId);
+                                                    void startGame('client', room.hostPeerId);
+                                                }}
+                                                className="rounded-xl border border-[#8f6a38]/35 bg-black/35 px-4 py-3 text-left transition-colors hover:border-[#efb768]/60"
+                                            >
+                                                <div className="text-[10px] tracking-[0.26em] text-[#8fb8c2]">{t('lobby.roomCode')}</div>
+                                                <div className="mt-1 font-bold tracking-[0.22em] text-[#efb768]">{room.shortCode}</div>
+                                                <div className="mt-1 truncate text-[11px] tracking-[0.16em] text-[#d7c5a1]">{room.hostPeerId}</div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="rounded-xl border border-[#8f6a38]/20 bg-black/25 px-4 py-3 text-center text-[11px] tracking-[0.18em] text-[#b9c7c8]">
+                                        {t('lobby.noRooms')}
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="rounded-xl border border-[#8f6a38]/20 bg-black/25 px-4 py-3 text-center text-[11px] tracking-[0.18em] text-[#b9c7c8]">
+                                {t('lobby.firebaseDisabled')}
+                            </div>
+                        )}
                     </div>
                 </div>
             ) : null}

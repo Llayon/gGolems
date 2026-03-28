@@ -20,6 +20,10 @@ const en = {
     'lobby.createSession': 'CREATE SESSION',
     'lobby.connect': 'CONNECT',
     'lobby.hostIdPlaceholder': 'HOST ID',
+    'lobby.availableRooms': 'OPEN LOBBIES',
+    'lobby.roomCode': 'ROOM CODE',
+    'lobby.noRooms': 'NO OPEN LOBBIES',
+    'lobby.firebaseDisabled': 'FIREBASE LOBBY IS DISABLED',
     'lobby.sealingCabin': 'SEALING COCKPIT',
 
     'session.solo': 'LOCAL MATCH',

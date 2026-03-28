@@ -20,6 +20,10 @@ const ru: typeof en = {
     'lobby.createSession': 'СОЗДАТЬ СЕССИЮ',
     'lobby.connect': 'ПОДКЛЮЧИТЬСЯ',
     'lobby.hostIdPlaceholder': 'ID ХОСТА',
+    'lobby.availableRooms': 'ОТКРЫТЫЕ ЛОББИ',
+    'lobby.roomCode': 'КОД КОМНАТЫ',
+    'lobby.noRooms': 'ОТКРЫТЫХ ЛОББИ НЕТ',
+    'lobby.firebaseDisabled': 'FIREBASE ЛОББИ ОТКЛЮЧЕНО',
     'lobby.sealingCabin': 'ГЕРМЕТИЗАЦИЯ КАБИНЫ',
 
     'session.solo': 'ЛОКАЛЬНЫЙ БОЙ',

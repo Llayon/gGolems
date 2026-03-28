@@ -19,6 +19,20 @@ View your app in AI Studio: https://ai.studio/apps/f5a11595-7575-42f3-8c21-db135
 3. Run the app:
    `npm run dev`
 
+## Firebase Lobby
+
+The game can use Firebase Realtime Database as a lightweight lobby registry while gameplay remains peer-to-peer via PeerJS.
+
+To enable Firebase-backed lobbies, fill these values in [.env.local](.env.local):
+
+- `VITE_FIREBASE_API_KEY`
+- `VITE_FIREBASE_AUTH_DOMAIN`
+- `VITE_FIREBASE_DATABASE_URL`
+- `VITE_FIREBASE_PROJECT_ID`
+- `VITE_FIREBASE_APP_ID`
+
+If these variables are left empty, the game still works, but the public lobby list in the main menu stays disabled.
+
 ## GitHub Pages
 
 This repo is configured to deploy to GitHub Pages from the `main` branch using GitHub Actions.
