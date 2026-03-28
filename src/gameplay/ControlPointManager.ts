@@ -14,6 +14,9 @@ type ControlPointRecord = ControlPointView & {
     progressRing: THREE.Mesh;
     beacon: THREE.Mesh;
     beaconCap: THREE.Mesh;
+    beam: THREE.Mesh;
+    bannerLeft: THREE.Mesh;
+    bannerRight: THREE.Mesh;
     label: THREE.Sprite;
     contested: boolean;
     blueInside: number;
@@ -154,6 +157,44 @@ export class ControlPointManager {
             beaconCap.castShadow = true;
             scene.add(beaconCap);
 
+            const beam = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.95, 1.8, 20, 14, 1, true),
+                new THREE.MeshBasicMaterial({
+                    color: 0xe0b36c,
+                    transparent: true,
+                    opacity: 0.14,
+                    side: THREE.DoubleSide,
+                    depthWrite: false
+                })
+            );
+            beam.position.copy(position);
+            beam.position.y += 10.5;
+            scene.add(beam);
+
+            const bannerMaterial = new THREE.MeshStandardMaterial({
+                color: 0x7a5c3d,
+                emissive: 0xe0b36c,
+                emissiveIntensity: 0.55,
+                roughness: 0.74,
+                metalness: 0.12,
+                side: THREE.DoubleSide
+            });
+            const bannerLeft = new THREE.Mesh(new THREE.PlaneGeometry(2.5, 4.8), bannerMaterial);
+            bannerLeft.position.copy(position);
+            bannerLeft.position.y += 7.4;
+            bannerLeft.position.x -= 2.1;
+            bannerLeft.rotation.y = Math.PI / 2;
+            bannerLeft.castShadow = true;
+            scene.add(bannerLeft);
+
+            const bannerRight = new THREE.Mesh(new THREE.PlaneGeometry(2.5, 4.8), bannerMaterial.clone());
+            bannerRight.position.copy(position);
+            bannerRight.position.y += 7.4;
+            bannerRight.position.x += 2.1;
+            bannerRight.rotation.y = -Math.PI / 2;
+            bannerRight.castShadow = true;
+            scene.add(bannerRight);
+
             const label = createLabelSprite(id);
             label.position.copy(position);
             label.position.y += 11.6;
@@ -170,6 +211,9 @@ export class ControlPointManager {
                 progressRing,
                 beacon,
                 beaconCap,
+                beam,
+                bannerLeft,
+                bannerRight,
                 label
                 ,
                 contested: false,
@@ -283,6 +327,33 @@ export class ControlPointManager {
         capMat.color.set(point.contested ? 0xd39957 : color.offsetHSL(0, 0.02, -0.16));
         capMat.emissiveIntensity = (0.8 + progress * 1.4) * pulse;
         point.beaconCap.scale.setScalar(point.contested ? 1.08 : 0.92 + progress * 0.2);
+
+        const beamMat = point.beam.material as THREE.MeshBasicMaterial;
+        beamMat.color.copy(color);
+        beamMat.opacity = point.contested
+            ? 0.18 + Math.sin(this.time * 7) * 0.05
+            : 0.06 + progress * 0.18 * pulse;
+        point.beam.scale.set(
+            0.92 + progress * 0.22,
+            0.96 + progress * 0.28,
+            0.92 + progress * 0.22
+        );
+
+        const bannerTilt = Math.sin(this.time * 3.2 + point.position.x * 0.04) * 0.08;
+        const bannerTone = point.contested ? new THREE.Color(0xd39957) : color.clone().offsetHSL(0, 0.03, -0.08);
+        const bannerLeftMat = point.bannerLeft.material as THREE.MeshStandardMaterial;
+        bannerLeftMat.color.copy(bannerTone);
+        bannerLeftMat.emissive.copy(color);
+        bannerLeftMat.emissiveIntensity = 0.32 + progress * 0.7;
+        point.bannerLeft.rotation.set(0, Math.PI / 2 + bannerTilt, -0.08 - bannerTilt * 0.5);
+        point.bannerLeft.position.y = point.position.y + 7.4 + progress * 0.45;
+
+        const bannerRightMat = point.bannerRight.material as THREE.MeshStandardMaterial;
+        bannerRightMat.color.copy(bannerTone);
+        bannerRightMat.emissive.copy(color);
+        bannerRightMat.emissiveIntensity = 0.32 + progress * 0.7;
+        point.bannerRight.rotation.set(0, -Math.PI / 2 - bannerTilt, 0.08 + bannerTilt * 0.5);
+        point.bannerRight.position.y = point.position.y + 7.4 + progress * 0.45;
 
         point.label.material.color = color;
         point.label.position.y = point.position.y + 11.4 + progress * 0.6;
