@@ -43,6 +43,7 @@ type RockMoundConfig = {
 const _quat = new THREE.Quaternion();
 const _euler = new THREE.Euler();
 const _color = new THREE.Color();
+const _normal = new THREE.Vector3();
 const TERRAIN_SPAWN_PADS = [
     { x: -46, z: 92, radius: 16, targetY: 2.4 },
     { x: 46, z: -92, radius: 16, targetY: 2.4 },
@@ -59,6 +60,11 @@ function clamp(value: number, min: number, max: number) {
 function smoothstep(edge0: number, edge1: number, value: number) {
     const t = clamp((value - edge0) / (edge1 - edge0), 0, 1);
     return t * t * (3 - 2 * t);
+}
+
+function hash2(x: number, y: number) {
+    const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453123;
+    return s - Math.floor(s);
 }
 
 function markShadows(mesh: THREE.Mesh) {
@@ -87,6 +93,47 @@ export class TerrainBuilder {
 
     getCollisionMeshes() {
         return this.collisionMeshes;
+    }
+
+    createGroundTexture() {
+        const canvas = document.createElement('canvas');
+        canvas.width = 256;
+        canvas.height = 256;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+            return null;
+        }
+
+        const image = ctx.createImageData(canvas.width, canvas.height);
+        const data = image.data;
+
+        for (let y = 0; y < canvas.height; y++) {
+            for (let x = 0; x < canvas.width; x++) {
+                const i = (y * canvas.width + x) * 4;
+                const nx = x / canvas.width;
+                const ny = y / canvas.height;
+                const grain = hash2(x * 0.9, y * 1.1);
+                const speckle = hash2(x * 2.6 + 18, y * 2.2 + 7);
+                const streak = Math.sin((nx * 8.5 + ny * 4.2) * Math.PI) * 0.5 + 0.5;
+                const dryDust = smoothstep(0.38, 0.92, ny) * 0.22;
+                const tone = 0.38 + grain * 0.18 + streak * 0.08 - dryDust;
+
+                data[i] = Math.round(112 + tone * 72 + speckle * 18);
+                data[i + 1] = Math.round(88 + tone * 48 + speckle * 10);
+                data[i + 2] = Math.round(68 + tone * 32 + speckle * 8);
+                data[i + 3] = 255;
+            }
+        }
+
+        ctx.putImageData(image, 0, 0);
+
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        texture.repeat.set(14, 14);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.needsUpdate = true;
+        return texture;
     }
 
     sampleHeight(x: number, z: number) {
@@ -160,7 +207,6 @@ export class TerrainBuilder {
 
         const positions = geometry.attributes.position as THREE.BufferAttribute;
         const heights = new Float32Array(this.groundRows * this.groundCols);
-        const colors: number[] = [];
 
         for (let row = 0; row < this.groundRows; row++) {
             const z = -this.halfSize + (row / (this.groundRows - 1)) * size;
@@ -170,24 +216,51 @@ export class TerrainBuilder {
                 const vertexIndex = row * this.groundCols + col;
                 positions.setY(vertexIndex, y);
                 heights[col * this.groundRows + row] = y;
+            }
+        }
+        positions.needsUpdate = true;
+        geometry.computeVertexNormals();
 
-                const ridgeFactor = clamp((y - 0.4) / 8.8, 0, 1);
+        const normals = geometry.attributes.normal as THREE.BufferAttribute;
+        const colors: number[] = [];
+        for (let row = 0; row < this.groundRows; row++) {
+            const z = -this.halfSize + (row / (this.groundRows - 1)) * size;
+            for (let col = 0; col < this.groundCols; col++) {
+                const x = -this.halfSize + (col / (this.groundCols - 1)) * size;
+                const vertexIndex = row * this.groundCols + col;
+                const y = positions.getY(vertexIndex);
+                _normal.set(normals.getX(vertexIndex), normals.getY(vertexIndex), normals.getZ(vertexIndex));
+
+                const ridgeFactor = clamp((y - 0.6) / 8.8, 0, 1);
+                const basinFactor = clamp((2.4 - y) / 2.4, 0, 1);
+                const slopeFactor = clamp(1 - _normal.y, 0, 1);
+                const westDust = smoothstep(0.18, 0.82, (x + this.halfSize) / (this.halfSize * 2));
+                const channelAsh = Math.exp(-Math.pow((x + z * 0.18) / 34, 2)) * 0.28;
+                const scorchBand = Math.exp(-Math.pow((x - 4) / 28, 2) - Math.pow((z + 4) / 56, 2)) * 0.18;
+
+                const baseR = THREE.MathUtils.lerp(0.19, 0.46, ridgeFactor);
+                const baseG = THREE.MathUtils.lerp(0.14, 0.32, ridgeFactor);
+                const baseB = THREE.MathUtils.lerp(0.12, 0.21, ridgeFactor);
+
+                const dryLift = westDust * 0.07 + (1 - basinFactor) * 0.03;
+                const dampCool = basinFactor * 0.06 + channelAsh * 0.08;
+                const rockTint = slopeFactor * 0.18;
+
                 _color.setRGB(
-                    THREE.MathUtils.lerp(0.15, 0.39, ridgeFactor),
-                    THREE.MathUtils.lerp(0.12, 0.31, ridgeFactor),
-                    THREE.MathUtils.lerp(0.13, 0.24, ridgeFactor)
+                    clamp(baseR + dryLift - dampCool + rockTint * 0.35 - scorchBand * 0.1, 0, 1),
+                    clamp(baseG + dryLift * 0.6 - dampCool * 0.8 - rockTint * 0.15 - scorchBand * 0.08, 0, 1),
+                    clamp(baseB - dampCool * 0.3 - rockTint * 0.05 - scorchBand * 0.02, 0, 1)
                 );
                 colors.push(_color.r, _color.g, _color.b);
             }
         }
 
         geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-        positions.needsUpdate = true;
-        geometry.computeVertexNormals();
 
         const material = new THREE.MeshStandardMaterial({
+            map: this.createGroundTexture() ?? undefined,
             vertexColors: true,
-            roughness: 0.98,
+            roughness: 0.99,
             metalness: 0.02
         });
 
