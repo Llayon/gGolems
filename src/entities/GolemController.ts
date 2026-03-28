@@ -602,11 +602,11 @@ export class GolemController {
             }
         } else {
             this.walkCycle = this.gameCamera.walkCycle * Math.PI * 2;
-            this.getViewAnchor(_cameraAnchor, this.torsoYaw);
+            this.getViewAnchor(_cameraAnchor, this.legYaw);
 
             this.gameCamera.update(
                 _cameraAnchor,
-                this.torsoYaw,
+                this.legYaw,
                 this.gameCamera.aimYaw,
                 this.currentSpeed,
                 this.mass,
@@ -629,14 +629,14 @@ export class GolemController {
         this.rightLeg.position.z = Math.sin(this.walkCycle + Math.PI) * 1.5;
         this.rightLeg.position.y = 1.5 + Math.max(0, Math.sin(this.walkCycle - Math.PI / 2)) * 0.5;
 
-        this.leftArm.position.z = Math.sin(this.walkCycle + Math.PI) * 1.0 + this.weaponRecoil.leftArmMount * 0.42;
-        this.rightArm.position.z = Math.sin(this.walkCycle) * 1.0 + this.weaponRecoil.rightArmMount * 0.42;
-        this.leftArm.rotation.x = -this.weaponRecoil.leftArmMount * 0.16;
-        this.rightArm.rotation.x = -this.weaponRecoil.rightArmMount * 0.16;
+        this.leftArm.position.z = Math.sin(this.walkCycle + Math.PI) * 1.0 + this.weaponRecoil.leftArmMount * 0.62;
+        this.rightArm.position.z = Math.sin(this.walkCycle) * 1.0 + this.weaponRecoil.rightArmMount * 0.62;
+        this.leftArm.rotation.x = -this.weaponRecoil.leftArmMount * 0.24;
+        this.rightArm.rotation.x = -this.weaponRecoil.rightArmMount * 0.24;
 
         this.torso.position.y = 5.5 + Math.abs(Math.sin(this.walkCycle * 2)) * 0.2;
-        this.torso.position.z = this.weaponRecoil.torsoMount * 0.3;
-        this.torso.rotation.x = -this.weaponRecoil.torsoMount * 0.08;
+        this.torso.position.z = this.weaponRecoil.torsoMount * 0.46;
+        this.torso.rotation.x = -this.weaponRecoil.torsoMount * 0.14;
         this.pelvis.position.y = 2.0 + Math.abs(Math.sin(this.walkCycle * 2)) * 0.2;
 
         this.boiler.scale.set(1 + Math.sin(Date.now() * 0.002) * 0.02, 1, 1 + Math.sin(Date.now() * 0.002) * 0.02);
