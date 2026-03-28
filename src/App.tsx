@@ -673,6 +673,7 @@ export default function App() {
     const [sessionMode, setSessionMode] = useState<SessionMode>('solo');
     const [selectedGameMode, setSelectedGameMode] = useState<GameMode>('control');
     const [roomFilter, setRoomFilter] = useState<'all' | GameMode>('all');
+    const [showUnavailableRooms, setShowUnavailableRooms] = useState(false);
     const [showPilotPanel, setShowPilotPanel] = useState(true);
     const [showMobileSettings, setShowMobileSettings] = useState(false);
     const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
@@ -974,6 +975,10 @@ export default function App() {
         ? firebaseRooms
         : firebaseRooms.filter((room) => room.gameMode === roomFilter);
     const canJoinRoom = (room: FirebaseLobbyRoom) => room.joinability !== 'full' && room.joinability !== 'ended';
+    const visibleFirebaseRooms = showUnavailableRooms
+        ? filteredFirebaseRooms
+        : filteredFirebaseRooms.filter((room) => canJoinRoom(room));
+    const hiddenUnavailableCount = filteredFirebaseRooms.length - visibleFirebaseRooms.length;
     const joinabilityTone = (room: FirebaseLobbyRoom) => room.joinability === 'ended'
         ? 'border-[#8a4f44]/55 bg-[#5b231b]/24 text-[#ffb7a6]'
         : room.joinability === 'full'
@@ -1163,9 +1168,16 @@ export default function App() {
                                         {t('lobby.mode.tdm')}
                                     </button>
                                 </div>
-                                {filteredFirebaseRooms.length > 0 ? (
+                                <button
+                                    type="button"
+                                    onClick={() => setShowUnavailableRooms((current) => !current)}
+                                    className={`rounded-xl border px-3 py-2 text-[10px] font-bold tracking-[0.16em] transition-colors ${showUnavailableRooms ? 'border-[#efb768]/70 bg-[#7d4f22]/45 text-[#fff1d4]' : 'border-[#8f6a38]/30 bg-black/25 text-[#d3bc94] hover:border-[#efb768]/50'}`}
+                                >
+                                    {t(showUnavailableRooms ? 'lobby.hideUnavailable' : 'lobby.showUnavailable')}
+                                </button>
+                                {visibleFirebaseRooms.length > 0 ? (
                                     <div className="flex max-h-56 flex-col gap-2 overflow-y-auto pr-1">
-                                        {filteredFirebaseRooms.slice(0, 8).map((room) => (
+                                        {visibleFirebaseRooms.slice(0, 8).map((room) => (
                                             <button
                                                 key={room.id}
                                                 type="button"
@@ -1207,9 +1219,16 @@ export default function App() {
                                     </div>
                                 ) : (
                                     <div className="rounded-xl border border-[#8f6a38]/20 bg-black/25 px-4 py-3 text-center text-[11px] tracking-[0.18em] text-[#b9c7c8]">
-                                        {roomFilter === 'all' ? t('lobby.noRooms') : t('lobby.noRoomsFiltered')}
+                                        {roomFilter === 'all'
+                                            ? (showUnavailableRooms ? t('lobby.noRooms') : t('lobby.noJoinableRooms'))
+                                            : t('lobby.noRoomsFiltered')}
                                     </div>
                                 )}
+                                {!showUnavailableRooms && hiddenUnavailableCount > 0 ? (
+                                    <div className="text-center text-[11px] tracking-[0.12em] text-[#b9c7c8]">
+                                        {t('lobby.hiddenUnavailable', { count: hiddenUnavailableCount })}
+                                    </div>
+                                ) : null}
                                 <div className="text-center text-[11px] tracking-[0.12em] text-[#b9c7c8]">
                                     {t('lobby.firebaseOptional')}
                                 </div>

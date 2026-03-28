@@ -48,6 +48,10 @@ const ru: typeof en = {
     'lobby.roomNameHint': 'Необязательное публичное имя для списка комнат.',
     'lobby.filter.all': 'ВСЕ',
     'lobby.noRoomsFiltered': 'ПО ЭТОМУ ФИЛЬТРУ КОМНАТ НЕТ',
+    'lobby.showUnavailable': 'ПОКАЗАТЬ ПОЛНЫЕ / ЗАВЕРШЕННЫЕ',
+    'lobby.hideUnavailable': 'СКРЫТЬ ПОЛНЫЕ / ЗАВЕРШЕННЫЕ',
+    'lobby.noJoinableRooms': 'НЕТ ДОСТУПНЫХ КОМНАТ',
+    'lobby.hiddenUnavailable': 'СКРЫТО НЕДОСТУПНЫХ КОМНАТ: {{count}}',
 
     'session.solo': 'ЛОКАЛЬНЫЙ БОЙ',
     'session.host': 'КАНАЛ ХОСТА',

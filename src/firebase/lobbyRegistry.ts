@@ -171,9 +171,19 @@ export function subscribeFirebaseLobbies(onRooms: (rooms: FirebaseLobbyRoom[]) =
 
     const emitRooms = () => {
         const now = Date.now();
+        const joinabilityRank: Record<LobbyJoinability, number> = {
+            open: 0,
+            closing: 1,
+            full: 2,
+            ended: 3
+        };
         const visibleRooms = rawRooms
             .filter((room) => room.expiresAt <= 0 || room.expiresAt >= now)
-            .sort((left, right) => right.updatedAt - left.updatedAt);
+            .sort((left, right) => {
+                const rankDelta = joinabilityRank[left.joinability] - joinabilityRank[right.joinability];
+                if (rankDelta !== 0) return rankDelta;
+                return right.updatedAt - left.updatedAt;
+            });
         onRooms(visibleRooms);
     };
 

@@ -48,6 +48,10 @@ const en = {
     'lobby.roomNameHint': 'Optional public name for the room browser.',
     'lobby.filter.all': 'ALL',
     'lobby.noRoomsFiltered': 'NO ROOMS FOR THIS FILTER',
+    'lobby.showUnavailable': 'SHOW FULL / ENDED',
+    'lobby.hideUnavailable': 'HIDE FULL / ENDED',
+    'lobby.noJoinableRooms': 'NO JOINABLE ROOMS',
+    'lobby.hiddenUnavailable': '{{count}} UNAVAILABLE ROOMS HIDDEN',
 
     'session.solo': 'LOCAL MATCH',
     'session.host': 'HOST CHANNEL',
