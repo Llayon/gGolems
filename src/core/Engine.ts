@@ -15,6 +15,7 @@ import { ProjectileManager } from '../combat/ProjectileManager';
 import { MechCamera } from '../camera/MechCamera';
 import { GOLEM, ROTATION } from '../utils/constants';
 import { QualityProfile, detectQualityProfile } from '../utils/quality';
+import type { ProjectileProfileId, WeaponFireRequest, WeaponId } from '../combat/weaponTypes';
 
 const _weaponOrigin = new THREE.Vector3();
 const _weaponDir = new THREE.Vector3();
@@ -26,6 +27,24 @@ const _listenerPos = new THREE.Vector3();
 const _radarDelta = new THREE.Vector3();
 const _radarRight = new THREE.Vector3();
 const _radarForward = new THREE.Vector3();
+const _spreadRight = new THREE.Vector3();
+const _spreadUp = new THREE.Vector3();
+const _spreadDir = new THREE.Vector3();
+const _muzzleOrigin = new THREE.Vector3();
+
+type FireShotPayload = {
+    weaponId: WeaponId;
+    profile: ProjectileProfileId;
+    ox: number;
+    oy: number;
+    oz: number;
+    dx: number;
+    dy: number;
+    dz: number;
+    damage: number;
+    speed: number;
+    range: number;
+};
 
 function clamp(value: number, min: number, max: number) {
     return Math.max(min, Math.min(max, value));
@@ -115,6 +134,77 @@ export class Game {
         });
 
         this.setupNetwork();
+    }
+
+    getSpreadDirection(baseDir: THREE.Vector3, spread: number) {
+        const spreadScale = Math.max(0, spread);
+        if (spreadScale <= 0.00001) {
+            return _spreadDir.copy(baseDir);
+        }
+
+        const referenceUp = Math.abs(baseDir.y) > 0.92 ? _spreadUp.set(1, 0, 0) : _spreadUp.set(0, 1, 0);
+        _spreadRight.crossVectors(baseDir, referenceUp).normalize();
+        _spreadUp.crossVectors(_spreadRight, baseDir).normalize();
+        return _spreadDir
+            .copy(baseDir)
+            .addScaledVector(_spreadRight, (Math.random() - 0.5) * spreadScale)
+            .addScaledVector(_spreadUp, (Math.random() - 0.5) * spreadScale)
+            .normalize();
+    }
+
+    spawnShot(shot: FireShotPayload, ownerId: string) {
+        this.projectiles.fire({
+            origin: _weaponOrigin.set(shot.ox, shot.oy, shot.oz).clone(),
+            dir: _weaponDir.set(shot.dx, shot.dy, shot.dz).clone(),
+            ownerId,
+            weaponId: shot.weaponId,
+            profile: shot.profile,
+            damage: shot.damage,
+            speed: shot.speed,
+            range: shot.range
+        });
+    }
+
+    fireWeaponRequests(ownerId: string, requests: WeaponFireRequest[]) {
+        if (requests.length === 0) return;
+
+        this.mechCamera.getAimDirection(_weaponDir);
+        const shots: FireShotPayload[] = [];
+        let trauma = 0;
+
+        for (const request of requests) {
+            this.golem.getWeaponMuzzleOrigin(request.mountId, _muzzleOrigin);
+            trauma = Math.max(trauma, request.fireTrauma);
+
+            for (let index = 0; index < request.projectileCount; index++) {
+                const dir = this.getSpreadDirection(_weaponDir, request.spread).clone();
+                const shot: FireShotPayload = {
+                    weaponId: request.weaponId,
+                    profile: request.projectileProfile,
+                    ox: _muzzleOrigin.x,
+                    oy: _muzzleOrigin.y,
+                    oz: _muzzleOrigin.z,
+                    dx: dir.x,
+                    dy: dir.y,
+                    dz: dir.z,
+                    damage: request.damage,
+                    speed: request.projectileSpeed,
+                    range: request.effectiveRange
+                };
+                shots.push(shot);
+                this.spawnShot(shot, ownerId);
+            }
+        }
+
+        this.mechCamera.onFire(trauma);
+
+        if (this.sessionMode !== 'solo') {
+            this.network.broadcast({
+                type: 'fire',
+                ownerId,
+                shots
+            });
+        }
     }
 
     playPropFx() {
@@ -265,10 +355,27 @@ export class Game {
                 this.mechCamera.addTrauma(1.0); // Big shake on respawn
             } else if (data.type === 'fire') {
                 if (id !== this.network.myId) {
-                    const origin = new THREE.Vector3(data.ox, data.oy, data.oz);
-                    const dir = new THREE.Vector3(data.dx, data.dy, data.dz);
-                    this.projectiles.fire(origin, dir, data.ownerId);
-                    
+                    const ownerId = this.network.isHost ? id : data.ownerId;
+                    const shots: FireShotPayload[] = Array.isArray(data.shots)
+                        ? data.shots
+                        : [{
+                            weaponId: 'rune_bolt',
+                            profile: 'bolt',
+                            ox: data.ox,
+                            oy: data.oy,
+                            oz: data.oz,
+                            dx: data.dx,
+                            dy: data.dy,
+                            dz: data.dz,
+                            damage: 15,
+                            speed: 60,
+                            range: 85
+                        }];
+
+                    for (const shot of shots) {
+                        this.spawnShot(shot, ownerId);
+                    }
+
                     // If Host receives fire from client, forward to other clients
                     if (this.network.isHost) {
                         this.network.connections.forEach((conn, peerId) => {
@@ -484,7 +591,18 @@ export class Game {
             ? this.dummy.update(dt, _botTarget.set(localPos.x, localPos.y + 1.4, localPos.z))
             : this.dummy.update(dt);
         if (botFireSolution) {
-            this.projectiles.fire(botFireSolution.origin, botFireSolution.dir, 'solo-bot');
+            for (const shot of botFireSolution.shots) {
+                this.projectiles.fire({
+                    origin: shot.origin,
+                    dir: shot.dir,
+                    ownerId: 'solo-bot',
+                    weaponId: shot.weaponId,
+                    profile: shot.profile,
+                    damage: shot.damage,
+                    speed: shot.speed,
+                    range: shot.range
+                });
+            }
         }
 
         this.projectiles.update(dt);
@@ -494,23 +612,22 @@ export class Game {
         this.golem.getViewAnchor(_weaponOrigin, this.mechCamera.aimYaw);
         _weaponOrigin.addScaledVector(_weaponDir, 0.9);
 
-        if (this.input.consumeClick()) {
-            if (this.golem.canFire() && this.golem.tryAction(5)) {
-                const origin = _weaponOrigin.clone();
-                
-                this.projectiles.fire(origin, _weaponDir.clone(), this.network.myId);
-                this.mechCamera.onFire(0.3); // RuneBolt weight
-                
-                // Broadcast fire event
-                if (this.sessionMode !== 'solo') {
-                    this.network.broadcast({
-                        type: 'fire',
-                        ownerId: this.network.myId,
-                        ox: origin.x, oy: origin.y, oz: origin.z,
-                        dx: _weaponDir.x, dy: _weaponDir.y, dz: _weaponDir.z
-                    });
-                }
-            }
+        const fireGroup1 = this.input.consumeFireGroup(1);
+        const fireGroup2 = this.input.consumeFireGroup(2);
+        const fireGroup3 = this.input.consumeKey('KeyQ') || this.input.consumeFireGroup(3);
+        const alphaStrike = this.input.consumeKey('KeyE') || this.input.consumeVirtualAction('alphaStrike');
+
+        if (fireGroup1) {
+            this.fireWeaponRequests(this.network.myId, this.golem.tryFireGroup(1));
+        }
+        if (fireGroup2) {
+            this.fireWeaponRequests(this.network.myId, this.golem.tryFireGroup(2));
+        }
+        if (fireGroup3) {
+            this.fireWeaponRequests(this.network.myId, this.golem.tryFireGroup(3));
+        }
+        if (alphaStrike) {
+            this.fireWeaponRequests(this.network.myId, this.golem.tryFireAlpha());
         }
         
         if (this.input.consumeKey('ShiftLeft') || this.input.consumeVirtualAction('dash')) {
@@ -653,6 +770,7 @@ export class Game {
             hitTargetMaxHp: this.hitTargetMaxHp,
             sections: { ...golemState.sections },
             maxSections: { ...golemState.maxSections },
+            weaponStatus: golemState.weaponStatus,
             radarContacts: this.buildRadarContacts(),
             terrainColliderMode: this.world.terrain.groundColliderMode,
             terrainColliderError: this.world.terrain.groundColliderError

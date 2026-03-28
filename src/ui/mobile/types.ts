@@ -1,3 +1,5 @@
+import type { WeaponStatusView } from '../../combat/weaponTypes';
+
 export type SessionMode = 'solo' | 'host' | 'client';
 export type AimPreset = 'LOW' | 'MID' | 'HIGH';
 export type SectionName = 'head' | 'centerTorso' | 'leftTorso' | 'rightTorso' | 'leftArm' | 'rightArm' | 'leftLeg' | 'rightLeg';
@@ -32,5 +34,6 @@ export type GameHudState = {
     hitTargetMaxHp: number;
     sections: SectionState;
     maxSections: SectionState;
+    weaponStatus: WeaponStatusView[];
     radarContacts: RadarContact[];
 };

@@ -1,11 +1,26 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
+import { getWeaponDefinition } from '../combat/weapons';
+import type { ProjectileProfileId, WeaponId } from '../combat/weaponTypes';
 
 const _currentPos = new THREE.Vector3();
 const _toTarget = new THREE.Vector3();
 const _strafe = new THREE.Vector3();
 const _desiredVelocity = new THREE.Vector3();
 const _aimPoint = new THREE.Vector3();
+const _botSpreadRight = new THREE.Vector3();
+const _botSpreadUp = new THREE.Vector3();
+const _botSpreadDir = new THREE.Vector3();
+
+type BotShot = {
+    origin: THREE.Vector3;
+    dir: THREE.Vector3;
+    weaponId: WeaponId;
+    profile: ProjectileProfileId;
+    damage: number;
+    speed: number;
+    range: number;
+};
 
 export class DummyBot {
     mesh: THREE.Mesh;
@@ -39,6 +54,20 @@ export class DummyBot {
         physics.createCollider(colliderDesc, this.body);
     }
 
+    getSpreadDirection(baseDir: THREE.Vector3, spread: number) {
+        if (spread <= 0.00001) {
+            return _botSpreadDir.copy(baseDir);
+        }
+        const referenceUp = Math.abs(baseDir.y) > 0.92 ? _botSpreadUp.set(1, 0, 0) : _botSpreadUp.set(0, 1, 0);
+        _botSpreadRight.crossVectors(baseDir, referenceUp).normalize();
+        _botSpreadUp.crossVectors(_botSpreadRight, baseDir).normalize();
+        return _botSpreadDir
+            .copy(baseDir)
+            .addScaledVector(_botSpreadRight, (Math.random() - 0.5) * spread)
+            .addScaledVector(_botSpreadUp, (Math.random() - 0.5) * spread)
+            .normalize();
+    }
+
     takeDamage(amount: number) {
         this.hp -= amount;
         this.damageTimer = 0.1;
@@ -60,7 +89,7 @@ export class DummyBot {
     }
 
     update(dt: number, target?: THREE.Vector3) {
-        let shot: { origin: THREE.Vector3; dir: THREE.Vector3 } | null = null;
+        let shot: { shots: BotShot[] } | null = null;
 
         if (this.damageTimer > 0) {
             this.damageTimer -= dt;
@@ -116,11 +145,31 @@ export class DummyBot {
 
                 this.fireCooldown -= dt;
                 if (this.fireCooldown <= 0 && distance < 58) {
-                    const origin = _currentPos.clone().addScaledVector(_toTarget, 1.6);
+                    const weaponId = distance < 25
+                        ? 'steam_cannon'
+                        : distance > 55
+                            ? 'rune_bolt'
+                            : 'arc_emitter';
+                    const definition = getWeaponDefinition(weaponId);
+                    const origin = _currentPos.clone().addScaledVector(_toTarget, weaponId === 'steam_cannon' ? 1.2 : 1.6);
                     origin.y += 1.25;
-                    const dir = target.clone().sub(origin).normalize();
-                    shot = { origin, dir };
-                    this.fireCooldown = 1.35 + Math.random() * 0.75;
+                    const baseDir = target.clone().sub(origin).normalize();
+                    const shots: BotShot[] = [];
+
+                    for (let index = 0; index < definition.projectileCount; index++) {
+                        shots.push({
+                            origin: origin.clone(),
+                            dir: this.getSpreadDirection(baseDir, definition.spread).clone(),
+                            weaponId: definition.id,
+                            profile: definition.projectileProfile,
+                            damage: definition.damage,
+                            speed: definition.projectileSpeed,
+                            range: definition.effectiveRange
+                        });
+                    }
+
+                    shot = { shots };
+                    this.fireCooldown = definition.cooldown + (weaponId === 'steam_cannon' ? 0.55 : 0.25) + Math.random() * 0.35;
                 }
             }
         } else {

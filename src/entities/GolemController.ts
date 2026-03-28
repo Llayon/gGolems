@@ -7,6 +7,8 @@ import { ParticleManager } from '../fx/ParticleManager';
 import { AudioManager } from '../core/AudioManager';
 import { DecalManager } from '../fx/DecalManager';
 import { MechCamera } from '../camera/MechCamera';
+import { getWeaponDefinition, WEAPON_MOUNT_ORDER } from '../combat/weapons';
+import type { WeaponFireRequest, WeaponGroupId, WeaponMountId, WeaponMountRuntime, WeaponStatusView } from '../combat/weaponTypes';
 
 const _moveDir = new THREE.Vector3();
 const _currentVel = new THREE.Vector3();
@@ -17,6 +19,7 @@ const _footOffset = new THREE.Vector3();
 const _bodyForward = new THREE.Vector3();
 const _desiredVel = new THREE.Vector3();
 const _sideVel = new THREE.Vector3();
+const _muzzleOffset = new THREE.Vector3();
 
 export type GolemSection =
     | 'head'
@@ -71,6 +74,7 @@ export interface GolemState {
     mass: number;
     sections: GolemSectionState;
     maxSections: GolemSectionState;
+    weaponStatus: WeaponStatusView[];
 }
 
 export interface GolemEvents {
@@ -98,6 +102,7 @@ export class GolemController {
     boilerMaterial: THREE.MeshStandardMaterial;
     sections: GolemSectionState = createSectionState();
     maxSections: GolemSectionState = createSectionState();
+    weaponMounts: Record<WeaponMountId, WeaponMountRuntime>;
 
     legYaw = 0;
     torsoYaw = 0;
@@ -149,7 +154,70 @@ export class GolemController {
         const colliderDesc = RAPIER.ColliderDesc.capsule(0.75, 0.8);
         colliderDesc.setMass(this.mass);
         physics.createCollider(colliderDesc, this.body);
+        this.weaponMounts = this.createWeaponMounts();
+        this.syncMountAvailabilityFromSections();
         this.syncAggregateHp();
+    }
+
+    createWeaponMounts(): Record<WeaponMountId, WeaponMountRuntime> {
+        return {
+            rightArmMount: {
+                mountId: 'rightArmMount',
+                weaponId: 'rune_bolt',
+                group: 1,
+                section: 'rightArm',
+                cooldownRemaining: 0,
+                enabled: true
+            },
+            leftArmMount: {
+                mountId: 'leftArmMount',
+                weaponId: 'arc_emitter',
+                group: 2,
+                section: 'leftArm',
+                cooldownRemaining: 0,
+                enabled: true
+            },
+            torsoMount: {
+                mountId: 'torsoMount',
+                weaponId: 'steam_cannon',
+                group: 3,
+                section: 'rightTorso',
+                cooldownRemaining: 0,
+                enabled: true
+            }
+        };
+    }
+
+    triggerOverheat(duration = GOLEM.overheatDuration) {
+        this.isOverheated = true;
+        this.overheatTimer = Math.max(this.overheatTimer, duration);
+    }
+
+    spendSteam(cost: number) {
+        if (this.isOverheated) return false;
+        if (cost <= 0) return true;
+        if (this.steam < cost) {
+            this.triggerOverheat();
+            return false;
+        }
+        this.steam -= cost;
+        if (this.steam <= GOLEM.overheatThreshold) {
+            this.triggerOverheat();
+        }
+        return true;
+    }
+
+    updateWeaponCooldowns(dt: number) {
+        for (const mountId of WEAPON_MOUNT_ORDER) {
+            this.weaponMounts[mountId].cooldownRemaining = Math.max(0, this.weaponMounts[mountId].cooldownRemaining - dt);
+        }
+    }
+
+    syncMountAvailabilityFromSections() {
+        for (const mountId of WEAPON_MOUNT_ORDER) {
+            const mount = this.weaponMounts[mountId];
+            mount.enabled = this.sections[mount.section] > 0;
+        }
     }
 
     flashDamage(duration = 0.16) {
@@ -169,12 +237,17 @@ export class GolemController {
             }
         }
         this.applySectionVisuals();
+        this.syncMountAvailabilityFromSections();
         this.syncAggregateHp();
     }
 
     resetSections() {
         this.sections = createSectionState();
+        for (const mountId of WEAPON_MOUNT_ORDER) {
+            this.weaponMounts[mountId].cooldownRemaining = 0;
+        }
         this.applySectionVisuals();
+        this.syncMountAvailabilityFromSections();
         this.syncAggregateHp();
     }
 
@@ -192,6 +265,7 @@ export class GolemController {
         this.sections[section] = remaining;
         this.flashDamage();
         this.applySectionVisuals();
+        this.syncMountAvailabilityFromSections();
         this.syncAggregateHp();
         return {
             section,
@@ -203,21 +277,119 @@ export class GolemController {
     }
 
     canFire() {
-        return this.sections.leftArm > 0 || this.sections.rightArm > 0;
+        return WEAPON_MOUNT_ORDER.some((mountId) => {
+            const mount = this.weaponMounts[mountId];
+            const definition = getWeaponDefinition(mount.weaponId);
+            return mount.enabled && mount.cooldownRemaining <= 0 && !this.isOverheated && this.steam >= definition.heatCost;
+        });
     }
 
     tryAction(cost: number) {
-        if (this.isOverheated) return false;
-        if (this.steam < 15 && cost > 0) {
-            this.isOverheated = true;
-            this.overheatTimer = 3.0;
-            return false;
+        return this.spendSteam(cost);
+    }
+
+    getWeaponStatus(): WeaponStatusView[] {
+        return WEAPON_MOUNT_ORDER.map((mountId) => {
+            const mount = this.weaponMounts[mountId];
+            const definition = getWeaponDefinition(mount.weaponId);
+
+            let state: WeaponStatusView['state'] = 'ready';
+            if (!mount.enabled) {
+                state = 'offline';
+            } else if (mount.cooldownRemaining > 0) {
+                state = 'recycle';
+            } else if (this.isOverheated || this.steam < definition.heatCost) {
+                state = 'heat';
+            }
+
+            return {
+                mountId: mount.mountId,
+                weaponId: mount.weaponId,
+                group: mount.group,
+                section: mount.section,
+                nameKey: definition.nameKey,
+                shortKey: definition.shortKey,
+                state,
+                cooldownRemaining: mount.cooldownRemaining,
+                heatCost: definition.heatCost
+            };
+        });
+    }
+
+    getMountRoot(mountId: WeaponMountId) {
+        switch (mountId) {
+            case 'leftArmMount':
+                return this.leftArm;
+            case 'rightArmMount':
+                return this.rightArm;
+            case 'torsoMount':
+            default:
+                return this.torso;
         }
-        if (this.steam >= cost) {
-            this.steam -= cost;
-            return true;
+    }
+
+    getWeaponMuzzleOrigin(mountId: WeaponMountId, out: THREE.Vector3) {
+        const mount = this.weaponMounts[mountId];
+        const definition = getWeaponDefinition(mount.weaponId);
+        _muzzleOffset.set(definition.muzzleOffset.x, definition.muzzleOffset.y, definition.muzzleOffset.z);
+        this.getMountRoot(mountId).localToWorld(out.copy(_muzzleOffset));
+        return out;
+    }
+
+    buildWeaponFireRequest(mount: WeaponMountRuntime): WeaponFireRequest {
+        const definition = getWeaponDefinition(mount.weaponId);
+        return {
+            mountId: mount.mountId,
+            weaponId: mount.weaponId,
+            group: mount.group,
+            section: mount.section,
+            nameKey: definition.nameKey,
+            shortKey: definition.shortKey,
+            damage: definition.damage,
+            heatCost: definition.heatCost,
+            spread: definition.spread,
+            projectileSpeed: definition.projectileSpeed,
+            effectiveRange: definition.effectiveRange,
+            projectileProfile: definition.projectileProfile,
+            projectileCount: definition.projectileCount,
+            fireTrauma: definition.fireTrauma,
+            muzzleOffset: definition.muzzleOffset
+        };
+    }
+
+    gatherReadyMounts(groupId?: WeaponGroupId) {
+        const mounts = WEAPON_MOUNT_ORDER
+            .map((mountId) => this.weaponMounts[mountId])
+            .filter((mount) => groupId === undefined || mount.group === groupId)
+            .filter((mount) => mount.enabled && mount.cooldownRemaining <= 0);
+
+        if (mounts.length === 0 || this.isOverheated) {
+            return [];
         }
-        return false;
+
+        const totalHeat = mounts.reduce((sum, mount) => sum + getWeaponDefinition(mount.weaponId).heatCost, 0);
+        if (this.steam < totalHeat) {
+            this.triggerOverheat();
+            return [];
+        }
+
+        if (!this.spendSteam(totalHeat)) {
+            return [];
+        }
+
+        for (const mount of mounts) {
+            mount.cooldownRemaining = getWeaponDefinition(mount.weaponId).cooldown;
+        }
+
+        return mounts.map((mount) => this.buildWeaponFireRequest(mount));
+    }
+
+    tryFireGroup(groupId: WeaponGroupId) {
+        return this.gatherReadyMounts(groupId);
+    }
+
+    tryFireAlpha() {
+        return this.gatherReadyMounts();
     }
 
     dash() {
@@ -259,6 +431,7 @@ export class GolemController {
         if (this.damageFlashTimer > 0) {
             this.damageFlashTimer = Math.max(0, this.damageFlashTimer - dt);
         }
+        this.updateWeaponCooldowns(dt);
         const flashRatio = this.damageFlashTimer > 0 ? this.damageFlashTimer / 0.16 : 0;
         const flashIntensity = flashRatio * 1.6;
         this.bronzeMaterial.emissive.setRGB(0.55 * flashRatio, 0.42 * flashRatio, 0.18 * flashRatio);
@@ -469,7 +642,8 @@ export class GolemController {
             currentSpeed: this.currentSpeed,
             mass: this.mass,
             sections: { ...this.sections },
-            maxSections: { ...this.maxSections }
+            maxSections: { ...this.maxSections },
+            weaponStatus: this.getWeaponStatus()
         };
     }
 }

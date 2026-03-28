@@ -143,11 +143,34 @@ export function MobileControls(props: MobileControlsProps) {
                     style={{ width: props.isPortrait ? 84 : 70, height: props.isPortrait ? 84 : 70 }}
                     onPointerDown={() => {
                         ensureAudio();
-                        props.game?.input?.triggerVirtualAction?.('fire');
+                        props.game?.input?.triggerVirtualAction?.('fireGroup1');
                     }}
                 >
                     {props.t('mobile.controls.fire')}
                 </button>
+
+                <div className={`flex gap-2 ${props.isPortrait ? 'max-w-[220px] flex-wrap' : 'w-[156px]'}`}>
+                    <button
+                        type="button"
+                        className={`pointer-events-auto rounded-2xl border border-[#35707a]/60 bg-[rgba(10,10,10,0.78)] text-[10px] tracking-[0.18em] text-[#7ee6f0] ${props.isPortrait ? 'px-3 py-3' : 'flex-1 px-3 py-2.5'}`}
+                        onPointerDown={() => {
+                            ensureAudio();
+                            props.game?.input?.triggerVirtualAction?.('fireGroup2');
+                        }}
+                    >
+                        {props.t('weapon.short.arcEmitter')}
+                    </button>
+                    <button
+                        type="button"
+                        className={`pointer-events-auto rounded-2xl border border-[#8f6a38]/60 bg-[rgba(10,10,10,0.78)] text-[10px] tracking-[0.18em] text-[#efb768] ${props.isPortrait ? 'px-3 py-3' : 'flex-1 px-3 py-2.5'}`}
+                        onPointerDown={() => {
+                            ensureAudio();
+                            props.game?.input?.triggerVirtualAction?.('fireGroup3');
+                        }}
+                    >
+                        {props.t('weapon.short.steamCannon')}
+                    </button>
+                </div>
 
                 <div className={`flex gap-2 ${props.isPortrait ? 'max-w-[220px] flex-wrap' : 'w-[156px]'}`}>
                     <button

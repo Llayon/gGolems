@@ -109,6 +109,7 @@ export function MobileSettingsOverlay(props: MobileSettingsOverlayProps) {
                             <li>{props.t('mobile.settings.hint.leftCircle')}</li>
                             <li>{props.t('mobile.settings.hint.rightZone')}</li>
                             <li>{props.t('mobile.settings.hint.fire')}</li>
+                            <li>{props.t('mobile.settings.hint.altFire')}</li>
                             <li>{props.t('mobile.settings.hint.dashVent')}</li>
                             <li>{props.t('mobile.settings.hint.centerTorso')}</li>
                             <li>{props.t('mobile.settings.hint.stopThrottle')}</li>

@@ -5,6 +5,7 @@ import type { TranslationDescriptor, Translator } from '../../i18n';
 import { translateMessage } from '../../i18n';
 import type { Locale } from '../../i18n/types';
 import { formatDistance } from '../../i18n/format';
+import type { WeaponStatusView } from '../../combat/weaponTypes';
 
 type MobileCombatLayoutProps = {
     warning: TranslationDescriptor;
@@ -15,6 +16,7 @@ type MobileCombatLayoutProps = {
     steamRatio: number;
     speed: number;
     maxSpeed: number;
+    weaponStatus: WeaponStatusView[];
     radarContacts: RadarContact[];
     isPortrait: boolean;
     leftHanded: boolean;
@@ -116,6 +118,30 @@ function RadarDial(props: { radarContacts: RadarContact[]; twistRatio: number; v
             </svg>
             <div className="absolute left-1/2 top-[10px] h-0 w-0 -translate-x-1/2 border-x-[5px] border-x-transparent border-b-[10px] border-b-[#efb768]" />
             <div className="absolute inset-x-0 bottom-[7px] text-center text-[7px] tracking-[0.24em] text-[#9fc4cc]">{props.t('mobile.radar')}</div>
+        </div>
+    );
+}
+
+function WeaponStatusRow(props: { weapons: WeaponStatusView[]; t: Translator }) {
+    if (props.weapons.length === 0) return null;
+
+    return (
+        <div className="flex items-center gap-1.5">
+            {props.weapons.map((weapon) => {
+                const tone = weapon.state === 'ready'
+                    ? 'border-[#2e829a]/55 text-[#7ee6f0]'
+                    : weapon.state === 'recycle'
+                        ? 'border-[#8f6a38]/55 text-[#efb768]'
+                        : weapon.state === 'offline'
+                            ? 'border-[#5a4630]/40 text-[#8d7760]'
+                            : 'border-[#9a433c]/50 text-[#f25c54]';
+                return (
+                    <div key={weapon.mountId} className={`rounded-full border bg-[rgba(9,9,9,0.78)] px-2.5 py-1 shadow-[inset_0_0_10px_rgba(0,0,0,0.35)] ${tone}`}>
+                        <div className="text-center text-[6px] tracking-[0.24em]">{props.t('weapon.group', { group: weapon.group })}</div>
+                        <div className="mt-0.5 text-center text-[8px] font-bold tracking-[0.16em] text-[#f3deb5]">{props.t(weapon.shortKey)}</div>
+                    </div>
+                );
+            })}
         </div>
     );
 }
@@ -228,6 +254,9 @@ function PortraitCombatLayout(props: MobileCombatLayoutProps) {
     return (
         <>
             <PortraitTopStrip warning={props.warning} onOpenSettings={props.onOpenSettings} t={props.t} />
+            <div className="pointer-events-none absolute bottom-[calc(env(safe-area-inset-bottom,0px)+184px)] left-1/2 z-20 -translate-x-1/2">
+                <WeaponStatusRow weapons={props.weaponStatus} t={props.t} />
+            </div>
             <PortraitRadarDock
                 legYaw={props.legYaw}
                 torsoYaw={props.torsoYaw}
@@ -278,6 +307,9 @@ function LandscapeCombatLayout(props: MobileCombatLayoutProps) {
                 showContact={Boolean(metrics.nearestContact)}
                 t={props.t}
             />
+            <div className="pointer-events-none absolute bottom-[calc(env(safe-area-inset-bottom,0px)+122px)] left-1/2 z-20 -translate-x-1/2">
+                <WeaponStatusRow weapons={props.weaponStatus} t={props.t} />
+            </div>
             <MobileControls
                 game={props.game}
                 leftHanded={props.leftHanded}

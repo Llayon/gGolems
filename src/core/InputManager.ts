@@ -1,16 +1,27 @@
-type VirtualAction = 'fire' | 'dash' | 'vent' | 'centerTorso' | 'stopThrottle';
+type VirtualAction =
+    | 'fireGroup1'
+    | 'fireGroup2'
+    | 'fireGroup3'
+    | 'alphaStrike'
+    | 'dash'
+    | 'vent'
+    | 'centerTorso'
+    | 'stopThrottle';
 
 export class InputManager {
     keys: Record<string, boolean> = {};
     movementX = 0;
     movementY = 0;
     isLocked = false;
-    isMouseDown = false;
-    justPressed = false;
+    justPressedPrimary = false;
+    justPressedSecondary = false;
     virtualThrottle = 0;
     virtualTurn = 0;
     virtualActions: Record<VirtualAction, boolean> = {
-        fire: false,
+        fireGroup1: false,
+        fireGroup2: false,
+        fireGroup3: false,
+        alphaStrike: false,
         dash: false,
         vent: false,
         centerTorso: false,
@@ -27,13 +38,17 @@ export class InputManager {
             }
         });
         window.addEventListener('mousedown', (e) => {
-            if (e.button === 0 && this.isLocked) {
-                this.isMouseDown = true;
-                this.justPressed = true;
+            if (!this.isLocked) return;
+            if (e.button === 0) {
+                this.justPressedPrimary = true;
+            } else if (e.button === 2) {
+                this.justPressedSecondary = true;
             }
         });
-        window.addEventListener('mouseup', (e) => {
-            if (e.button === 0) this.isMouseDown = false;
+        window.addEventListener('contextmenu', (e) => {
+            if (this.isLocked) {
+                e.preventDefault();
+            }
         });
         document.addEventListener('pointerlockchange', () => {
             this.isLocked = document.pointerLockElement !== null;
@@ -48,11 +63,23 @@ export class InputManager {
         return { mx, my };
     }
 
-    consumeClick() {
-        const clicked = this.justPressed || this.virtualActions.fire;
-        this.justPressed = false;
-        this.virtualActions.fire = false;
-        return clicked;
+    consumeFireGroup(group: 1 | 2 | 3) {
+        if (group === 1) {
+            const active = this.justPressedPrimary || this.virtualActions.fireGroup1;
+            this.justPressedPrimary = false;
+            this.virtualActions.fireGroup1 = false;
+            return active;
+        }
+        if (group === 2) {
+            const active = this.justPressedSecondary || this.virtualActions.fireGroup2;
+            this.justPressedSecondary = false;
+            this.virtualActions.fireGroup2 = false;
+            return active;
+        }
+
+        const active = this.virtualActions.fireGroup3;
+        this.virtualActions.fireGroup3 = false;
+        return active;
     }
     
     consumeKey(code: string) {
@@ -77,7 +104,7 @@ export class InputManager {
         this.virtualActions[action] = true;
     }
 
-    consumeVirtualAction(action: Exclude<VirtualAction, 'fire'>) {
+    consumeVirtualAction(action: Exclude<VirtualAction, 'fireGroup1' | 'fireGroup2' | 'fireGroup3'>) {
         const active = this.virtualActions[action];
         this.virtualActions[action] = false;
         return active;

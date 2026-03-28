@@ -14,6 +14,7 @@ import { MobileSettingsOverlay } from './ui/mobile/MobileSettingsOverlay';
 import { createTranslator, getInitialLocale, saveLocale, translateMessage, type TranslationDescriptor, type TranslationKey, type Translator } from './i18n';
 import { formatPercent, formatSeconds, formatSpeedUnit } from './i18n/format';
 import type { Locale } from './i18n/types';
+import type { WeaponStatusView } from './combat/weaponTypes';
 
 type SessionMode = 'solo' | 'host' | 'client';
 type SectionName = 'head' | 'centerTorso' | 'leftTorso' | 'rightTorso' | 'leftArm' | 'rightArm' | 'leftLeg' | 'rightLeg';
@@ -47,6 +48,7 @@ type GameHudState = {
     hitTargetMaxHp: number;
     sections: SectionState;
     maxSections: SectionState;
+    weaponStatus: WeaponStatusView[];
     radarContacts: RadarContact[];
     terrainColliderMode: 'heightfield' | 'trimeshFallback';
     terrainColliderError: string;
@@ -113,6 +115,7 @@ const initialGameState: GameHudState = {
     hitTargetMaxHp: 100,
     sections: { ...defaultSections },
     maxSections: { ...defaultSections },
+    weaponStatus: [],
     radarContacts: [],
     terrainColliderMode: 'heightfield',
     terrainColliderError: ''
@@ -419,6 +422,48 @@ function SectionArmorDisplay(props: { sections: SectionState; maxSections: Secti
                 {sectionBox('rightArm', 'right-0 top-7 h-8 w-5')}
                 {sectionBox('leftLeg', 'left-[42px] bottom-0 h-12 w-4')}
                 {sectionBox('rightLeg', 'right-[42px] bottom-0 h-12 w-4')}
+            </div>
+        </div>
+    );
+}
+
+function WeaponRack(props: { weapons: WeaponStatusView[]; locale: Locale; t: Translator }) {
+    if (props.weapons.length === 0) return null;
+
+    return (
+        <div className="w-full rounded-[24px] border border-[#8f6a38]/60 bg-black/28 p-3 shadow-[inset_0_0_16px_rgba(0,0,0,0.38)]">
+            <div className="mb-2 text-center text-[10px] tracking-[0.32em] text-[#a1bdc4]">{props.t('hud.weapons')}</div>
+            <div className="grid grid-cols-3 gap-2">
+                {props.weapons.map((weapon) => {
+                    const stateTone = weapon.state === 'ready'
+                        ? 'text-[#7ee6f0] border-[#2e829a]/55'
+                        : weapon.state === 'recycle'
+                            ? 'text-[#efb768] border-[#8f6a38]/55'
+                            : weapon.state === 'offline'
+                                ? 'text-[#8d7760] border-[#5a4630]/40'
+                                : 'text-[#f25c54] border-[#9a433c]/50';
+                    const baseStateLabel = weapon.state === 'ready'
+                        ? props.t('weapon.state.ready')
+                        : weapon.state === 'recycle'
+                            ? props.t('weapon.state.recycle')
+                            : weapon.state === 'offline'
+                                ? props.t('weapon.state.offline')
+                                : props.t('weapon.state.heat');
+                    const stateLabel = weapon.state === 'recycle'
+                        ? `${baseStateLabel} ${formatSeconds(props.locale, weapon.cooldownRemaining)}`
+                        : baseStateLabel;
+
+                    return (
+                        <div key={weapon.mountId} className={`rounded-2xl border bg-[rgba(10,10,10,0.76)] px-3 py-2 ${stateTone}`}>
+                            <div className="flex items-center justify-between text-[9px] tracking-[0.22em]">
+                                <span>{props.t('weapon.group', { group: weapon.group })}</span>
+                                <span className="text-[#c6b08a]">{weapon.heatCost}</span>
+                            </div>
+                            <div className="mt-1 text-sm font-bold tracking-[0.18em] text-[#f3deb5]">{props.t(weapon.shortKey)}</div>
+                            <div className="mt-1 text-[9px] tracking-[0.18em]">{stateLabel}</div>
+                        </div>
+                    );
+                })}
             </div>
         </div>
     );
@@ -826,6 +871,7 @@ export default function App() {
                             steamRatio={steamRatio}
                             speed={gameState.speed}
                             maxSpeed={gameState.maxSpeed}
+                            weaponStatus={gameState.weaponStatus}
                             radarContacts={gameState.radarContacts}
                             isPortrait={isPortrait}
                             leftHanded={mobileLeftHanded}
@@ -902,6 +948,9 @@ export default function App() {
                                     <li>{t('pilot.controls.x')}</li>
                                     <li>{t('pilot.controls.v')}</li>
                                     <li>{t('pilot.controls.fire')}</li>
+                                    <li>{t('pilot.controls.fire2')}</li>
+                                    <li>{t('pilot.controls.fire3')}</li>
+                                    <li>{t('pilot.controls.alpha')}</li>
                                     <li>{t('pilot.controls.shift')}</li>
                                     <li>{t('pilot.controls.space')}</li>
                                 </ul>
@@ -967,6 +1016,8 @@ export default function App() {
 
                         <div className="mx-6 flex min-w-0 flex-1 flex-col items-center gap-4">
                             <HeadingTape legYaw={gameState.legYaw} torsoYaw={gameState.torsoYaw} maxTwist={gameState.maxTwist} t={t} />
+
+                            <WeaponRack weapons={gameState.weaponStatus} locale={locale} t={t} />
 
                             <div className="grid w-full grid-cols-3 gap-3 text-center">
                                 <div className="rounded-2xl border border-[#8f6a38]/60 bg-black/35 px-4 py-3">

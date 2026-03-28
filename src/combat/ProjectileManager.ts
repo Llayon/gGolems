@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { PROJECTILE_PROFILES } from './weapons';
+import type { ProjectileProfileId, WeaponId } from './weaponTypes';
 import { DummyBot } from '../entities/DummyBot';
 import { GolemController, GolemSection } from '../entities/GolemController';
 import { DecalManager } from '../fx/DecalManager';
@@ -14,28 +16,84 @@ const _sectionWorld = new THREE.Vector3();
 
 type HitResult = { section: GolemSection; distanceSq: number } | null;
 
+type ProjectileInstance = {
+    mesh: THREE.Mesh;
+    dir: THREE.Vector3;
+    prevPos: THREE.Vector3;
+    life: number;
+    active: boolean;
+    ownerId: string;
+    damage: number;
+    speed: number;
+    weaponId: WeaponId;
+    profile: ProjectileProfileId;
+};
+
+type ProjectileSpawnSpec = {
+    origin: THREE.Vector3;
+    dir: THREE.Vector3;
+    ownerId: string;
+    weaponId: WeaponId;
+    profile: ProjectileProfileId;
+    damage: number;
+    speed: number;
+    range: number;
+};
+
 export class ProjectileManager {
-    projectiles: { mesh: THREE.Mesh, dir: THREE.Vector3, life: number, active: boolean, ownerId: string, prevPos: THREE.Vector3 }[] = [];
+    projectiles: ProjectileInstance[] = [];
     scene: THREE.Scene;
-    geo: THREE.SphereGeometry;
-    mat: THREE.MeshStandardMaterial;
+    geometryByProfile: Record<ProjectileProfileId, THREE.SphereGeometry>;
+    materialByProfile: Record<ProjectileProfileId, THREE.MeshStandardMaterial>;
     raycaster = new THREE.Raycaster();
 
     constructor(scene: THREE.Scene) {
         this.scene = scene;
-        this.geo = new THREE.SphereGeometry(0.2, 8, 8);
-        this.mat = new THREE.MeshStandardMaterial({ color: 0x00AAFF, emissive: 0x00AAFF, emissiveIntensity: 2 });
+        this.geometryByProfile = {
+            bolt: new THREE.SphereGeometry(PROJECTILE_PROFILES.bolt.radius, 8, 8),
+            arc_pulse: new THREE.SphereGeometry(PROJECTILE_PROFILES.arc_pulse.radius, 8, 8),
+            steam_slug: new THREE.SphereGeometry(PROJECTILE_PROFILES.steam_slug.radius, 10, 10)
+        };
+        this.materialByProfile = {
+            bolt: new THREE.MeshStandardMaterial({
+                color: PROJECTILE_PROFILES.bolt.color,
+                emissive: PROJECTILE_PROFILES.bolt.emissive,
+                emissiveIntensity: PROJECTILE_PROFILES.bolt.emissiveIntensity
+            }),
+            arc_pulse: new THREE.MeshStandardMaterial({
+                color: PROJECTILE_PROFILES.arc_pulse.color,
+                emissive: PROJECTILE_PROFILES.arc_pulse.emissive,
+                emissiveIntensity: PROJECTILE_PROFILES.arc_pulse.emissiveIntensity
+            }),
+            steam_slug: new THREE.MeshStandardMaterial({
+                color: PROJECTILE_PROFILES.steam_slug.color,
+                emissive: PROJECTILE_PROFILES.steam_slug.emissive,
+                emissiveIntensity: PROJECTILE_PROFILES.steam_slug.emissiveIntensity
+            })
+        };
     }
 
-    fire(origin: THREE.Vector3, dir: THREE.Vector3, ownerId: string) {
-        const mesh = new THREE.Mesh(this.geo, this.mat);
-        mesh.position.copy(origin);
+    fire(spec: ProjectileSpawnSpec) {
+        const geometry = this.geometryByProfile[spec.profile];
+        const material = this.materialByProfile[spec.profile];
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.position.copy(spec.origin);
         this.scene.add(mesh);
-        this.projectiles.push({ mesh, dir: dir.normalize(), life: 2.0, active: true, ownerId, prevPos: origin.clone() });
+        this.projectiles.push({
+            mesh,
+            dir: spec.dir.clone().normalize(),
+            life: Math.max(0.35, spec.range / Math.max(spec.speed, 0.1)),
+            active: true,
+            ownerId: spec.ownerId,
+            prevPos: spec.origin.clone(),
+            damage: spec.damage,
+            speed: spec.speed,
+            weaponId: spec.weaponId,
+            profile: spec.profile
+        });
     }
 
     update(dt: number) {
-        const speed = 60;
         for (const p of this.projectiles) {
             if (!p.active) continue;
             p.life -= dt;
@@ -45,7 +103,7 @@ export class ProjectileManager {
                 continue;
             }
             p.prevPos.copy(p.mesh.position);
-            p.mesh.position.addScaledVector(p.dir, speed * dt);
+            p.mesh.position.addScaledVector(p.dir, p.speed * dt);
         }
         this.projectiles = this.projectiles.filter(p => p.active);
     }
@@ -79,7 +137,7 @@ export class ProjectileManager {
                 p.active = false;
                 this.scene.remove(p.mesh);
                 const hit = intersects[0];
-                const consumedByProp = props.handleProjectileHit(hit.object, hit.point, 15, isHost);
+                const consumedByProp = props.handleProjectileHit(hit.object, hit.point, p.damage, isHost);
                 if (!consumedByProp) {
                     decals.addBulletMark(hit.point);
                 }
@@ -91,7 +149,7 @@ export class ProjectileManager {
             if (p.ownerId !== 'solo-bot' && _closestPoint.distanceToSquared(dummyPos) < 2.5 * 2.5) {
                 p.active = false;
                 this.scene.remove(p.mesh);
-                if (isHost) onPlayerHit(p.ownerId, '__dummy__', 15, '__dummy__');
+                if (isHost) onPlayerHit(p.ownerId, '__dummy__', p.damage, '__dummy__');
                 continue;
             }
 
@@ -101,7 +159,7 @@ export class ProjectileManager {
             if (p.ownerId !== localId && localHit) {
                 p.active = false;
                 this.scene.remove(p.mesh);
-                if (isHost) onPlayerHit(p.ownerId, localId, 15, localHit.section);
+                if (isHost) onPlayerHit(p.ownerId, localId, p.damage, localHit.section);
                 continue;
             }
 
@@ -112,7 +170,7 @@ export class ProjectileManager {
                 if (p.ownerId !== pid && remoteHit) {
                     p.active = false;
                     this.scene.remove(p.mesh);
-                    if (isHost) onPlayerHit(p.ownerId, pid, 15, remoteHit.section);
+                    if (isHost) onPlayerHit(p.ownerId, pid, p.damage, remoteHit.section);
                     hitRemote = true;
                     break;
                 }

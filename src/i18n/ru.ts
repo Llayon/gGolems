@@ -97,6 +97,19 @@ const ru: typeof en = {
     'hud.armor': 'БРОНЯ',
     'hud.pressure': 'ДАВЛЕНИЕ',
     'hud.venting': 'СБРОС {{seconds}}',
+    'hud.weapons': 'ОРУЖИЕ',
+
+    'weapon.runeBolt': 'РУННЫЙ БОЛТ',
+    'weapon.arcEmitter': 'ДУГОВОЙ ИЗЛУЧАТЕЛЬ',
+    'weapon.steamCannon': 'ПАРОВАЯ ПУШКА',
+    'weapon.short.runeBolt': 'БОЛТ',
+    'weapon.short.arcEmitter': 'ДУГА',
+    'weapon.short.steamCannon': 'ПУШКА',
+    'weapon.group': 'ГР{{group}}',
+    'weapon.state.ready': 'ГОТОВ',
+    'weapon.state.recycle': 'ПЕРЕЗАРЯД',
+    'weapon.state.offline': 'СЕКЦИЯ',
+    'weapon.state.heat': 'ПАР',
 
     'pilot.title': 'ПАНЕЛЬ ПИЛОТА',
     'pilot.hide': 'СКРЫТЬ [H]',
@@ -111,6 +124,9 @@ const ru: typeof en = {
     'pilot.controls.x': 'X отсечь тягу',
     'pilot.controls.v': 'V сменить вид',
     'pilot.controls.fire': 'ЛКМ рунный болт',
+    'pilot.controls.fire2': 'ПКМ дуговой излучатель',
+    'pilot.controls.fire3': 'Q паровая пушка',
+    'pilot.controls.alpha': 'E альфа-залп',
     'pilot.controls.shift': 'SHIFT рывок',
     'pilot.controls.space': 'SPACE сброс пара',
 
@@ -144,6 +160,7 @@ const ru: typeof en = {
     'mobile.settings.hint.leftCircle': 'ЛЕВЫЙ КРУГ ход и поворот шасси',
     'mobile.settings.hint.rightZone': 'СВОБОДНЫЙ ЭКРАН обзор и наведение торса',
     'mobile.settings.hint.fire': 'ОГОНЬ рунный болт',
+    'mobile.settings.hint.altFire': 'ДУГА / ПУШКА вторичный и тяжелый огонь',
     'mobile.settings.hint.dashVent': 'РЫВОК / ПАР маневр и сброс давления',
     'mobile.settings.hint.centerTorso': 'ЦЕНТР ТОРС выровнять торс по шасси',
     'mobile.settings.hint.stopThrottle': 'СТОП ХОД мгновенно сбросить тягу'

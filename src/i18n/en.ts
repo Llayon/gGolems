@@ -97,6 +97,19 @@ const en = {
     'hud.armor': 'ARMOR',
     'hud.pressure': 'PRESSURE',
     'hud.venting': 'VENT {{seconds}}',
+    'hud.weapons': 'WEAPONS',
+
+    'weapon.runeBolt': 'RUNE BOLT',
+    'weapon.arcEmitter': 'ARC EMITTER',
+    'weapon.steamCannon': 'STEAM CANNON',
+    'weapon.short.runeBolt': 'BOLT',
+    'weapon.short.arcEmitter': 'ARC',
+    'weapon.short.steamCannon': 'CANNON',
+    'weapon.group': 'G{{group}}',
+    'weapon.state.ready': 'READY',
+    'weapon.state.recycle': 'RECYCLE',
+    'weapon.state.offline': 'OFFLINE',
+    'weapon.state.heat': 'HEAT',
 
     'pilot.title': 'PILOT PANEL',
     'pilot.hide': 'HIDE [H]',
@@ -111,6 +124,9 @@ const en = {
     'pilot.controls.x': 'X cut throttle',
     'pilot.controls.v': 'V switch view',
     'pilot.controls.fire': 'LMB rune bolt',
+    'pilot.controls.fire2': 'RMB arc emitter',
+    'pilot.controls.fire3': 'Q steam cannon',
+    'pilot.controls.alpha': 'E alpha strike',
     'pilot.controls.shift': 'SHIFT dash',
     'pilot.controls.space': 'SPACE vent steam',
 
@@ -144,6 +160,7 @@ const en = {
     'mobile.settings.hint.leftCircle': 'LEFT CIRCLE move and turn chassis',
     'mobile.settings.hint.rightZone': 'FREE SCREEN aim and look',
     'mobile.settings.hint.fire': 'FIRE rune bolt',
+    'mobile.settings.hint.altFire': 'ARC / CANNON fire secondary and heavy weapons',
     'mobile.settings.hint.dashVent': 'DASH / VENT maneuver and pressure release',
     'mobile.settings.hint.centerTorso': 'CENTER TORSO align torso to chassis',
     'mobile.settings.hint.stopThrottle': 'CUT THROTTLE instant throttle stop'
