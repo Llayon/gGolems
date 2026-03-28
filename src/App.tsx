@@ -676,6 +676,14 @@ export default function App() {
 
             {inLobby ? (
                 <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[radial-gradient(circle_at_center,#2a1c12_0%,#130e0b_60%,#090807_100%)] px-4 text-white">
+                    <button
+                        type="button"
+                        onClick={() => setLocale((current) => current === 'ru' ? 'en' : 'ru')}
+                        className="absolute right-4 top-4 rounded-full border border-[#8f6a38]/55 bg-black/40 px-4 py-2 text-[10px] tracking-[0.24em] text-[#d8c19a] transition-colors hover:border-[#efb768]/70 hover:text-[#efb768]"
+                    >
+                        {localeLabel}
+                    </button>
+
                     <h1 className="mb-6 text-center text-2xl font-bold tracking-[0.22em] text-[#efb768] drop-shadow-[0_0_14px_rgba(239,183,104,0.45)] sm:mb-8 sm:text-4xl sm:tracking-[0.35em]">
                         {t('lobby.title')}
                     </h1>
