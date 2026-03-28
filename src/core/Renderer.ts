@@ -13,7 +13,7 @@ export class Renderer {
         this.scene.background = new THREE.Color(0x1a1a2e);
         this.scene.fog = new THREE.FogExp2(0x1a1a2e, quality.fogDensity);
 
-        this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1400);
+        this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1800);
         
         this.renderer = new THREE.WebGLRenderer({ canvas, antialias: quality.antialias });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
@@ -27,10 +27,10 @@ export class Renderer {
         const dirLight = new THREE.DirectionalLight(0xffaa55, 1.5);
         dirLight.position.set(10, 20, 10);
         dirLight.castShadow = quality.shadows;
-        dirLight.shadow.camera.top = 96;
-        dirLight.shadow.camera.bottom = -96;
-        dirLight.shadow.camera.left = -96;
-        dirLight.shadow.camera.right = 96;
+        dirLight.shadow.camera.top = 156;
+        dirLight.shadow.camera.bottom = -156;
+        dirLight.shadow.camera.left = -156;
+        dirLight.shadow.camera.right = 156;
         dirLight.shadow.mapSize.setScalar(quality.shadowMapSize);
         this.scene.add(dirLight);
 
