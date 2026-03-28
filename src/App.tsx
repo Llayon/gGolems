@@ -742,6 +742,7 @@ export default function App() {
                         </div>
 
                         <div className="flex flex-col gap-2">
+                            <div className="text-center text-xs tracking-[0.28em] text-[#8fb8c2]">{t('lobby.directJoinTitle')}</div>
                             <input
                                 type="text"
                                 placeholder={t('lobby.hostIdPlaceholder')}
@@ -756,6 +757,9 @@ export default function App() {
                             >
                                 {t('lobby.connect')}
                             </button>
+                            <div className="text-center text-[11px] tracking-[0.12em] text-[#b9c7c8]">
+                                {t('lobby.directJoinHint')}
+                            </div>
                         </div>
 
                         {firebaseLobbyStatus.enabled ? (
@@ -784,6 +788,9 @@ export default function App() {
                                         {t('lobby.noRooms')}
                                     </div>
                                 )}
+                                <div className="text-center text-[11px] tracking-[0.12em] text-[#b9c7c8]">
+                                    {t('lobby.firebaseOptional')}
+                                </div>
                             </div>
                         ) : (
                             <div className="rounded-xl border border-[#8f6a38]/20 bg-black/25 px-4 py-3 text-center text-[11px] tracking-[0.18em] text-[#b9c7c8]">

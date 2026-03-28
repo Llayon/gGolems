@@ -6,9 +6,14 @@ import {
     remove,
     serverTimestamp,
     set,
+    update,
     type Database
 } from 'firebase/database';
 import { getFirebaseDatabase } from './client';
+
+const HEARTBEAT_INTERVAL_MS = 15000;
+const ROOM_TTL_MS = 45000;
+const ROOM_LIST_REFRESH_MS = 5000;
 
 export type FirebaseLobbyRoom = {
     id: string;
@@ -17,6 +22,7 @@ export type FirebaseLobbyRoom = {
     status: 'open';
     createdAt: number;
     updatedAt: number;
+    expiresAt: number;
 };
 
 export type FirebaseLobbyRegistration = {
@@ -30,6 +36,7 @@ type LobbySnapshotValue = {
     status?: 'open';
     createdAt?: number;
     updatedAt?: number;
+    expiresAt?: number;
 };
 
 function getLobbyDatabase(): Database | null {
@@ -49,20 +56,36 @@ export async function registerFirebaseLobby(hostPeerId: string): Promise<Firebas
     const roomId = roomRef.key;
     if (!roomId) return null;
 
+    let heartbeatTimer: number | null = null;
+    const now = Date.now();
     const payload = {
         shortCode: roomId.slice(-6).toUpperCase(),
         hostPeerId,
         status: 'open' as const,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
+        createdAt: now,
+        updatedAt: now,
+        expiresAt: now + ROOM_TTL_MS,
+        serverUpdatedAt: serverTimestamp()
     };
 
     await set(roomRef, payload);
     await onDisconnect(roomRef).remove();
 
+    heartbeatTimer = window.setInterval(() => {
+        const now = Date.now();
+        void update(roomRef, {
+            updatedAt: now,
+            expiresAt: now + ROOM_TTL_MS,
+            serverUpdatedAt: serverTimestamp()
+        });
+    }, HEARTBEAT_INTERVAL_MS);
+
     return {
         roomId,
         unregister: async () => {
+            if (heartbeatTimer !== null) {
+                window.clearInterval(heartbeatTimer);
+            }
             await remove(roomRef);
         }
     };
@@ -76,25 +99,44 @@ export function subscribeFirebaseLobbies(onRooms: (rooms: FirebaseLobbyRoom[]) =
     }
 
     const lobbiesRef = ref(database, 'lobbies');
+    let rawRooms: FirebaseLobbyRoom[] = [];
 
-    return onValue(lobbiesRef, (snapshot) => {
-        const rooms: FirebaseLobbyRoom[] = [];
+    const emitRooms = () => {
+        const now = Date.now();
+        const visibleRooms = rawRooms
+            .filter((room) => room.expiresAt <= 0 || room.expiresAt >= now)
+            .sort((left, right) => right.updatedAt - left.updatedAt);
+        onRooms(visibleRooms);
+    };
+
+    const unsubscribe = onValue(lobbiesRef, (snapshot) => {
+        const nextRooms: FirebaseLobbyRoom[] = [];
         snapshot.forEach((child) => {
             const value = child.val() as LobbySnapshotValue | null;
             if (!value || value.status !== 'open' || !value.hostPeerId) return;
+            const expiresAt = typeof value.expiresAt === 'number' ? value.expiresAt : 0;
 
-            rooms.push({
+            nextRooms.push({
                 id: child.key ?? '',
                 shortCode: value.shortCode ?? (child.key ?? '').slice(-6).toUpperCase(),
                 hostPeerId: value.hostPeerId,
                 status: 'open',
                 createdAt: typeof value.createdAt === 'number' ? value.createdAt : 0,
-                updatedAt: typeof value.updatedAt === 'number' ? value.updatedAt : 0
+                updatedAt: typeof value.updatedAt === 'number' ? value.updatedAt : 0,
+                expiresAt
             });
         });
 
-        rooms.sort((left, right) => right.updatedAt - left.updatedAt);
-        onRooms(rooms);
+        rawRooms = nextRooms;
+        emitRooms();
     });
-}
 
+    const refreshTimer = window.setInterval(() => {
+        emitRooms();
+    }, ROOM_LIST_REFRESH_MS);
+
+    return () => {
+        window.clearInterval(refreshTimer);
+        unsubscribe();
+    };
+}

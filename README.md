@@ -23,6 +23,11 @@ View your app in AI Studio: https://ai.studio/apps/f5a11595-7575-42f3-8c21-db135
 
 The game can use Firebase Realtime Database as a lightweight lobby registry while gameplay remains peer-to-peer via PeerJS.
 
+Firebase is optional:
+- manual join by `HOST ID` still works exactly as before
+- actual gameplay still runs over PeerJS
+- Firebase only powers the public lobby list in the main menu
+
 To enable Firebase-backed lobbies, fill these values in [.env.local](.env.local):
 
 - `VITE_FIREBASE_API_KEY`
@@ -32,6 +37,8 @@ To enable Firebase-backed lobbies, fill these values in [.env.local](.env.local)
 - `VITE_FIREBASE_APP_ID`
 
 If these variables are left empty, the game still works, but the public lobby list in the main menu stays disabled.
+
+Hosted rooms publish a small heartbeat and expire from the visible public list automatically if they stop updating.
 
 ## GitHub Pages
 
