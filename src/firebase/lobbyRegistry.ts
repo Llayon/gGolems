@@ -22,6 +22,9 @@ export type FirebaseLobbyRoom = {
     hostPeerId: string;
     gameMode: GameMode;
     status: 'open';
+    inProgress: boolean;
+    currentPlayers: number;
+    maxPlayers: number;
     createdAt: number;
     updatedAt: number;
     expiresAt: number;
@@ -29,6 +32,7 @@ export type FirebaseLobbyRoom = {
 
 export type FirebaseLobbyRegistration = {
     roomId: string;
+    updateMeta: (meta: { currentPlayers?: number; inProgress?: boolean }) => Promise<void>;
     unregister: () => Promise<void>;
 };
 
@@ -37,6 +41,9 @@ type LobbySnapshotValue = {
     hostPeerId?: string;
     gameMode?: GameMode;
     status?: 'open';
+    inProgress?: boolean;
+    currentPlayers?: number;
+    maxPlayers?: number;
     createdAt?: number;
     updatedAt?: number;
     expiresAt?: number;
@@ -66,6 +73,9 @@ export async function registerFirebaseLobby(hostPeerId: string, gameMode: GameMo
         hostPeerId,
         gameMode,
         status: 'open' as const,
+        inProgress: true,
+        currentPlayers: 1,
+        maxPlayers: 5,
         createdAt: now,
         updatedAt: now,
         expiresAt: now + ROOM_TTL_MS,
@@ -86,6 +96,20 @@ export async function registerFirebaseLobby(hostPeerId: string, gameMode: GameMo
 
     return {
         roomId,
+        updateMeta: async (meta) => {
+            const now = Date.now();
+            await update(roomRef, {
+                updatedAt: now,
+                expiresAt: now + ROOM_TTL_MS,
+                serverUpdatedAt: serverTimestamp(),
+                ...(typeof meta.currentPlayers === 'number'
+                    ? { currentPlayers: Math.max(1, Math.round(meta.currentPlayers)) }
+                    : {}),
+                ...(typeof meta.inProgress === 'boolean'
+                    ? { inProgress: meta.inProgress }
+                    : {})
+            });
+        },
         unregister: async () => {
             if (heartbeatTimer !== null) {
                 window.clearInterval(heartbeatTimer);
@@ -126,6 +150,9 @@ export function subscribeFirebaseLobbies(onRooms: (rooms: FirebaseLobbyRoom[]) =
                 hostPeerId: value.hostPeerId,
                 gameMode: value.gameMode === 'tdm' ? 'tdm' : 'control',
                 status: 'open',
+                inProgress: value.inProgress !== false,
+                currentPlayers: typeof value.currentPlayers === 'number' ? Math.max(1, Math.round(value.currentPlayers)) : 1,
+                maxPlayers: typeof value.maxPlayers === 'number' ? Math.max(1, Math.round(value.maxPlayers)) : 5,
                 createdAt: typeof value.createdAt === 'number' ? value.createdAt : 0,
                 updatedAt: typeof value.updatedAt === 'number' ? value.updatedAt : 0,
                 expiresAt

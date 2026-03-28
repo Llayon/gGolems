@@ -824,6 +824,24 @@ export default function App() {
     }, []);
 
     useEffect(() => {
+        if (!firebaseLobbyStatus.enabled || !firebaseLobbyRef.current || !isHost || inLobby) {
+            return;
+        }
+
+        const pushLobbyMeta = () => {
+            const currentPlayers = 1 + (gameInstance?.remotePlayers?.size ?? 0);
+            void firebaseLobbyRef.current?.updateMeta({
+                currentPlayers,
+                inProgress: true
+            });
+        };
+
+        pushLobbyMeta();
+        const timer = window.setInterval(pushLobbyMeta, 2500);
+        return () => window.clearInterval(timer);
+    }, [firebaseLobbyStatus.enabled, gameInstance, inLobby, isHost, loading]);
+
+    useEffect(() => {
         try {
             window.localStorage.setItem('golems_mobile_handed', mobileLeftHanded ? 'left' : 'right');
             window.localStorage.setItem('golems_mobile_aim_preset', mobileAimPreset);
@@ -915,6 +933,7 @@ export default function App() {
             ? 'lobby.mode.tdm'
             : 'lobby.mode.control'
         : null;
+    const directJoinStatusKey = directJoinRoom?.inProgress ? 'lobby.roomState.live' : 'lobby.roomState.open';
     const sessionSummaryLabel = t(
         sessionMode === 'solo' ? 'pilot.summary.base' : 'pilot.summary.withId',
         sessionMode === 'solo'
@@ -1028,7 +1047,12 @@ export default function App() {
                             {hostId.trim() ? (
                                 <div className="text-center text-[11px] tracking-[0.14em] text-[#d7c5a1]">
                                     {directJoinModeKey
-                                        ? t('lobby.directJoinResolved', { mode: t(directJoinModeKey) })
+                                        ? t('lobby.directJoinResolved', {
+                                            mode: t(directJoinModeKey),
+                                            players: directJoinRoom?.currentPlayers ?? 1,
+                                            max: directJoinRoom?.maxPlayers ?? 5,
+                                            state: t(directJoinStatusKey)
+                                        })
                                         : firebaseLobbyStatus.enabled
                                             ? t('lobby.directJoinUnknown')
                                             : t('lobby.directJoinHint')}
@@ -1061,6 +1085,10 @@ export default function App() {
                                                     <div className="rounded-full border border-[#8f6a38]/45 bg-black/30 px-2 py-1 text-[9px] tracking-[0.18em] text-[#d7c5a1]">
                                                         {t(room.gameMode === 'tdm' ? 'lobby.mode.tdm' : 'lobby.mode.control')}
                                                     </div>
+                                                </div>
+                                                <div className="mt-1 flex items-center justify-between gap-3 text-[10px] tracking-[0.16em] text-[#bfa987]">
+                                                    <div>{t('lobby.playerCount', { current: room.currentPlayers, max: room.maxPlayers })}</div>
+                                                    <div>{t(room.inProgress ? 'lobby.roomState.live' : 'lobby.roomState.open')}</div>
                                                 </div>
                                                 <div className="mt-1 truncate text-[11px] tracking-[0.16em] text-[#d7c5a1]">{room.hostPeerId}</div>
                                             </button>
