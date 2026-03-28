@@ -125,6 +125,14 @@ export class ProjectileManager {
         return events;
     }
 
+    clear() {
+        for (const projectile of this.projectiles) {
+            this.scene.remove(projectile.mesh);
+        }
+        this.projectiles = [];
+        this.impacts = [];
+    }
+
     checkCollisions(
         bots: Map<string, DummyBot>,
         players: Map<string, GolemController>, 

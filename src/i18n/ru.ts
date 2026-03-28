@@ -145,6 +145,7 @@ const ru: typeof en = {
     'hud.results.active': 'В СТРОЮ',
     'hud.results.wave': 'ВОЛНА',
     'hud.results.none': '--',
+    'hud.results.restart': 'ПЕРЕЗАПУСК МАТЧА',
 
     'weapon.runeBolt': 'РУННЫЙ БОЛТ',
     'weapon.arcEmitter': 'ДУГОВОЙ ИЗЛУЧАТЕЛЬ',

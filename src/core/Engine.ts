@@ -168,6 +168,64 @@ export class Game {
         this.controlPoints.setVisible(mode === 'control');
     }
 
+    restartMatch(fromNetwork = false) {
+        if (this.sessionMode === 'client' && !fromNetwork) {
+            this.network.sendToHost({ type: 'restartRequest' });
+            return false;
+        }
+
+        this.projectiles.clear();
+        this.hitConfirmTimer = 0;
+        this.hitTargetHp = 0;
+        this.hitTargetMaxHp = 100;
+        this.teamScores = {
+            blue: 0,
+            red: 0,
+            scoreToWin: SCORE_TO_WIN[this.gameMode],
+            winner: null
+        };
+        this.respawnWaves = { blue: 0, red: 0 };
+        this.controlPoints.reset();
+
+        this.localRespawnState.alive = true;
+        this.localRespawnState.timer = 0;
+        const localSpawn = this.getTeamSpawn('blue', this.localRespawnState.slot);
+        this.placeGolemAtSpawn(this.golem, localSpawn);
+        this.golem.steam = this.golem.maxSteam;
+        this.golem.isOverheated = false;
+        this.golem.overheatTimer = 0;
+        this.golem.throttle = 0;
+        this.setGolemPresence(this.golem, true);
+
+        for (const [id, player] of this.remotePlayers) {
+            const state = this.remotePlayerStates.get(id) ?? { alive: true, timer: 0, slot: this.remoteSpawnSlots.get(id) ?? 1, team: 'blue' as TeamId };
+            const spawn = this.getTeamSpawn(state.team, state.slot);
+            this.placeGolemAtSpawn(player, spawn);
+            player.steam = player.maxSteam;
+            player.isOverheated = false;
+            player.overheatTimer = 0;
+            player.throttle = 0;
+            this.setRemotePlayerState(id, { alive: true, timer: 0, slot: state.slot, team: state.team });
+            this.setGolemPresence(player, true);
+            if (this.sessionMode === 'host') {
+                this.network.sendTo(id, { type: 'respawn', x: spawn.x, y: spawn.y, z: spawn.z, yaw: this.getSpawnYaw(spawn), slot: state.slot });
+            }
+        }
+
+        for (const [id, bot] of this.bots) {
+            const slot = Number(id.split('-').pop() ?? 0) || 0;
+            bot.respawnAt(this.getTeamSpawn(bot.team, slot));
+        }
+
+        this.mechCamera.addTrauma(0.8);
+
+        if (this.sessionMode === 'host') {
+            this.network.broadcast({ type: 'restartMatch', mode: this.gameMode });
+        }
+
+        return true;
+    }
+
     getSpreadDirection(baseDir: THREE.Vector3, spread: number) {
         const spreadScale = Math.max(0, spread);
         if (spreadScale <= 0.00001) {
@@ -972,6 +1030,8 @@ export class Game {
                     remoteGolem.targetTorsoYaw = data.ty;
                     remoteGolem.targetPos.set(data.pos.x, data.pos.y, data.pos.z);
                 }
+            } else if (data.type === 'restartRequest' && this.network.isHost) {
+                this.restartMatch();
             } else if (data.type === 'respawn') {
                 if (typeof data.slot === 'number') {
                     this.localRespawnState.slot = data.slot;
@@ -993,6 +1053,11 @@ export class Game {
                 this.golem.overheatTimer = 0;
                 this.setGolemPresence(this.golem, true);
                 this.mechCamera.addTrauma(1.0); // Big shake on respawn
+            } else if (data.type === 'restartMatch') {
+                if (data.mode === 'control' || data.mode === 'tdm') {
+                    this.setGameMode(data.mode);
+                }
+                this.restartMatch(true);
             } else if (data.type === 'fire') {
                 if (id !== this.network.myId) {
                     const ownerId = this.network.isHost ? id : data.ownerId;

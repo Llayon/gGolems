@@ -531,7 +531,7 @@ function getHeldPoints(points: ControlPointView[], owner: 'blue' | 'red') {
     return points.filter((point) => point.owner === owner).length;
 }
 
-function MatchStatusOverlay(props: { scores: TeamScoreState; points: ControlPointView[]; teamOverview: TeamOverview; respawnTimer: number; isTouchDevice: boolean; locale: Locale; gameMode: GameMode; t: Translator }) {
+function MatchStatusOverlay(props: { scores: TeamScoreState; points: ControlPointView[]; teamOverview: TeamOverview; respawnTimer: number; isTouchDevice: boolean; locale: Locale; gameMode: GameMode; t: Translator; onRestart?: () => void }) {
     const pointTone = (point: ControlPointView) => point.contested
         ? 'border-[#b57d3c]/60 bg-[#f0b35c]/16 text-[#ffd489]'
         : point.owner === 'blue'
@@ -603,7 +603,7 @@ function MatchStatusOverlay(props: { scores: TeamScoreState; points: ControlPoin
             </div>
 
             {props.scores.winner ? (
-                <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center bg-[radial-gradient(circle_at_center,rgba(18,16,12,0.44),rgba(5,5,5,0.74))] px-4">
+                <div className="absolute inset-0 z-40 flex items-center justify-center bg-[radial-gradient(circle_at_center,rgba(18,16,12,0.44),rgba(5,5,5,0.74))] px-4">
                     <div className={`w-full max-w-[560px] rounded-[28px] border bg-[rgba(10,10,10,0.88)] px-6 py-5 shadow-[0_0_28px_rgba(0,0,0,0.42)] ${props.scores.winner === 'blue' ? 'border-[#3d8fb4]/60 text-[#8ee6ff]' : 'border-[#a24f39]/60 text-[#ffb49b]'}`}>
                         <div className="text-center text-[10px] tracking-[0.34em] text-[#f0d8ab]">
                             {props.t('hud.results.title')}
@@ -636,6 +636,15 @@ function MatchStatusOverlay(props: { scores: TeamScoreState; points: ControlPoin
                                 <div>{props.teamOverview.red.alive}/{props.teamOverview.red.total}</div>
                                 <div>{props.teamOverview.red.waveTimer > 0.05 ? formatSeconds(props.locale, props.teamOverview.red.waveTimer) : props.t('hud.results.none')}</div>
                             </div>
+                        </div>
+                        <div className="mt-5 flex justify-center">
+                            <button
+                                type="button"
+                                onClick={props.onRestart}
+                                className="pointer-events-auto rounded-full border border-[#8f6a38]/60 bg-black/40 px-5 py-3 text-[11px] font-bold tracking-[0.24em] text-[#f3deb5] transition-colors hover:border-[#efb768]/80 hover:text-[#fff1d4]"
+                            >
+                                {props.t('hud.results.restart')}
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -1025,6 +1034,7 @@ export default function App() {
                     locale={locale}
                     gameMode={gameState.gameMode}
                     t={t}
+                    onRestart={() => gameInstance?.restartMatch?.()}
                 />
             ) : null}
 

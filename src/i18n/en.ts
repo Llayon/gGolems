@@ -145,6 +145,7 @@ const en = {
     'hud.results.active': 'ACTIVE',
     'hud.results.wave': 'WAVE',
     'hud.results.none': '--',
+    'hud.results.restart': 'RESTART MATCH',
 
     'weapon.runeBolt': 'RUNE BOLT',
     'weapon.arcEmitter': 'ARC EMITTER',

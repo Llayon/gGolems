@@ -262,6 +262,19 @@ export class ControlPointManager {
         }));
     }
 
+    reset() {
+        this.scoreTimer = 0;
+        this.time = 0;
+        for (const point of this.points) {
+            point.owner = 'neutral';
+            point.capture = 0;
+            point.contested = false;
+            point.blueInside = 0;
+            point.redInside = 0;
+            this.applyVisual(point);
+        }
+    }
+
     update(dt: number, units: UnitPresence[]) {
         this.time += dt;
         for (const point of this.points) {
