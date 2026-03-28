@@ -83,7 +83,7 @@ export class MechCamera {
 
     update(
         anchorPos: THREE.Vector3,
-        _bodyYaw: number,
+        bodyYaw: number,
         aimYaw: number,
         speed: number,
         mass: number,
@@ -93,8 +93,8 @@ export class MechCamera {
         this.getAimDirection(_aimForward);
 
         if (this.mode === 'thirdPerson') {
-            setLookVector(_bodyForward, aimYaw, 0);
-            _cameraRight.set(Math.cos(aimYaw), 0, Math.sin(aimYaw));
+            setLookVector(_bodyForward, bodyYaw, 0);
+            _cameraRight.set(Math.cos(bodyYaw), 0, Math.sin(bodyYaw));
 
             _targetPos
                 .copy(anchorPos)

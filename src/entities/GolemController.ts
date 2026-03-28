@@ -8,7 +8,7 @@ import { AudioManager } from '../core/AudioManager';
 import { DecalManager } from '../fx/DecalManager';
 import { MechCamera } from '../camera/MechCamera';
 import { getWeaponDefinition, WEAPON_MOUNT_ORDER } from '../combat/weapons';
-import type { WeaponFireRequest, WeaponGroupId, WeaponMountId, WeaponMountRuntime, WeaponStatusView } from '../combat/weaponTypes';
+import type { WeaponFireRequest, WeaponGroupId, WeaponId, WeaponMountId, WeaponMountRuntime, WeaponStatusView } from '../combat/weaponTypes';
 
 const _moveDir = new THREE.Vector3();
 const _currentVel = new THREE.Vector3();
@@ -103,6 +103,11 @@ export class GolemController {
     sections: GolemSectionState = createSectionState();
     maxSections: GolemSectionState = createSectionState();
     weaponMounts: Record<WeaponMountId, WeaponMountRuntime>;
+    weaponRecoil: Record<WeaponMountId, number> = {
+        rightArmMount: 0,
+        leftArmMount: 0,
+        torsoMount: 0
+    };
 
     legYaw = 0;
     torsoYaw = 0;
@@ -245,6 +250,7 @@ export class GolemController {
         this.sections = createSectionState();
         for (const mountId of WEAPON_MOUNT_ORDER) {
             this.weaponMounts[mountId].cooldownRemaining = 0;
+            this.weaponRecoil[mountId] = 0;
         }
         this.applySectionVisuals();
         this.syncMountAvailabilityFromSections();
@@ -334,6 +340,11 @@ export class GolemController {
         _muzzleOffset.set(definition.muzzleOffset.x, definition.muzzleOffset.y, definition.muzzleOffset.z);
         this.getMountRoot(mountId).localToWorld(out.copy(_muzzleOffset));
         return out;
+    }
+
+    triggerWeaponRecoil(weaponId: WeaponId) {
+        const mountId = getWeaponDefinition(weaponId).mountId;
+        this.weaponRecoil[mountId] = 1;
     }
 
     buildWeaponFireRequest(mount: WeaponMountRuntime): WeaponFireRequest {
@@ -432,6 +443,9 @@ export class GolemController {
             this.damageFlashTimer = Math.max(0, this.damageFlashTimer - dt);
         }
         this.updateWeaponCooldowns(dt);
+        for (const mountId of WEAPON_MOUNT_ORDER) {
+            this.weaponRecoil[mountId] = Math.max(0, this.weaponRecoil[mountId] - dt * 8.5);
+        }
         const flashRatio = this.damageFlashTimer > 0 ? this.damageFlashTimer / 0.16 : 0;
         const flashIntensity = flashRatio * 1.6;
         this.bronzeMaterial.emissive.setRGB(0.55 * flashRatio, 0.42 * flashRatio, 0.18 * flashRatio);
@@ -588,11 +602,11 @@ export class GolemController {
             }
         } else {
             this.walkCycle = this.gameCamera.walkCycle * Math.PI * 2;
-            this.getViewAnchor(_cameraAnchor, this.gameCamera.aimYaw);
+            this.getViewAnchor(_cameraAnchor, this.torsoYaw);
 
             this.gameCamera.update(
                 _cameraAnchor,
-                this.legYaw,
+                this.torsoYaw,
                 this.gameCamera.aimYaw,
                 this.currentSpeed,
                 this.mass,
@@ -615,10 +629,14 @@ export class GolemController {
         this.rightLeg.position.z = Math.sin(this.walkCycle + Math.PI) * 1.5;
         this.rightLeg.position.y = 1.5 + Math.max(0, Math.sin(this.walkCycle - Math.PI / 2)) * 0.5;
 
-        this.leftArm.position.z = Math.sin(this.walkCycle + Math.PI) * 1.0;
-        this.rightArm.position.z = Math.sin(this.walkCycle) * 1.0;
+        this.leftArm.position.z = Math.sin(this.walkCycle + Math.PI) * 1.0 + this.weaponRecoil.leftArmMount * 0.42;
+        this.rightArm.position.z = Math.sin(this.walkCycle) * 1.0 + this.weaponRecoil.rightArmMount * 0.42;
+        this.leftArm.rotation.x = -this.weaponRecoil.leftArmMount * 0.16;
+        this.rightArm.rotation.x = -this.weaponRecoil.rightArmMount * 0.16;
 
         this.torso.position.y = 5.5 + Math.abs(Math.sin(this.walkCycle * 2)) * 0.2;
+        this.torso.position.z = this.weaponRecoil.torsoMount * 0.3;
+        this.torso.rotation.x = -this.weaponRecoil.torsoMount * 0.08;
         this.pelvis.position.y = 2.0 + Math.abs(Math.sin(this.walkCycle * 2)) * 0.2;
 
         this.boiler.scale.set(1 + Math.sin(Date.now() * 0.002) * 0.02, 1, 1 + Math.sin(Date.now() * 0.002) * 0.02);

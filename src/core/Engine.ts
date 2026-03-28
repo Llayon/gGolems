@@ -261,6 +261,7 @@ export class Game {
 
         for (const request of requests) {
             this.golem.getWeaponMuzzleOrigin(request.mountId, _muzzleOrigin);
+            this.golem.triggerWeaponRecoil(request.weaponId);
             trauma = Math.max(trauma, request.fireTrauma);
             _shotBaseDir.copy(aimTarget).sub(_muzzleOrigin);
             if (_shotBaseDir.lengthSq() <= 0.0001) {
@@ -1013,6 +1014,12 @@ export class Game {
 
                     for (const shot of shots) {
                         this.spawnShot(shot, ownerId);
+                    }
+                    const remotePlayer = this.remotePlayers.get(ownerId);
+                    if (remotePlayer) {
+                        for (const shot of shots) {
+                            remotePlayer.triggerWeaponRecoil(shot.weaponId);
+                        }
                     }
                     this.playWeaponVolleyFx(shots);
 
