@@ -126,14 +126,40 @@ export class TerrainBuilder {
         this.scene.add(ground);
         this.collisionMeshes.push(ground);
 
-        const groundBody = this.physics.createRigidBody(RAPIER.RigidBodyDesc.fixed());
-        const groundCollider = RAPIER.ColliderDesc.heightfield(
-            this.groundRows,
-            this.groundCols,
-            heights,
-            { x: size, y: 1, z: size }
-        );
-        this.physics.createCollider(groundCollider, groundBody);
+        this.createGroundCollider(geometry, heights, size);
+    }
+
+    createGroundCollider(geometry: THREE.BufferGeometry, heights: Float32Array, size: number) {
+        try {
+            const groundCollider = RAPIER.ColliderDesc.heightfield(
+                this.groundRows,
+                this.groundCols,
+                heights,
+                { x: size, y: 1, z: size }
+            );
+            const groundBody = this.physics.createRigidBody(RAPIER.RigidBodyDesc.fixed());
+            this.physics.createCollider(groundCollider, groundBody);
+        } catch (error) {
+            console.warn('Heightfield collider failed, falling back to trimesh ground.', error);
+
+            const positionAttr = geometry.attributes.position;
+            const vertices = positionAttr.array instanceof Float32Array
+                ? positionAttr.array
+                : new Float32Array(positionAttr.array);
+            const indices = geometry.index
+                ? geometry.index.array instanceof Uint32Array
+                    ? geometry.index.array
+                    : new Uint32Array(geometry.index.array)
+                : new Uint32Array(Array.from({ length: vertices.length / 3 }, (_, index) => index));
+
+            const groundCollider = RAPIER.ColliderDesc.trimesh(
+                vertices,
+                indices,
+                RAPIER.TriMeshFlags.FIX_INTERNAL_EDGES
+            );
+            const groundBody = this.physics.createRigidBody(RAPIER.RigidBodyDesc.fixed());
+            this.physics.createCollider(groundCollider, groundBody);
+        }
     }
 
     buildTerrainMasses() {
