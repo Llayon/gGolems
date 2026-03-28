@@ -7,6 +7,7 @@ const _targetPos = new THREE.Vector3();
 const _targetLookAt = new THREE.Vector3();
 const _aimForward = new THREE.Vector3();
 const _bodyForward = new THREE.Vector3();
+const _cameraRight = new THREE.Vector3();
 const _up = new THREE.Vector3(0, 1, 0);
 
 function setLookVector(out: THREE.Vector3, yaw: number, pitch: number) {
@@ -82,7 +83,7 @@ export class MechCamera {
 
     update(
         anchorPos: THREE.Vector3,
-        bodyYaw: number,
+        _bodyYaw: number,
         aimYaw: number,
         speed: number,
         mass: number,
@@ -92,11 +93,13 @@ export class MechCamera {
         this.getAimDirection(_aimForward);
 
         if (this.mode === 'thirdPerson') {
-            setLookVector(_bodyForward, bodyYaw, 0);
+            setLookVector(_bodyForward, aimYaw, 0);
+            _cameraRight.set(Math.cos(aimYaw), 0, Math.sin(aimYaw));
 
             _targetPos
                 .copy(anchorPos)
                 .addScaledVector(_bodyForward, -CAMERA.thirdPersonDistance)
+                .addScaledVector(_cameraRight, CAMERA.thirdPersonShoulderOffset)
                 .addScaledVector(_up, CAMERA.thirdPersonHeight);
             _targetLookAt.copy(anchorPos).addScaledVector(_aimForward, CAMERA.thirdPersonLookForward);
         } else {

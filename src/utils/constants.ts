@@ -3,6 +3,8 @@ export const CAMERA = {
     thirdPersonLookForward: 18,
     thirdPersonDistance: 8.4,
     thirdPersonHeight: 2.7,
+    thirdPersonShoulderOffset: 1.15,
+    aimRayDistance: 160,
 
     // FOV
     fov: 58,
@@ -35,7 +37,7 @@ export const SHAKE = {
     rotationScale: 0.03,
     footstepTrauma: 0.04,
     hitTraumaPerDamage: 0.025,
-    fireTraumaScale: 0.1,
+    fireTraumaScale: 0.26,
 };
 
 export const ROTATION = {

@@ -14,7 +14,7 @@ import { DecalManager } from '../fx/DecalManager';
 import { ProjectileManager } from '../combat/ProjectileManager';
 import { MechCamera } from '../camera/MechCamera';
 import { ControlPointManager } from '../gameplay/ControlPointManager';
-import { GOLEM, ROTATION } from '../utils/constants';
+import { CAMERA, GOLEM, ROTATION } from '../utils/constants';
 import { QualityProfile, detectQualityProfile } from '../utils/quality';
 import type { ProjectileProfileId, WeaponFireRequest, WeaponId } from '../combat/weaponTypes';
 import type { BotStateView, GameMode, TeamId, TeamOverview, TeamScoreState } from '../gameplay/types';
@@ -33,6 +33,8 @@ const _spreadRight = new THREE.Vector3();
 const _spreadUp = new THREE.Vector3();
 const _spreadDir = new THREE.Vector3();
 const _muzzleOrigin = new THREE.Vector3();
+const _cameraAimDir = new THREE.Vector3();
+const _shotBaseDir = new THREE.Vector3();
 
 type FireShotPayload = {
     weaponId: WeaponId;
@@ -98,6 +100,7 @@ export class Game {
     sounds: AudioManager;
     decals: DecalManager;
     quality: QualityProfile;
+    aimRaycaster = new THREE.Raycaster();
     onStateUpdate: (state: any) => void;
     sessionMode: SessionMode;
     gameMode: GameMode;
@@ -181,6 +184,61 @@ export class Game {
             .normalize();
     }
 
+    getAimTargetPoint(out: THREE.Vector3) {
+        this.renderer.camera.getWorldDirection(_cameraAimDir).normalize();
+        this.aimRaycaster.set(this.renderer.camera.position, _cameraAimDir);
+        this.aimRaycaster.far = CAMERA.aimRayDistance;
+        const hits = this.aimRaycaster.intersectObjects(this.world.getCollisionMeshes(), false);
+        if (hits.length > 0) {
+            return out.copy(hits[0].point);
+        }
+        return out.copy(this.renderer.camera.position).addScaledVector(_cameraAimDir, CAMERA.aimRayDistance);
+    }
+
+    playWeaponVolleyFx(shots: FireShotPayload[]) {
+        const played = new Set<ProjectileProfileId>();
+        for (const shot of shots) {
+            if (played.has(shot.profile)) continue;
+            played.add(shot.profile);
+
+            if (shot.profile === 'steam_slug') {
+                this.particles.emitBurst(shot.ox, shot.oy, shot.oz, 12, 0.8, 1.8, 0.28);
+                this.sounds.playWeaponFire(shot.profile, 1.1);
+            } else if (shot.profile === 'arc_pulse') {
+                this.particles.emitBurst(shot.ox, shot.oy, shot.oz, 8, 0.45, 1.2, 0.18);
+                this.sounds.playWeaponFire(shot.profile, 0.9);
+            } else {
+                this.particles.emitBurst(shot.ox, shot.oy, shot.oz, 6, 0.32, 0.9, 0.16);
+                this.sounds.playWeaponFire(shot.profile, 0.8);
+            }
+        }
+    }
+
+    playProjectileImpactFx() {
+        const localPos = this.golem.body.translation();
+        _listenerPos.set(localPos.x, localPos.y, localPos.z);
+
+        for (const event of this.projectiles.consumeImpactEvents()) {
+            _propFxPos.set(event.x, event.y, event.z);
+            const proximity = clamp(1 - _propFxPos.distanceTo(_listenerPos) / 34, 0, 1);
+
+            if (event.profile === 'steam_slug') {
+                this.particles.emitBurst(event.x, event.y, event.z, event.kind === 'world' ? 18 : 24, 1.2, 2.3, 0.55);
+            } else if (event.profile === 'arc_pulse') {
+                this.particles.emitBurst(event.x, event.y, event.z, event.kind === 'world' ? 12 : 16, 0.85, 1.7, 0.4);
+            } else {
+                this.particles.emitBurst(event.x, event.y, event.z, event.kind === 'world' ? 8 : 12, 0.55, 1.2, 0.3);
+            }
+
+            if (proximity > 0.05) {
+                this.sounds.playWeaponImpact(event.profile, 0.75 + proximity * 0.45);
+                if (event.kind !== 'world') {
+                    this.mechCamera.addTrauma(proximity * 0.08);
+                }
+            }
+        }
+    }
+
     spawnShot(shot: FireShotPayload, ownerId: string) {
         this.projectiles.fire({
             origin: _weaponOrigin.set(shot.ox, shot.oy, shot.oz).clone(),
@@ -194,19 +252,25 @@ export class Game {
         });
     }
 
-    fireWeaponRequests(ownerId: string, requests: WeaponFireRequest[]) {
+    fireWeaponRequests(ownerId: string, requests: WeaponFireRequest[], aimTarget: THREE.Vector3) {
         if (requests.length === 0) return;
 
-        this.mechCamera.getAimDirection(_weaponDir);
+        this.renderer.camera.getWorldDirection(_cameraAimDir).normalize();
         const shots: FireShotPayload[] = [];
         let trauma = 0;
 
         for (const request of requests) {
             this.golem.getWeaponMuzzleOrigin(request.mountId, _muzzleOrigin);
             trauma = Math.max(trauma, request.fireTrauma);
+            _shotBaseDir.copy(aimTarget).sub(_muzzleOrigin);
+            if (_shotBaseDir.lengthSq() <= 0.0001) {
+                _shotBaseDir.copy(_cameraAimDir);
+            } else {
+                _shotBaseDir.normalize();
+            }
 
             for (let index = 0; index < request.projectileCount; index++) {
-                const dir = this.getSpreadDirection(_weaponDir, request.spread).clone();
+                const dir = this.getSpreadDirection(_shotBaseDir, request.spread).clone();
                 const shot: FireShotPayload = {
                     weaponId: request.weaponId,
                     profile: request.projectileProfile,
@@ -225,6 +289,7 @@ export class Game {
             }
         }
 
+        this.playWeaponVolleyFx(shots);
         this.mechCamera.onFire(trauma);
 
         if (this.sessionMode !== 'solo') {
@@ -949,6 +1014,7 @@ export class Game {
                     for (const shot of shots) {
                         this.spawnShot(shot, ownerId);
                     }
+                    this.playWeaponVolleyFx(shots);
 
                     // If Host receives fire from client, forward to other clients
                     if (this.network.isHost) {
@@ -1190,6 +1256,19 @@ export class Game {
                         range: shot.range
                     });
                 }
+                this.playWeaponVolleyFx(botFireSolution.shots.map((shot) => ({
+                    weaponId: shot.weaponId,
+                    profile: shot.profile,
+                    ox: shot.origin.x,
+                    oy: shot.origin.y,
+                    oz: shot.origin.z,
+                    dx: shot.dir.x,
+                    dy: shot.dir.y,
+                    dz: shot.dir.z,
+                    damage: shot.damage,
+                    speed: shot.speed,
+                    range: shot.range
+                })));
             }
         }
 
@@ -1202,9 +1281,7 @@ export class Game {
         }
         this.decals.update(dt);
         
-        this.mechCamera.getAimDirection(_weaponDir);
-        this.golem.getViewAnchor(_weaponOrigin, this.mechCamera.aimYaw);
-        _weaponOrigin.addScaledVector(_weaponDir, 0.9);
+        this.getAimTargetPoint(_aimPoint);
 
         const fireGroup1 = this.input.consumeFireGroup(1);
         const fireGroup2 = this.input.consumeFireGroup(2);
@@ -1214,16 +1291,16 @@ export class Game {
         if (canControlLocal) {
             const localOwnerId = this.getLocalUnitId();
             if (fireGroup1) {
-                this.fireWeaponRequests(localOwnerId, this.golem.tryFireGroup(1));
+                this.fireWeaponRequests(localOwnerId, this.golem.tryFireGroup(1), _aimPoint);
             }
             if (fireGroup2) {
-                this.fireWeaponRequests(localOwnerId, this.golem.tryFireGroup(2));
+                this.fireWeaponRequests(localOwnerId, this.golem.tryFireGroup(2), _aimPoint);
             }
             if (fireGroup3) {
-                this.fireWeaponRequests(localOwnerId, this.golem.tryFireGroup(3));
+                this.fireWeaponRequests(localOwnerId, this.golem.tryFireGroup(3), _aimPoint);
             }
             if (alphaStrike) {
-                this.fireWeaponRequests(localOwnerId, this.golem.tryFireAlpha());
+                this.fireWeaponRequests(localOwnerId, this.golem.tryFireAlpha(), _aimPoint);
             }
         }
         
@@ -1273,6 +1350,7 @@ export class Game {
                     : (this.remotePlayerStates.get(targetId)?.alive ?? true),
                 (ownerId, targetId, damage, section) => this.handlePlayerHit(ownerId, targetId, damage, section)
             );
+            this.playProjectileImpactFx();
 
             this.playPropFx();
             this.updateRespawns(dt);
@@ -1342,7 +1420,7 @@ export class Game {
             }
         }
 
-        _aimPoint.copy(_weaponOrigin).addScaledVector(_weaponDir, 120);
+        this.getAimTargetPoint(_aimPoint);
         _aimPoint.project(this.renderer.camera);
 
         const aimScreenX = THREE.MathUtils.clamp(_aimPoint.x, -1.2, 1.2);

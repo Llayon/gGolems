@@ -41,6 +41,70 @@ export class AudioManager {
         this.servoOsc.frequency.setTargetAtTime(targetFreq, this.ctx.currentTime, 0.1);
     }
 
+    playWeaponFire(profile: 'bolt' | 'arc_pulse' | 'steam_slug', intensity = 1) {
+        if (!this.ctx) return;
+        const time = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        if (profile === 'bolt') {
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(420, time);
+            osc.frequency.exponentialRampToValueAtTime(160, time + 0.08);
+            gain.gain.setValueAtTime(0.03 * intensity, time);
+            gain.gain.exponentialRampToValueAtTime(0.001, time + 0.08);
+        } else if (profile === 'arc_pulse') {
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(260, time);
+            osc.frequency.exponentialRampToValueAtTime(180, time + 0.11);
+            gain.gain.setValueAtTime(0.035 * intensity, time);
+            gain.gain.exponentialRampToValueAtTime(0.001, time + 0.11);
+        } else {
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(150, time);
+            osc.frequency.exponentialRampToValueAtTime(55, time + 0.16);
+            gain.gain.setValueAtTime(0.055 * intensity, time);
+            gain.gain.exponentialRampToValueAtTime(0.001, time + 0.16);
+        }
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(time);
+        osc.stop(time + (profile === 'steam_slug' ? 0.18 : 0.12));
+    }
+
+    playWeaponImpact(profile: 'bolt' | 'arc_pulse' | 'steam_slug', intensity = 1) {
+        if (!this.ctx) return;
+        const time = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        if (profile === 'bolt') {
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(240, time);
+            osc.frequency.exponentialRampToValueAtTime(90, time + 0.1);
+            gain.gain.setValueAtTime(0.035 * intensity, time);
+            gain.gain.exponentialRampToValueAtTime(0.001, time + 0.1);
+        } else if (profile === 'arc_pulse') {
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(320, time);
+            osc.frequency.exponentialRampToValueAtTime(120, time + 0.12);
+            gain.gain.setValueAtTime(0.04 * intensity, time);
+            gain.gain.exponentialRampToValueAtTime(0.001, time + 0.12);
+        } else {
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(95, time);
+            osc.frequency.exponentialRampToValueAtTime(32, time + 0.18);
+            gain.gain.setValueAtTime(0.065 * intensity, time);
+            gain.gain.exponentialRampToValueAtTime(0.001, time + 0.18);
+        }
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(time);
+        osc.stop(time + (profile === 'steam_slug' ? 0.22 : 0.14));
+    }
+
     playFootstep(mass: number) {
         if (!this.ctx) return;
         const time = this.ctx.currentTime;

@@ -15,7 +15,16 @@ const _sectionCenter = new THREE.Vector3();
 const _sectionOffset = new THREE.Vector3();
 const _sectionWorld = new THREE.Vector3();
 
-type HitResult = { section: GolemSection; distanceSq: number } | null;
+type HitResult = { section: GolemSection; distanceSq: number; point: THREE.Vector3 } | null;
+
+export type ProjectileImpactEvent = {
+    x: number;
+    y: number;
+    z: number;
+    profile: ProjectileProfileId;
+    kind: 'world' | 'prop' | 'bot' | 'player';
+    damage: number;
+};
 
 type ProjectileInstance = {
     mesh: THREE.Mesh;
@@ -43,6 +52,7 @@ type ProjectileSpawnSpec = {
 
 export class ProjectileManager {
     projectiles: ProjectileInstance[] = [];
+    impacts: ProjectileImpactEvent[] = [];
     scene: THREE.Scene;
     geometryByProfile: Record<ProjectileProfileId, THREE.SphereGeometry>;
     materialByProfile: Record<ProjectileProfileId, THREE.MeshStandardMaterial>;
@@ -109,6 +119,12 @@ export class ProjectileManager {
         this.projectiles = this.projectiles.filter(p => p.active);
     }
 
+    consumeImpactEvents() {
+        const events = this.impacts;
+        this.impacts = [];
+        return events;
+    }
+
     checkCollisions(
         bots: Map<string, DummyBot>,
         players: Map<string, GolemController>, 
@@ -140,6 +156,14 @@ export class ProjectileManager {
                 this.scene.remove(p.mesh);
                 const hit = intersects[0];
                 const consumedByProp = props.handleProjectileHit(hit.object, hit.point, p.damage, isHost);
+                this.impacts.push({
+                    x: hit.point.x,
+                    y: hit.point.y,
+                    z: hit.point.z,
+                    profile: p.profile,
+                    kind: consumedByProp ? 'prop' : 'world',
+                    damage: p.damage
+                });
                 if (!consumedByProp) {
                     decals.addBulletMark(hit.point);
                 }
@@ -157,6 +181,14 @@ export class ProjectileManager {
                 if (_closestPoint.distanceToSquared(bot.mesh.position) < 2.5 * 2.5) {
                     p.active = false;
                     this.scene.remove(p.mesh);
+                    this.impacts.push({
+                        x: _closestPoint.x,
+                        y: _closestPoint.y,
+                        z: _closestPoint.z,
+                        profile: p.profile,
+                        kind: 'bot',
+                        damage: p.damage
+                    });
                     if (isHost) onPlayerHit(p.ownerId, botId, p.damage, '__bot__');
                     hitBot = true;
                     break;
@@ -171,6 +203,14 @@ export class ProjectileManager {
             if (canTargetPlayer(localId) && p.ownerId !== localId && (!ownerTeam || !localTeam || ownerTeam !== localTeam) && localHit) {
                 p.active = false;
                 this.scene.remove(p.mesh);
+                this.impacts.push({
+                    x: localHit.point.x,
+                    y: localHit.point.y,
+                    z: localHit.point.z,
+                    profile: p.profile,
+                    kind: 'player',
+                    damage: p.damage
+                });
                 if (isHost) onPlayerHit(p.ownerId, localId, p.damage, localHit.section);
                 continue;
             }
@@ -184,6 +224,14 @@ export class ProjectileManager {
                 if (p.ownerId !== pid && (!ownerTeam || !targetTeam || ownerTeam !== targetTeam) && remoteHit) {
                     p.active = false;
                     this.scene.remove(p.mesh);
+                    this.impacts.push({
+                        x: remoteHit.point.x,
+                        y: remoteHit.point.y,
+                        z: remoteHit.point.z,
+                        profile: p.profile,
+                        kind: 'player',
+                        damage: p.damage
+                    });
                     if (isHost) onPlayerHit(p.ownerId, pid, p.damage, remoteHit.section);
                     hitRemote = true;
                     break;
@@ -201,7 +249,7 @@ export class ProjectileManager {
             const distanceSq = _closestPoint.distanceToSquared(center);
             if (distanceSq > radius * radius) return;
             if (!bestHit || distanceSq < bestHit.distanceSq) {
-                bestHit = { section, distanceSq };
+                bestHit = { section, distanceSq, point: _closestPoint.clone() };
             }
         };
 
