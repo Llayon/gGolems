@@ -163,7 +163,7 @@ export class DummyBot {
         return remainingHp;
     }
 
-    update(dt: number, target?: THREE.Vector3) {
+    update(dt: number, moveTarget?: THREE.Vector3, engageTarget?: THREE.Vector3, freeze = false) {
         let shot: { shots: BotShot[] } | null = null;
 
         if (this.respawnTimer > 0) {
@@ -195,16 +195,22 @@ export class DummyBot {
                 const newPos = new THREE.Vector3(currentPos.x, currentPos.y, currentPos.z).lerp(this.targetPos, 0.3);
                 this.body.setNextKinematicTranslation(newPos);
             }
-        } else if (target) {
+        } else if (freeze) {
+            const currentVelocity = this.body.linvel();
+            this.body.setLinvel({ x: 0, y: currentVelocity.y, z: 0 }, true);
+        } else if (moveTarget || engageTarget) {
+            const maneuverTarget = moveTarget ?? engageTarget;
+            const combatTarget = engageTarget;
             const pos = this.body.translation();
             _currentPos.set(pos.x, pos.y, pos.z);
-            _toTarget.copy(target).sub(_currentPos);
+            _toTarget.copy(maneuverTarget ?? _currentPos).sub(_currentPos);
             _toTarget.y = 0;
 
             const distance = _toTarget.length();
             if (distance > 0.001) {
                 _toTarget.divideScalar(distance);
                 _strafe.set(-_toTarget.z, 0, _toTarget.x);
+                const objectiveMode = !!maneuverTarget && !combatTarget;
 
                 this.strafeTimer -= dt;
                 if (this.strafeTimer <= 0) {
@@ -213,35 +219,46 @@ export class DummyBot {
                 }
 
                 _desiredVelocity.set(0, 0, 0);
-                if (distance > 21) {
-                    _desiredVelocity.add(_toTarget);
-                } else if (distance < 11) {
-                    _desiredVelocity.addScaledVector(_toTarget, -0.9);
+                if (objectiveMode) {
+                    if (distance > 4.5) {
+                        _desiredVelocity.add(_toTarget);
+                    } else if (distance < 1.8) {
+                        _desiredVelocity.addScaledVector(_toTarget, -0.35);
+                    }
+                    _desiredVelocity.addScaledVector(_strafe, this.strafeSign * 0.22);
+                } else {
+                    if (distance > 21) {
+                        _desiredVelocity.add(_toTarget);
+                    } else if (distance < 11) {
+                        _desiredVelocity.addScaledVector(_toTarget, -0.9);
+                    }
+                    _desiredVelocity.addScaledVector(_strafe, this.strafeSign * 0.9);
                 }
-                _desiredVelocity.addScaledVector(_strafe, this.strafeSign * 0.9);
 
                 if (_desiredVelocity.lengthSq() > 0.0001) {
-                    _desiredVelocity.normalize().multiplyScalar(8.5);
+                    _desiredVelocity.normalize().multiplyScalar(objectiveMode ? 6.2 : 8.5);
                 }
 
                 const currentVelocity = this.body.linvel();
                 this.body.setLinvel({ x: _desiredVelocity.x, y: currentVelocity.y, z: _desiredVelocity.z }, true);
 
-                _aimPoint.copy(target);
+                _aimPoint.copy(combatTarget ?? maneuverTarget ?? _currentPos);
                 _aimPoint.y = _currentPos.y;
                 this.mesh.rotation.y = Math.atan2(_aimPoint.x - _currentPos.x, -(_aimPoint.z - _currentPos.z));
 
                 this.fireCooldown -= dt;
-                if (this.fireCooldown <= 0 && distance < 58) {
-                    const weaponId = distance < 25
+                const combatDistance = combatTarget ? combatTarget.distanceTo(_currentPos) : Number.POSITIVE_INFINITY;
+                if (combatTarget && this.fireCooldown <= 0 && combatDistance < 58) {
+                    const weaponId = combatDistance < 25
                         ? 'steam_cannon'
-                        : distance > 55
+                        : combatDistance > 55
                             ? 'rune_bolt'
                             : 'arc_emitter';
                     const definition = getWeaponDefinition(weaponId);
-                    const origin = _currentPos.clone().addScaledVector(_toTarget, weaponId === 'steam_cannon' ? 1.2 : 1.6);
+                    const baseDir = combatTarget.clone().sub(_currentPos).normalize();
+                    const origin = _currentPos.clone().addScaledVector(baseDir, weaponId === 'steam_cannon' ? 1.2 : 1.6);
                     origin.y += 1.25;
-                    const baseDir = target.clone().sub(origin).normalize();
+                    baseDir.copy(combatTarget).sub(origin).normalize();
                     const shots: BotShot[] = [];
 
                     for (let index = 0; index < definition.projectileCount; index++) {

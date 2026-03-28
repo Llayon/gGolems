@@ -424,13 +424,15 @@ export class Game {
         return null;
     }
 
-    getNearestEnemyTarget(team: TeamId, from: THREE.Vector3) {
+    getNearestEnemyTarget(team: TeamId, from: THREE.Vector3, maxDistance = Number.POSITIVE_INFINITY) {
         let bestDistanceSq = Number.POSITIVE_INFINITY;
         let bestTarget: THREE.Vector3 | null = null;
+        const maxDistanceSq = maxDistance * maxDistance;
 
         const consider = (target: THREE.Vector3, enemyTeam: TeamId, alive: boolean) => {
             if (!alive || enemyTeam === team) return;
             const distanceSq = from.distanceToSquared(target);
+            if (distanceSq > maxDistanceSq) return;
             if (distanceSq < bestDistanceSq) {
                 bestDistanceSq = distanceSq;
                 bestTarget = target.clone();
@@ -453,6 +455,62 @@ export class Game {
         }
 
         return bestTarget;
+    }
+
+    getPriorityControlPoint(team: TeamId, from: THREE.Vector3) {
+        const enemyTeam: TeamId = team === 'blue' ? 'red' : 'blue';
+        let bestScore = Number.NEGATIVE_INFINITY;
+        let bestPoint: (typeof this.controlPoints.points)[number] | null = null;
+
+        for (const point of this.controlPoints.points) {
+            const friendlyInside = team === 'blue' ? point.blueInside : point.redInside;
+            const enemyInside = team === 'blue' ? point.redInside : point.blueInside;
+            const distance = from.distanceTo(point.position);
+            let score = -distance * 1.6;
+
+            if (point.contested) {
+                score += 260;
+            } else if (point.owner === enemyTeam) {
+                score += 220;
+            } else if (point.owner === 'neutral') {
+                score += 180;
+            } else if (enemyInside > 0) {
+                score += 210;
+            } else {
+                score += 60;
+            }
+
+            if (point.owner === team && point.capture * (team === 'blue' ? 1 : -1) >= 0.98) {
+                score -= 30;
+            }
+
+            score -= friendlyInside * 24;
+            score += enemyInside * 16;
+
+            if (distance <= point.radius * 0.78) {
+                score += 32;
+            }
+
+            if (score > bestScore) {
+                bestScore = score;
+                bestPoint = point;
+            }
+        }
+
+        return bestPoint;
+    }
+
+    getBotMovementTarget(team: TeamId, from: THREE.Vector3) {
+        const point = this.getPriorityControlPoint(team, from);
+        if (point) {
+            return point.position.clone();
+        }
+        return this.getNearestEnemyTarget(team, from);
+    }
+
+    haltHorizontalMotion(body: RAPIER.RigidBody) {
+        const velocity = body.linvel();
+        body.setLinvel({ x: 0, y: velocity.y, z: 0 }, true);
     }
 
     collectControlUnits() {
@@ -910,6 +968,8 @@ export class Game {
             this.toggleCameraMode();
         }
 
+        const matchEnded = this.teamScores.winner !== null;
+
         let throttleInput = this.input.virtualThrottle;
         let turnInput = this.input.virtualTurn;
         if (this.input.keys['KeyW']) throttleInput += 1;
@@ -921,14 +981,15 @@ export class Game {
 
         const centerTorso = this.input.consumeKey('KeyC') || this.input.consumeVirtualAction('centerTorso');
         const stopThrottle = this.input.consumeKey('KeyX') || this.input.consumeVirtualAction('stopThrottle');
+        const canControlLocal = this.localRespawnState.alive && !matchEnded;
 
         this.golem.update(
             dt,
             this.mechCamera.aimYaw,
-            this.localRespawnState.alive ? throttleInput : 0,
-            this.localRespawnState.alive ? turnInput : 0,
-            this.localRespawnState.alive ? centerTorso : false,
-            this.localRespawnState.alive ? stopThrottle : false,
+            canControlLocal ? throttleInput : 0,
+            canControlLocal ? turnInput : 0,
+            canControlLocal ? centerTorso : false,
+            canControlLocal ? stopThrottle : false,
             this.sounds,
             this.decals
         );
@@ -948,10 +1009,13 @@ export class Game {
         const authorityMode = this.sessionMode !== 'client';
         for (const bot of this.bots.values()) {
             const botPos = bot.body.translation();
-            const target = authorityMode
-                ? this.getNearestEnemyTarget(bot.team, _botTarget.set(botPos.x, botPos.y, botPos.z))
+            const movementTarget = authorityMode && !matchEnded
+                ? this.getBotMovementTarget(bot.team, _botTarget.set(botPos.x, botPos.y, botPos.z))
                 : undefined;
-            const botFireSolution = bot.update(dt, target ?? undefined);
+            const engageTarget = authorityMode && !matchEnded
+                ? this.getNearestEnemyTarget(bot.team, _botTarget.set(botPos.x, botPos.y, botPos.z), 58)
+                : undefined;
+            const botFireSolution = bot.update(dt, movementTarget ?? undefined, engageTarget ?? undefined, matchEnded);
             if (botFireSolution) {
                 for (const shot of botFireSolution.shots) {
                     this.projectiles.fire({
@@ -968,7 +1032,13 @@ export class Game {
             }
         }
 
-        this.projectiles.update(dt);
+        if (matchEnded) {
+            this.haltHorizontalMotion(this.golem.body);
+            this.remotePlayers.forEach((player) => this.haltHorizontalMotion(player.body));
+            this.bots.forEach((bot) => this.haltHorizontalMotion(bot.body));
+        } else {
+            this.projectiles.update(dt);
+        }
         this.decals.update(dt);
         
         this.mechCamera.getAimDirection(_weaponDir);
@@ -980,7 +1050,7 @@ export class Game {
         const fireGroup3 = this.input.consumeKey('KeyQ') || this.input.consumeFireGroup(3);
         const alphaStrike = this.input.consumeKey('KeyE') || this.input.consumeVirtualAction('alphaStrike');
 
-        if (this.localRespawnState.alive) {
+        if (canControlLocal) {
             const localOwnerId = this.getLocalUnitId();
             if (fireGroup1) {
                 this.fireWeaponRequests(localOwnerId, this.golem.tryFireGroup(1));
@@ -996,21 +1066,21 @@ export class Game {
             }
         }
         
-        if (this.localRespawnState.alive && (this.input.consumeKey('ShiftLeft') || this.input.consumeVirtualAction('dash'))) {
+        if (canControlLocal && (this.input.consumeKey('ShiftLeft') || this.input.consumeVirtualAction('dash'))) {
             if (this.golem.tryAction(30)) {
                 this.golem.dash();
                 this.mechCamera.onDash();
             }
         }
         
-        if (this.localRespawnState.alive && (this.input.consumeKey('Space') || this.input.consumeVirtualAction('vent'))) {
+        if (canControlLocal && (this.input.consumeKey('Space') || this.input.consumeVirtualAction('vent'))) {
             if (this.golem.tryAction(0)) {
                 this.golem.vent(this.particles);
                 this.mechCamera.addTrauma(0.5);
             }
         }
 
-        if (authorityMode) {
+        if (authorityMode && !matchEnded) {
             this.controlPoints.update(dt, this.collectControlUnits());
             if (!this.teamScores.winner) {
                 const scoreDelta = this.controlPoints.tickScore(dt);
@@ -1026,24 +1096,26 @@ export class Game {
             }
         }
 
-        this.projectiles.checkCollisions(
-            this.bots,
-            this.remotePlayers, 
-            this.golem, 
-            this.getLocalUnitId(), 
-            authorityMode,
-            this.world.getCollisionMeshes(),
-            this.world.propManager,
-            this.decals,
-            (unitId) => this.getUnitTeam(unitId),
-            (targetId) => targetId === this.getLocalUnitId()
-                ? this.localRespawnState.alive
-                : (this.remotePlayerStates.get(targetId)?.alive ?? true),
-            (ownerId, targetId, damage, section) => this.handlePlayerHit(ownerId, targetId, damage, section)
-        );
+        if (!matchEnded) {
+            this.projectiles.checkCollisions(
+                this.bots,
+                this.remotePlayers, 
+                this.golem, 
+                this.getLocalUnitId(), 
+                authorityMode,
+                this.world.getCollisionMeshes(),
+                this.world.propManager,
+                this.decals,
+                (unitId) => this.getUnitTeam(unitId),
+                (targetId) => targetId === this.getLocalUnitId()
+                    ? this.localRespawnState.alive
+                    : (this.remotePlayerStates.get(targetId)?.alive ?? true),
+                (ownerId, targetId, damage, section) => this.handlePlayerHit(ownerId, targetId, damage, section)
+            );
 
-        this.playPropFx();
-        this.updateRespawns(dt);
+            this.playPropFx();
+            this.updateRespawns(dt);
+        }
         
         this.boilerParticleTimer += dt;
         if (this.boilerParticleTimer >= this.quality.boilerParticleInterval) {
@@ -1097,7 +1169,7 @@ export class Game {
                     props: this.world.propManager.getSnapshot()
                 });
             } else if (this.sessionMode === 'client') {
-                if (this.localRespawnState.alive) {
+                if (this.localRespawnState.alive && !matchEnded) {
                     this.network.sendToHost({
                         type: 'input',
                         pos: { x: pos.x, y: pos.y, z: pos.z },

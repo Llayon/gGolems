@@ -7,6 +7,9 @@ export type ControlPointView = {
     owner: ControlOwner;
     capture: number;
     radius: number;
+    contested: boolean;
+    blueInside: number;
+    redInside: number;
 };
 
 export type TeamScoreState = {

@@ -104,6 +104,12 @@ const en = {
     'hud.respawn': 'RESPAWN',
     'hud.victory.blue': 'BLUE VICTORY',
     'hud.victory.red': 'RED VICTORY',
+    'hud.matchLocked': 'COMBAT LOCKED',
+    'hud.point.contested': 'POINT {{point}} CONTESTED',
+    'hud.point.securing': '{{team}} SECURING {{point}} {{progress}}',
+    'hud.point.holding': '{{team}} HOLDS {{count}}',
+    'hud.point.split': 'CONTROL SPLIT {{blue}}-{{red}}',
+    'hud.point.neutral': 'ALL POINTS NEUTRAL',
 
     'weapon.runeBolt': 'RUNE BOLT',
     'weapon.arcEmitter': 'ARC EMITTER',

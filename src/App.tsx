@@ -476,12 +476,51 @@ function WeaponRack(props: { weapons: WeaponStatusView[]; locale: Locale; t: Tra
     );
 }
 
-function MatchStatusOverlay(props: { scores: TeamScoreState; points: ControlPointView[]; respawnTimer: number; isTouchDevice: boolean; t: Translator }) {
-    const pointTone = (owner: ControlPointView['owner']) => owner === 'blue'
-        ? 'border-[#3d8fb4]/60 bg-[#57bde8]/20 text-[#8ee6ff]'
-        : owner === 'red'
-            ? 'border-[#a24f39]/60 bg-[#f26b4a]/18 text-[#ffb49b]'
-            : 'border-[#8f6a38]/55 bg-black/25 text-[#e6c78c]';
+function getPointStatusText(points: ControlPointView[], t: Translator, locale: Locale) {
+    const contestedPoint = points.find((point) => point.contested);
+    if (contestedPoint) {
+        return t('hud.point.contested', { point: contestedPoint.id });
+    }
+
+    const activePoint = points.find((point) => {
+        const blueSecuring = point.blueInside > 0 && point.redInside === 0 && !(point.owner === 'blue' && point.capture >= 0.99);
+        const redSecuring = point.redInside > 0 && point.blueInside === 0 && !(point.owner === 'red' && point.capture <= -0.99);
+        return blueSecuring || redSecuring;
+    });
+
+    if (activePoint) {
+        const blueSecuring = activePoint.blueInside > 0 && activePoint.redInside === 0;
+        return t('hud.point.securing', {
+            team: t(blueSecuring ? 'hud.team.blue' : 'hud.team.red'),
+            point: activePoint.id,
+            progress: formatPercent(locale, Math.abs(activePoint.capture) * 100)
+        });
+    }
+
+    const blueOwned = points.filter((point) => point.owner === 'blue').length;
+    const redOwned = points.filter((point) => point.owner === 'red').length;
+    if (blueOwned === 0 && redOwned === 0) {
+        return t('hud.point.neutral');
+    }
+    if (blueOwned === redOwned) {
+        return t('hud.point.split', { blue: blueOwned, red: redOwned });
+    }
+
+    return t('hud.point.holding', {
+        team: t(blueOwned > redOwned ? 'hud.team.blue' : 'hud.team.red'),
+        count: Math.max(blueOwned, redOwned)
+    });
+}
+
+function MatchStatusOverlay(props: { scores: TeamScoreState; points: ControlPointView[]; respawnTimer: number; isTouchDevice: boolean; locale: Locale; t: Translator }) {
+    const pointTone = (point: ControlPointView) => point.contested
+        ? 'border-[#b57d3c]/60 bg-[#f0b35c]/16 text-[#ffd489]'
+        : point.owner === 'blue'
+            ? 'border-[#3d8fb4]/60 bg-[#57bde8]/20 text-[#8ee6ff]'
+            : point.owner === 'red'
+                ? 'border-[#a24f39]/60 bg-[#f26b4a]/18 text-[#ffb49b]'
+                : 'border-[#8f6a38]/55 bg-black/25 text-[#e6c78c]';
+    const pointStatus = getPointStatusText(props.points, props.t, props.locale);
 
     return (
         <>
@@ -499,7 +538,7 @@ function MatchStatusOverlay(props: { scores: TeamScoreState; points: ControlPoin
                         </div>
                         <div className="flex items-center gap-1.5">
                             {props.points.map((point) => (
-                                <div key={point.id} className={`min-w-[42px] rounded-full border px-3 py-1 text-center text-xs font-bold tracking-[0.18em] ${pointTone(point.owner)}`}>
+                                <div key={point.id} className={`min-w-[42px] rounded-full border px-3 py-1 text-center text-xs font-bold tracking-[0.18em] ${pointTone(point)}`}>
                                     {point.id}
                                 </div>
                             ))}
@@ -512,13 +551,21 @@ function MatchStatusOverlay(props: { scores: TeamScoreState; points: ControlPoin
                     <div className="mt-1 text-center text-[9px] tracking-[0.24em] text-[#cbb48a]">
                         {props.t('hud.scoreTarget', { score: props.scores.scoreToWin })}
                     </div>
+                    <div className="mt-1 text-center text-[10px] tracking-[0.18em] text-[#e7d3aa]">
+                        {pointStatus}
+                    </div>
                 </div>
             </div>
 
             {props.scores.winner ? (
                 <div className="pointer-events-none absolute inset-x-0 top-[126px] z-40 flex justify-center">
-                    <div className={`rounded-full border px-5 py-2 text-[11px] tracking-[0.3em] shadow-[0_0_18px_rgba(0,0,0,0.34)] ${props.scores.winner === 'blue' ? 'border-[#3d8fb4]/60 bg-[rgba(12,28,34,0.84)] text-[#8ee6ff]' : 'border-[#a24f39]/60 bg-[rgba(36,18,14,0.84)] text-[#ffb49b]'}`}>
-                        {props.t(props.scores.winner === 'blue' ? 'hud.victory.blue' : 'hud.victory.red')}
+                    <div className={`rounded-[24px] border px-5 py-3 text-center shadow-[0_0_18px_rgba(0,0,0,0.34)] ${props.scores.winner === 'blue' ? 'border-[#3d8fb4]/60 bg-[rgba(12,28,34,0.84)] text-[#8ee6ff]' : 'border-[#a24f39]/60 bg-[rgba(36,18,14,0.84)] text-[#ffb49b]'}`}>
+                        <div className="text-[11px] tracking-[0.3em]">
+                            {props.t(props.scores.winner === 'blue' ? 'hud.victory.blue' : 'hud.victory.red')}
+                        </div>
+                        <div className="mt-1 text-[9px] tracking-[0.22em] text-[#f0d8ab]">
+                            {props.t('hud.matchLocked')}
+                        </div>
                     </div>
                 </div>
             ) : null}
@@ -821,6 +868,7 @@ export default function App() {
                     points={gameState.controlPoints}
                     respawnTimer={gameState.respawnTimer}
                     isTouchDevice={isTouchDevice}
+                    locale={locale}
                     t={t}
                 />
             ) : null}

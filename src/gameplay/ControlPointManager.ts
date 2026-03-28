@@ -229,12 +229,23 @@ export class ControlPointManager {
             if (!next) continue;
             point.owner = next.owner;
             point.capture = next.capture;
+            point.contested = next.contested;
+            point.blueInside = next.blueInside;
+            point.redInside = next.redInside;
             this.applyVisual(point);
         }
     }
 
     getSnapshot() {
-        return this.points.map(({ id, owner, capture, radius }) => ({ id, owner, capture, radius }));
+        return this.points.map(({ id, owner, capture, radius, contested, blueInside, redInside }) => ({
+            id,
+            owner,
+            capture,
+            radius,
+            contested,
+            blueInside,
+            redInside
+        }));
     }
 
     update(dt: number, units: UnitPresence[]) {

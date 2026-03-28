@@ -104,6 +104,12 @@ const ru: typeof en = {
     'hud.respawn': 'РЕСПАВН',
     'hud.victory.blue': 'СИНИЕ ПОБЕДИЛИ',
     'hud.victory.red': 'КРАСНЫЕ ПОБЕДИЛИ',
+    'hud.matchLocked': 'БОЙ ЗАВЕРШЕН',
+    'hud.point.contested': 'ТОЧКА {{point}} ОСПАРИВАЕТСЯ',
+    'hud.point.securing': '{{team}} УДЕРЖИВАЮТ {{point}} {{progress}}',
+    'hud.point.holding': '{{team}} ДЕРЖАТ {{count}}',
+    'hud.point.split': 'КОНТРОЛЬ РАЗДЕЛЕН {{blue}}-{{red}}',
+    'hud.point.neutral': 'ВСЕ ТОЧКИ НЕЙТРАЛЬНЫ',
 
     'weapon.runeBolt': 'РУННЫЙ БОЛТ',
     'weapon.arcEmitter': 'ДУГОВОЙ ИЗЛУЧАТЕЛЬ',
