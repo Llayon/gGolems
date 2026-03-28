@@ -1,13 +1,13 @@
 import { angleDiff, clamp, polarToCartesian, toDegrees, wrapDegrees } from './helpers';
 import { MobileControls } from './MobileControls';
 import type { RadarContact } from './types';
-import type { Translator } from '../../i18n';
+import type { TranslationDescriptor, Translator } from '../../i18n';
+import { translateMessage } from '../../i18n';
 import type { Locale } from '../../i18n/types';
 import { formatDistance } from '../../i18n/format';
 
 type MobileCombatLayoutProps = {
-    warning: string;
-    throttleText: string;
+    warning: TranslationDescriptor;
     legYaw: number;
     torsoYaw: number;
     twistRatio: number;
@@ -127,7 +127,7 @@ function PortraitRadarDock(props: Pick<MobileCombatLayoutProps, 'legYaw' | 'tors
         <div className="pointer-events-none absolute bottom-[calc(env(safe-area-inset-bottom,0px)+14px)] left-1/2 z-20 -translate-x-1/2">
             <div className="flex flex-col items-center gap-1.5">
                 {metrics.nearestContact ? (
-                    <div
+                <div
                         className="rounded-full border border-[#8f6a38]/45 bg-[rgba(8,8,8,0.82)] px-3 py-1 text-[8px] font-bold tracking-[0.18em] shadow-[0_0_14px_rgba(0,0,0,0.24)]"
                         style={{ color: metrics.nearestColor }}
                     >
@@ -159,8 +159,8 @@ function LandscapeTopStrip(props: Pick<MobileCombatLayoutProps, 'warning' | 'leg
     return (
         <div className="pointer-events-none absolute inset-x-0 top-0 z-20 px-3" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 8px)' }}>
             <div className="mx-auto flex max-w-[min(96vw,980px)] items-center gap-2">
-                <div className="min-w-0 flex-1 rounded-full border border-[#8f6a38]/55 bg-[rgba(10,10,10,0.8)] px-4 py-2 text-[9px] tracking-[0.22em] text-[#efb768] shadow-[0_0_18px_rgba(0,0,0,0.3)]">
-                    {props.warning}
+                    <div className="min-w-0 flex-1 rounded-full border border-[#8f6a38]/55 bg-[rgba(10,10,10,0.8)] px-4 py-2 text-[9px] tracking-[0.22em] text-[#efb768] shadow-[0_0_18px_rgba(0,0,0,0.3)]">
+                    {translateMessage(props.t, props.warning)}
                 </div>
 
                 <div className="flex items-center gap-1.5">
@@ -210,7 +210,7 @@ function PortraitTopStrip(props: Pick<MobileCombatLayoutProps, 'warning' | 'onOp
         <div className="pointer-events-none absolute inset-x-0 top-0 z-20 px-3" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 8px)' }}>
             <div className="mx-auto flex max-w-[min(96vw,420px)] items-start justify-between gap-2">
                 <div className="min-w-0 flex-1 rounded-full border border-[#8f6a38]/55 bg-[rgba(10,10,10,0.8)] px-4 py-2.5 text-center text-[9px] tracking-[0.22em] text-[#efb768] shadow-[0_0_18px_rgba(0,0,0,0.3)]">
-                    {props.warning}
+                    {translateMessage(props.t, props.warning)}
                 </div>
                 <button
                     type="button"

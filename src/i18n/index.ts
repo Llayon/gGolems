@@ -1,11 +1,12 @@
 import en from './en';
 import ru from './ru';
-import type { Locale, TranslationDict, TranslationParams } from './types';
+import type { Locale, MessageDescriptor, TranslationDict, TranslationParams } from './types';
 
 export const LOCALE_STORAGE_KEY = 'gGolems.locale';
 
 export type TranslationKey = keyof typeof en;
 export type Translator = (key: TranslationKey, params?: TranslationParams) => string;
+export type TranslationDescriptor = MessageDescriptor<TranslationKey>;
 
 const dictionaries: Record<Locale, TranslationDict> = {
     en,
@@ -81,4 +82,11 @@ export function createTranslator(locale: Locale): Translator {
         }
         return interpolate(template, params);
     };
+}
+
+export function translateMessage(t: Translator, descriptor: TranslationDescriptor) {
+    if (typeof descriptor === 'string') {
+        return t(descriptor);
+    }
+    return t(descriptor.key, descriptor.params);
 }

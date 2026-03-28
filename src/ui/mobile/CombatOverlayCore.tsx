@@ -1,4 +1,5 @@
-import type { Translator } from '../../i18n';
+import type { TranslationDescriptor, Translator } from '../../i18n';
+import { translateMessage } from '../../i18n';
 
 type CombatOverlayCoreProps = {
     reticleX: number;
@@ -6,7 +7,7 @@ type CombatOverlayCoreProps = {
     hitConfirmRatio: number;
     hitTargetRatio: number;
     showAlignPrompt: boolean;
-    alignPromptLabel: string;
+    alignPrompt: TranslationDescriptor;
     t: Translator;
 };
 
@@ -63,7 +64,7 @@ export function CombatOverlayCore(props: CombatOverlayCoreProps) {
 
             {props.showAlignPrompt ? (
                 <div className="pointer-events-none absolute left-1/2 top-[58%] z-30 -translate-x-1/2 rounded-full border border-[#8f6a38]/60 bg-black/55 px-4 py-2 text-[11px] tracking-[0.36em] text-[#efb768]">
-                    {props.alignPromptLabel}
+                    {translateMessage(props.t, props.alignPrompt)}
                 </div>
             ) : null}
         </>

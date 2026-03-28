@@ -1,15 +1,16 @@
 import type { AimPreset, SessionMode } from './types';
 import type { Locale } from '../../i18n/types';
-import type { Translator } from '../../i18n';
+import type { TranslationDescriptor, Translator } from '../../i18n';
+import { translateMessage } from '../../i18n';
 
 type MobileSettingsOverlayProps = {
     open: boolean;
     isPortrait: boolean;
     sessionMode: SessionMode;
-    sessionLabel: string;
+    sessionMessage: TranslationDescriptor;
     cameraMode: 'cockpit' | 'thirdPerson';
     myId: string;
-    copyLabel: string;
+    copyMessage: TranslationDescriptor;
     leftHanded: boolean;
     aimPreset: AimPreset;
     locale: Locale;
@@ -40,7 +41,7 @@ export function MobileSettingsOverlay(props: MobileSettingsOverlayProps) {
                 <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
                         <div className="text-[11px] tracking-[0.34em] text-[#8fb8c2]">{props.t('mobile.settings.title')}</div>
-                        <div className="mt-2 text-xs tracking-[0.24em] text-[#d3b886]">{props.sessionLabel}</div>
+                        <div className="mt-2 text-xs tracking-[0.24em] text-[#d3b886]">{translateMessage(props.t, props.sessionMessage)}</div>
                     </div>
                     <button
                         type="button"
@@ -81,7 +82,7 @@ export function MobileSettingsOverlay(props: MobileSettingsOverlayProps) {
                                 className="rounded-full border border-[#8f6a38]/55 bg-black/35 px-3 py-2 text-[10px] tracking-[0.22em] text-[#d8c19a]"
                                 onClick={props.onToggleLocale}
                             >
-                                {props.t('locale.label')}: {props.t(props.locale === 'ru' ? 'locale.ru' : 'locale.en')}
+                                {props.t('locale.current', { label: props.t('locale.label'), value: props.t(props.locale === 'ru' ? 'locale.ru' : 'locale.en') })}
                             </button>
                         </div>
                     </div>
@@ -97,7 +98,7 @@ export function MobileSettingsOverlay(props: MobileSettingsOverlayProps) {
                                 className="mt-3 rounded-full border border-[#8f6a38]/55 bg-black/35 px-3 py-2 text-[10px] tracking-[0.24em] text-[#d8c19a]"
                                 onClick={props.onCopyHostId}
                             >
-                                {props.copyLabel}
+                                {translateMessage(props.t, props.copyMessage)}
                             </button>
                         </div>
                     ) : null}

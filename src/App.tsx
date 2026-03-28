@@ -8,7 +8,7 @@ import { initGame } from './core/Engine';
 import { CombatOverlayCore } from './ui/mobile/CombatOverlayCore';
 import { MobileCombatLayout } from './ui/mobile/MobileCombatLayout';
 import { MobileSettingsOverlay } from './ui/mobile/MobileSettingsOverlay';
-import { createTranslator, getInitialLocale, saveLocale, type TranslationKey, type Translator } from './i18n';
+import { createTranslator, getInitialLocale, saveLocale, translateMessage, type TranslationDescriptor, type TranslationKey, type Translator } from './i18n';
 import { formatPercent, formatSeconds, formatSpeedUnit } from './i18n/format';
 import type { Locale, TranslationParams } from './i18n/types';
 
@@ -268,8 +268,8 @@ function TorsoTwistArc(props: { twistRatio: number; maxTwist: number; t: Transla
     );
 }
 
-function CockpitFrame(props: { warning: string; throttleLabel: string }) {
-    const { warning, throttleLabel } = props;
+function CockpitFrame(props: { warning: TranslationDescriptor; throttleLabel: TranslationDescriptor; t: Translator }) {
+    const { warning, throttleLabel, t } = props;
 
     return (
         <div className="pointer-events-none absolute inset-0 z-10 overflow-hidden">
@@ -304,10 +304,10 @@ function CockpitFrame(props: { warning: string; throttleLabel: string }) {
             </div>
 
             <div className="absolute left-1/2 top-4 -translate-x-1/2 rounded-full border border-[#8f6a38]/70 bg-[rgba(12,10,8,0.82)] px-6 py-2 text-[11px] tracking-[0.42em] text-[#f1bd6e] shadow-[0_0_18px_rgba(0,0,0,0.4)]">
-                {warning}
+                {translateMessage(t, warning)}
             </div>
             <div className="absolute left-1/2 bottom-[214px] -translate-x-1/2 rounded-full border border-[#5f4d2e]/70 bg-[rgba(7,7,7,0.82)] px-5 py-2 text-[10px] tracking-[0.4em] text-[#a7c1c8]">
-                {throttleLabel}
+                {translateMessage(t, throttleLabel)}
             </div>
         </div>
     );
@@ -536,13 +536,12 @@ export default function App() {
     const hpRatio = gameState.maxHp > 0 ? gameState.hp / gameState.maxHp : 0;
     const steamRatio = gameState.maxSteam > 0 ? gameState.steam / gameState.maxSteam : 0;
     const displaySpeed = Math.round((gameState.speed / Math.max(gameState.maxSpeed, 0.1)) * 68);
-    const throttleMessage: { key: TranslationKey; params?: TranslationParams } = throttleRatio > 0.05
+    const throttleMessage: TranslationDescriptor = throttleRatio > 0.05
         ? { key: 'hud.throttle.forward', params: { percent: formatPercent(locale, Math.round(throttleRatio * 100)) } }
         : throttleRatio < -0.05
             ? { key: 'hud.throttle.reverse', params: { percent: formatPercent(locale, Math.round(-throttleRatio * 100)) } }
             : { key: 'hud.throttle.zero' };
-    const throttleText = t(throttleMessage.key, throttleMessage.params);
-    const warningMessage: { key: TranslationKey; params?: TranslationParams } = gameState.isOverheated
+    const warningMessage: TranslationDescriptor = gameState.isOverheated
         ? { key: 'hud.warning.overheat', params: { seconds: formatSeconds(locale, gameState.overheatTimer) } }
         : Math.abs(twistRatio) > 0.86
             ? { key: 'hud.warning.torsoLimit' }
@@ -553,7 +552,6 @@ export default function App() {
                     : throttleRatio > 0.7
                         ? { key: 'hud.warning.fullAhead' }
                         : { key: 'hud.warning.cruise' };
-    const warningText = t(warningMessage.key, warningMessage.params);
 
     const zeroLineTop = 69;
     const forwardFillHeight = `${Math.max(0, throttleRatio) * zeroLineTop}%`;
@@ -563,34 +561,44 @@ export default function App() {
     const hitConfirmRatio = clamp(gameState.hitConfirm / 0.22, 0, 1);
     const hitTargetRatio = clamp(gameState.hitTargetHp / Math.max(gameState.hitTargetMaxHp, 1), 0, 1);
     const mobileAimSensitivity = mobileAimPreset === 'LOW' ? 0.62 : mobileAimPreset === 'HIGH' ? 1.2 : 0.9;
-    const sessionLabel = t(sessionMode === 'solo'
+    const sessionMessage: TranslationDescriptor = sessionMode === 'solo'
         ? 'session.solo'
         : isHost
             ? 'session.host'
-            : 'session.client');
-    const copyLabel = t(copyState === 'copied'
+            : 'session.client';
+    const copyMessage: TranslationDescriptor = copyState === 'copied'
         ? 'common.copied'
         : copyState === 'error'
             ? 'common.failed'
-            : 'common.copy');
+            : 'common.copy';
 
-    const cameraModeLabel = t(gameState.cameraMode === 'thirdPerson' ? 'camera.3p' : 'camera.fp');
-    const terrainDebugLabel = gameState.terrainColliderMode === 'heightfield'
-        ? t('hud.debug.terrainHF')
-        : t('hud.debug.terrainTMFallback');
+    const cameraModeMessage: TranslationDescriptor = gameState.cameraMode === 'thirdPerson' ? 'camera.3p' : 'camera.fp';
+    const terrainDebugMessage: TranslationDescriptor = gameState.terrainColliderMode === 'heightfield'
+        ? 'hud.debug.terrainHF'
+        : 'hud.debug.terrainTMFallback';
     const terrainDebugTone = gameState.terrainColliderMode === 'heightfield'
         ? 'text-[#8fb8c2]'
         : 'text-[#f3b56c]';
     const terrainDebugError = gameState.terrainColliderError
         ? gameState.terrainColliderError.slice(0, 72)
         : '';
+    const sessionLabel = translateMessage(t, sessionMessage);
+    const copyTextLabel = translateMessage(t, copyMessage);
+    const cameraModeLabel = translateMessage(t, cameraModeMessage);
+    const terrainDebugLabel = translateMessage(t, terrainDebugMessage);
+    const sessionSummaryLabel = t(
+        sessionMode === 'solo' ? 'pilot.summary.base' : 'pilot.summary.withId',
+        sessionMode === 'solo'
+            ? { session: sessionLabel, camera: cameraModeLabel }
+            : { session: sessionLabel, camera: cameraModeLabel, idLabel: t('common.id'), id: myId || t('session.sync') }
+    );
     const showCockpitDecor = !isTouchDevice && gameState.cameraMode === 'cockpit';
     const hostBadgeClass = 'pointer-events-auto absolute right-4 top-4 z-30 flex items-center gap-3 rounded-2xl border border-[#8f6a38]/45 bg-[rgba(10,10,10,0.78)] px-4 py-3 text-[#e1cea7] shadow-[0_0_22px_rgba(0,0,0,0.32)] backdrop-blur-sm';
     const pilotPanelAnchorClass = 'left-4 top-4';
     const pilotPanelHideLabel = t('pilot.hide');
     const pilotPanelShowLabel = t('pilot.show');
-    const alignPromptLabel = t(isTouchDevice ? 'hud.alignChassis' : 'hud.alignChassisHotkey');
-    const localeLabel = `${t('locale.label')}: ${t(locale === 'ru' ? 'locale.ru' : 'locale.en')}`;
+    const alignPromptMessage: TranslationDescriptor = isTouchDevice ? 'hud.alignChassis' : 'hud.alignChassisHotkey';
+    const localeLabel = t('locale.current', { label: t('locale.label'), value: t(locale === 'ru' ? 'locale.ru' : 'locale.en') });
     return (
         <div className="relative h-[100dvh] w-full overflow-hidden bg-[#100d0b] font-mono text-[#f2ddb1]">
             <canvas ref={canvasRef} className={`block h-full w-full ${inLobby ? 'hidden' : ''}`} />
@@ -658,11 +666,10 @@ export default function App() {
 
             {!loading && !inLobby ? (
                 <>
-                    {showCockpitDecor ? <CockpitFrame warning={warningText} throttleLabel={throttleText} /> : null}
+                    {showCockpitDecor ? <CockpitFrame warning={warningMessage} throttleLabel={throttleMessage} t={t} /> : null}
                     {isTouchDevice ? (
                         <MobileCombatLayout
-                            warning={warningText}
-                            throttleText={throttleText}
+                            warning={warningMessage}
                             legYaw={gameState.legYaw}
                             torsoYaw={gameState.torsoYaw}
                             twistRatio={twistRatio}
@@ -693,7 +700,7 @@ export default function App() {
                                 onClick={copyHostId}
                                 className="shrink-0 rounded-full border border-[#8f6a38]/55 bg-black/40 px-4 py-2 text-[10px] tracking-[0.24em] text-[#d8c19a] transition-colors hover:border-[#efb768]/70 hover:text-[#efb768]"
                             >
-                                {copyLabel}
+                                {copyTextLabel}
                             </button>
                         </div>
                     ) : null}
@@ -706,7 +713,7 @@ export default function App() {
                                     <div className="min-w-0">
                                         <h1 className="text-lg font-bold tracking-[0.32em] text-[#efb768]">{t('pilot.title')}</h1>
                                         <p className="mt-2 text-xs tracking-[0.22em] text-[#8fb8c2]">
-                                            {sessionMode === 'solo' ? `${sessionLabel} | ${cameraModeLabel}` : `${sessionLabel} | ${cameraModeLabel} | ${t('common.id')} ${myId || t('session.sync')}`}
+                                            {sessionSummaryLabel}
                                         </p>
                                         <div className={`mt-2 text-[10px] tracking-[0.24em] ${terrainDebugTone}`}>
                                             {terrainDebugLabel}
@@ -725,7 +732,7 @@ export default function App() {
                                                 onClick={copyHostId}
                                                 className="mt-3 rounded-full border border-[#8f6a38]/55 bg-black/35 px-3 py-1 text-[10px] tracking-[0.24em] text-[#d8c19a] transition-colors hover:border-[#efb768]/70 hover:text-[#efb768]"
                                             >
-                                                {copyLabel}
+                                                {copyTextLabel}
                                             </button>
                                         ) : null}
                                     </div>
@@ -771,7 +778,7 @@ export default function App() {
                         hitConfirmRatio={hitConfirmRatio}
                         hitTargetRatio={hitTargetRatio}
                         showAlignPrompt={!isTouchDevice && Math.abs(twistRatio) > 0.55}
-                        alignPromptLabel={alignPromptLabel}
+                        alignPrompt={alignPromptMessage}
                         t={t}
                     />
 
@@ -877,10 +884,10 @@ export default function App() {
                             open={showMobileSettings}
                             isPortrait={isPortrait}
                             sessionMode={sessionMode}
-                            sessionLabel={sessionLabel}
+                            sessionMessage={sessionMessage}
                             cameraMode={gameState.cameraMode}
                             myId={myId}
-                            copyLabel={copyLabel}
+                            copyMessage={copyMessage}
                             leftHanded={mobileLeftHanded}
                             aimPreset={mobileAimPreset}
                             locale={locale}

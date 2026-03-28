@@ -2,6 +2,7 @@ import en from './en';
 
 const ru: typeof en = {
     'locale.label': 'ЯЗЫК',
+    'locale.current': '{{label}}: {{value}}',
     'locale.en': 'АНГЛИЙСКИЙ',
     'locale.ru': 'РУССКИЙ',
 
@@ -86,6 +87,8 @@ const ru: typeof en = {
     'pilot.hide': 'СКРЫТЬ [H]',
     'pilot.show': 'ПАНЕЛЬ [H]',
     'pilot.hostId': 'ID ХОСТА',
+    'pilot.summary.base': '{{session}} | {{camera}}',
+    'pilot.summary.withId': '{{session}} | {{camera}} | {{idLabel}} {{id}}',
     'pilot.controls.mouse': 'МЫШЬ наводка торса',
     'pilot.controls.ws': 'W / S поднять / сбросить тягу',
     'pilot.controls.ad': 'A / D повернуть шасси',

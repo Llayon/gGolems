@@ -2,6 +2,7 @@ import type { TranslationDict } from './types';
 
 const en = {
     'locale.label': 'LANG',
+    'locale.current': '{{label}}: {{value}}',
     'locale.en': 'ENGLISH',
     'locale.ru': 'RUSSIAN',
 
@@ -86,6 +87,8 @@ const en = {
     'pilot.hide': 'HIDE [H]',
     'pilot.show': 'PANEL [H]',
     'pilot.hostId': 'HOST ID',
+    'pilot.summary.base': '{{session}} | {{camera}}',
+    'pilot.summary.withId': '{{session}} | {{camera}} | {{idLabel}} {{id}}',
     'pilot.controls.mouse': 'MOUSE torso aim',
     'pilot.controls.ws': 'W / S throttle up / down',
     'pilot.controls.ad': 'A / D turn chassis',
