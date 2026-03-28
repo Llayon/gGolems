@@ -72,12 +72,8 @@ export class Arena {
         const configs: BoxConfig[] = [
             { x: -58, z: -26, w: 12, h: 4.4, d: 18, color: 0x51505b, yOffset: 2.2, rotationY: -0.18 },
             { x: -62, z: 24, w: 14, h: 4.6, d: 16, color: 0x51505b, yOffset: 2.3, rotationY: 0.16 },
-            { x: -20, z: 58, w: 10, h: 4.2, d: 18, color: 0x565662, yOffset: 2.1 },
-            { x: 18, z: -60, w: 10, h: 4.2, d: 18, color: 0x565662, yOffset: 2.1 },
             { x: 52, z: -48, w: 10, h: 4.4, d: 16, color: 0x5b5a63, yOffset: 2.2 },
             { x: 64, z: 34, w: 12, h: 4.8, d: 14, color: 0x5b5a63, yOffset: 2.4 },
-            { x: 88, z: -10, w: 8, h: 3.6, d: 16, color: 0x69666e, yOffset: 1.8 },
-            { x: 92, z: 18, w: 8, h: 3.6, d: 16, color: 0x69666e, yOffset: 1.8 },
             { x: -94, z: -46, w: 8, h: 3.8, d: 18, color: 0x5d5b61, yOffset: 1.9, rotationY: 0.14 },
             { x: -96, z: 14, w: 8, h: 3.8, d: 18, color: 0x5d5b61, yOffset: 1.9, rotationY: -0.14 },
             { x: -72, z: 52, w: 10, h: 4.0, d: 16, color: 0x66646b, yOffset: 2.0, rotationY: 0.08 },

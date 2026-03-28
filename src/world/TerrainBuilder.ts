@@ -103,13 +103,18 @@ export class TerrainBuilder {
             * Math.max(0, 1 - Math.abs(z) / (this.halfSize * 0.86))
             * 3.2;
         const southRise = Math.exp(-Math.pow((z + 88) / 20, 2)) * Math.exp(-Math.pow((x - 14) / 68, 2)) * 1.8;
-        const centerKnoll = Math.exp(-Math.pow((x - 16) / 18, 2) - Math.pow((z + 4) / 16, 2)) * 1.1;
-        const eastKnoll = Math.exp(-Math.pow((x - 54) / 22, 2) - Math.pow((z + 42) / 18, 2)) * 1.3;
-        const westKnoll = Math.exp(-Math.pow((x + 42) / 26, 2) - Math.pow((z - 26) / 22, 2)) * 1.15;
-        const westBerm = Math.exp(-Math.pow((x + 36) / 18, 2) - Math.pow((z + 10) / 38, 2)) * 3.4;
-        const eastBerm = Math.exp(-Math.pow((x - 38) / 18, 2) - Math.pow((z - 12) / 36, 2)) * 3.2;
-        const northBerm = Math.exp(-Math.pow((x + 6) / 28, 2) - Math.pow((z - 38) / 16, 2)) * 2.9;
-        const southBerm = Math.exp(-Math.pow((x - 6) / 26, 2) - Math.pow((z + 42) / 16, 2)) * 3.0;
+        const centerKnoll = Math.exp(-Math.pow((x - 16) / 16, 2) - Math.pow((z + 4) / 14, 2)) * 1.75;
+        const eastKnoll = Math.exp(-Math.pow((x - 54) / 20, 2) - Math.pow((z + 42) / 16, 2)) * 1.8;
+        const westKnoll = Math.exp(-Math.pow((x + 42) / 22, 2) - Math.pow((z - 26) / 20, 2)) * 1.65;
+        const westBerm = Math.exp(-Math.pow((x + 38) / 11, 2) - Math.pow((z + 4) / 34, 2)) * 5.4;
+        const eastBerm = Math.exp(-Math.pow((x - 40) / 11, 2) - Math.pow((z - 6) / 32, 2)) * 5.1;
+        const northBerm = Math.exp(-Math.pow((x + 4) / 25, 2) - Math.pow((z - 40) / 10, 2)) * 3.9;
+        const southBerm = Math.exp(-Math.pow((x - 2) / 23, 2) - Math.pow((z + 44) / 10, 2)) * 4.0;
+        const centerSaddle = -Math.exp(-Math.pow(x / 18, 2) - Math.pow((z + 2) / 20, 2)) * 1.2;
+        const westPass = -Math.exp(-Math.pow((x + 32) / 10, 2) - Math.pow((z + 42) / 14, 2)) * 1.35;
+        const eastPass = -Math.exp(-Math.pow((x - 34) / 10, 2) - Math.pow((z - 42) / 14, 2)) * 1.25;
+        const northPass = -Math.exp(-Math.pow((x - 26) / 14, 2) - Math.pow((z - 28) / 10, 2)) * 1.1;
+        const southPass = -Math.exp(-Math.pow((x + 24) / 14, 2) - Math.pow((z + 28) / 10, 2)) * 1.1;
         const perimeterLift = smoothstep(0.72, 0.98, radial) * 8.4;
 
         let height = Math.max(
@@ -129,6 +134,11 @@ export class TerrainBuilder {
             + eastBerm
             + northBerm
             + southBerm
+            + centerSaddle
+            + westPass
+            + eastPass
+            + northPass
+            + southPass
             + perimeterLift
         );
 
