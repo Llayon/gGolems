@@ -8,6 +8,9 @@ import { initGame } from './core/Engine';
 import { CombatOverlayCore } from './ui/mobile/CombatOverlayCore';
 import { MobileCombatLayout } from './ui/mobile/MobileCombatLayout';
 import { MobileSettingsOverlay } from './ui/mobile/MobileSettingsOverlay';
+import { createTranslator, getInitialLocale, saveLocale, type TranslationKey, type Translator } from './i18n';
+import { formatPercent, formatSeconds, formatSpeedUnit } from './i18n/format';
+import type { Locale, TranslationParams } from './i18n/types';
 
 type SessionMode = 'solo' | 'host' | 'client';
 type SectionName = 'head' | 'centerTorso' | 'leftTorso' | 'rightTorso' | 'leftArm' | 'rightArm' | 'leftLeg' | 'rightLeg';
@@ -147,17 +150,17 @@ async function copyText(text: string) {
     }
 }
 
-function describeError(error: unknown) {
+function describeError(error: unknown, fallback: string) {
     if (error instanceof Error && error.message) {
         return error.message;
     }
-    return typeof error === 'string' ? error : 'Неизвестная ошибка';
+    return typeof error === 'string' ? error : fallback;
 }
 
-function withTimeout<T>(promiseFactory: () => Promise<T>, timeoutMs: number, label: string) {
+function withTimeout<T>(promiseFactory: () => Promise<T>, timeoutMs: number, timeoutMessage: string) {
     return new Promise<T>((resolve, reject) => {
         const timeoutId = window.setTimeout(() => {
-            reject(new Error(`${label}: превышен таймаут ${Math.round(timeoutMs / 1000)}с`));
+            reject(new Error(timeoutMessage));
         }, timeoutMs);
 
         try {
@@ -178,7 +181,7 @@ function withTimeout<T>(promiseFactory: () => Promise<T>, timeoutMs: number, lab
     });
 }
 
-function HeadingTape(props: { legYaw: number; torsoYaw: number; maxTwist: number }) {
+function HeadingTape(props: { legYaw: number; torsoYaw: number; maxTwist: number; t: Translator }) {
     const { legYaw, torsoYaw, maxTwist } = props;
     const bodyOffsetPx = clamp(angleDiff(torsoYaw, legYaw) / (maxTwist * 1.1), -1, 1) * 184;
     const centerHeading = wrapDegrees(Math.round(toDegrees(torsoYaw)));
@@ -206,26 +209,26 @@ function HeadingTape(props: { legYaw: number; torsoYaw: number; maxTwist: number
             })}
 
             <div className="absolute left-1/2 top-[7px] -translate-x-1/2 text-[10px] font-bold tracking-[0.42em] text-[#7ee6f0]">
-                ВЗГЛЯД
+                {props.t('hud.heading.gaze')}
             </div>
             <div className="absolute left-1/2 top-1 -translate-x-1/2">
                 <div className="h-0 w-0 border-x-[8px] border-x-transparent border-t-[14px] border-t-[#7ee6f0] drop-shadow-[0_0_8px_rgba(126,230,240,0.55)]" />
             </div>
 
             <div className="absolute top-[7px] text-[10px] font-bold tracking-[0.36em] text-[#efb768]" style={{ left: `calc(50% + ${bodyOffsetPx}px)`, transform: 'translateX(-50%)' }}>
-                ШАССИ
+                {props.t('hud.heading.chassis')}
             </div>
             <div className="absolute top-2" style={{ left: `calc(50% + ${bodyOffsetPx}px)`, transform: 'translateX(-50%)' }}>
                 <div className="h-0 w-0 border-x-[8px] border-x-transparent border-t-[14px] border-t-[#efb768] drop-shadow-[0_0_10px_rgba(239,183,104,0.55)]" />
             </div>
 
-            <div className="absolute left-5 bottom-2 text-[11px] tracking-[0.22em] text-[#9cb5bb]">ТОРС {centerHeading.toString().padStart(3, '0')}</div>
-            <div className="absolute right-5 bottom-2 text-[11px] tracking-[0.22em] text-[#d0b07a]">КОРПУС {chassisHeading.toString().padStart(3, '0')}</div>
+            <div className="absolute left-5 bottom-2 text-[11px] tracking-[0.22em] text-[#9cb5bb]">{props.t('hud.heading.torso')} {centerHeading.toString().padStart(3, '0')}</div>
+            <div className="absolute right-5 bottom-2 text-[11px] tracking-[0.22em] text-[#d0b07a]">{props.t('hud.body')} {chassisHeading.toString().padStart(3, '0')}</div>
         </div>
     );
 }
 
-function TorsoTwistArc(props: { twistRatio: number; maxTwist: number }) {
+function TorsoTwistArc(props: { twistRatio: number; maxTwist: number; t: Translator }) {
     const { twistRatio, maxTwist } = props;
     const clampedRatio = clamp(twistRatio, -1, 1);
     const pipAngle = 270 + clampedRatio * 60;
@@ -248,7 +251,7 @@ function TorsoTwistArc(props: { twistRatio: number; maxTwist: number }) {
                 <circle cx={rightLimit.x} cy={rightLimit.y} r="4" fill="#9d7740" />
             </svg>
             <div className="absolute inset-x-0 bottom-[18px] text-center text-[10px] tracking-[0.46em] text-[#a0bcc3]">
-                ПРЕДЕЛ СКРУТКИ {Math.round(toDegrees(maxTwist))} ГР
+                {props.t('hud.torsoLimitDegrees', { degrees: Math.round(toDegrees(maxTwist)) })}
             </div>
         </div>
     );
@@ -299,7 +302,7 @@ function CockpitFrame(props: { warning: string; throttleLabel: string }) {
     );
 }
 
-function SectionArmorDisplay(props: { sections: SectionState; maxSections: SectionState }) {
+function SectionArmorDisplay(props: { sections: SectionState; maxSections: SectionState; t: Translator }) {
     const { sections, maxSections } = props;
 
     const ratioOf = (section: SectionName) => clamp(sections[section] / Math.max(maxSections[section], 1), 0, 1);
@@ -321,7 +324,7 @@ function SectionArmorDisplay(props: { sections: SectionState; maxSections: Secti
 
     return (
         <div className="rounded-[24px] border border-[#8f6a38]/70 bg-[linear-gradient(180deg,rgba(13,13,13,0.94),rgba(28,20,15,0.96))] p-3 shadow-[inset_0_0_18px_rgba(0,0,0,0.5)]">
-            <div className="text-center text-[9px] tracking-[0.28em] text-[#efb768]">СЕКЦИИ</div>
+            <div className="text-center text-[9px] tracking-[0.28em] text-[#efb768]">{props.t('hud.sections')}</div>
             <div className="relative mx-auto mt-3 h-[130px] w-[120px]">
                 {sectionBox('head', 'left-1/2 top-0 h-4 w-4 -translate-x-1/2')}
                 {sectionBox('centerTorso', 'left-1/2 top-5 h-9 w-7 -translate-x-1/2')}
@@ -339,6 +342,7 @@ function SectionArmorDisplay(props: { sections: SectionState; maxSections: Secti
 export default function App() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const copyResetRef = useRef<number | null>(null);
+    const [locale, setLocale] = useState<Locale>(() => getInitialLocale());
     const [loading, setLoading] = useState(false);
     const [inLobby, setInLobby] = useState(true);
     const [isTouchDevice, setIsTouchDevice] = useState(false);
@@ -354,6 +358,7 @@ export default function App() {
     const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
     const [gameInstance, setGameInstance] = useState<any>(null);
     const [gameState, setGameState] = useState<GameHudState>(initialGameState);
+    const t = createTranslator(locale);
 
     const showCopyState = (nextState: 'copied' | 'error') => {
         setCopyState(nextState);
@@ -393,7 +398,7 @@ export default function App() {
             setMyId('');
             setInLobby(true);
             setLoading(false);
-            alert(`Ошибка запуска: ${describeError(error)}`);
+            alert(t('errors.startup', { message: describeError(error, t('errors.unknown')) }));
         };
 
         try {
@@ -402,7 +407,7 @@ export default function App() {
                     setGameState({ ...state });
                 }, mode),
                 15000,
-                'Запуск мира'
+                t('errors.timeout', { label: t('errors.startWorld'), seconds: formatSeconds(locale, 15) })
             );
 
             setGameInstance(game);
@@ -420,7 +425,7 @@ export default function App() {
                         game.network.initAsHost(resolve, reject);
                     }),
                     15000,
-                    'Создание сессии'
+                    t('errors.timeout', { label: t('errors.createSession'), seconds: formatSeconds(locale, 15) })
                 );
                 setMyId(createdHostId);
                 setIsHost(true);
@@ -435,7 +440,7 @@ export default function App() {
                         game.network.initAsClient(targetHostId, resolve, reject);
                     }),
                     15000,
-                    'Подключение к хосту'
+                    t('errors.timeout', { label: t('errors.connectToHost'), seconds: formatSeconds(locale, 15) })
                 );
                 setMyId(clientId);
                 setIsHost(false);
@@ -443,7 +448,7 @@ export default function App() {
                 return;
             }
 
-            throw new Error('Не указан ID хоста');
+            throw new Error(t('errors.hostIdRequired'));
         } catch (error) {
             failStart(error);
         }
@@ -476,6 +481,10 @@ export default function App() {
             // Ignore storage access issues.
         }
     }, []);
+
+    useEffect(() => {
+        saveLocale(locale);
+    }, [locale]);
 
     useEffect(() => {
         try {
@@ -516,22 +525,24 @@ export default function App() {
     const hpRatio = gameState.maxHp > 0 ? gameState.hp / gameState.maxHp : 0;
     const steamRatio = gameState.maxSteam > 0 ? gameState.steam / gameState.maxSteam : 0;
     const displaySpeed = Math.round((gameState.speed / Math.max(gameState.maxSpeed, 0.1)) * 68);
-    const throttleText = throttleRatio > 0.05
-        ? `ТЯГА ${Math.round(throttleRatio * 100)}%`
+    const throttleMessage: { key: TranslationKey; params?: TranslationParams } = throttleRatio > 0.05
+        ? { key: 'hud.throttle.forward', params: { percent: formatPercent(locale, Math.round(throttleRatio * 100)) } }
         : throttleRatio < -0.05
-            ? `РЕВЕРС ${Math.round(-throttleRatio * 100)}%`
-            : 'ТЯГА НОЛЬ';
-    const warningText = gameState.isOverheated
-        ? `ПАРОВОЙ ЗАМОК ${gameState.overheatTimer.toFixed(1)}С`
+            ? { key: 'hud.throttle.reverse', params: { percent: formatPercent(locale, Math.round(-throttleRatio * 100)) } }
+            : { key: 'hud.throttle.zero' };
+    const throttleText = t(throttleMessage.key, throttleMessage.params);
+    const warningMessage: { key: TranslationKey; params?: TranslationParams } = gameState.isOverheated
+        ? { key: 'hud.warning.overheat', params: { seconds: formatSeconds(locale, gameState.overheatTimer) } }
         : Math.abs(twistRatio) > 0.86
-            ? 'ПРЕДЕЛ ТОРСА'
+            ? { key: 'hud.warning.torsoLimit' }
             : !isTouchDevice && Math.abs(twistRatio) > 0.6
-                ? 'ЦЕНТРОВАТЬ ТОРС [C]'
+                ? { key: 'hud.warning.centerTorso' }
                 : throttleRatio < -0.05
-                    ? 'ЗАДНИЙ ХОД'
+                    ? { key: 'hud.warning.reverse' }
                     : throttleRatio > 0.7
-                        ? 'ПОЛНЫЙ ХОД'
-                        : 'КРЕЙСЕРСКИЙ ХОД';
+                        ? { key: 'hud.warning.fullAhead' }
+                        : { key: 'hud.warning.cruise' };
+    const warningText = t(warningMessage.key, warningMessage.params);
 
     const zeroLineTop = 69;
     const forwardFillHeight = `${Math.max(0, throttleRatio) * zeroLineTop}%`;
@@ -541,21 +552,21 @@ export default function App() {
     const hitConfirmRatio = clamp(gameState.hitConfirm / 0.22, 0, 1);
     const hitTargetRatio = clamp(gameState.hitTargetHp / Math.max(gameState.hitTargetMaxHp, 1), 0, 1);
     const mobileAimSensitivity = mobileAimPreset === 'LOW' ? 0.62 : mobileAimPreset === 'HIGH' ? 1.2 : 0.9;
-    const sessionLabel = sessionMode === 'solo'
-        ? 'ЛОКАЛЬНЫЙ БОЙ'
+    const sessionLabel = t(sessionMode === 'solo'
+        ? 'session.solo'
         : isHost
-            ? 'КАНАЛ ХОСТА'
-            : 'КАНАЛ КЛИЕНТА';
-    const copyLabel = copyState === 'copied'
-        ? 'СКОПИРОВАНО'
+            ? 'session.host'
+            : 'session.client');
+    const copyLabel = t(copyState === 'copied'
+        ? 'common.copied'
         : copyState === 'error'
-            ? 'НЕ УДАЛОСЬ'
-            : 'КОПИРОВАТЬ';
+            ? 'common.failed'
+            : 'common.copy');
 
-    const cameraModeLabel = gameState.cameraMode === 'thirdPerson' ? 'VIEW 3P' : 'VIEW FP';
+    const cameraModeLabel = t(gameState.cameraMode === 'thirdPerson' ? 'camera.3p' : 'camera.fp');
     const terrainDebugLabel = gameState.terrainColliderMode === 'heightfield'
-        ? 'ГРУНТ HF'
-        : 'ГРУНТ TM FALLBACK';
+        ? t('hud.debug.terrainHF')
+        : t('hud.debug.terrainTMFallback');
     const terrainDebugTone = gameState.terrainColliderMode === 'heightfield'
         ? 'text-[#8fb8c2]'
         : 'text-[#f3b56c]';
@@ -565,9 +576,10 @@ export default function App() {
     const showCockpitDecor = !isTouchDevice && gameState.cameraMode === 'cockpit';
     const hostBadgeClass = 'pointer-events-auto absolute right-4 top-4 z-30 flex items-center gap-3 rounded-2xl border border-[#8f6a38]/45 bg-[rgba(10,10,10,0.78)] px-4 py-3 text-[#e1cea7] shadow-[0_0_22px_rgba(0,0,0,0.32)] backdrop-blur-sm';
     const pilotPanelAnchorClass = 'left-4 top-4';
-    const pilotPanelHideLabel = 'СКРЫТЬ [H]';
-    const pilotPanelShowLabel = 'ПАНЕЛЬ [H]';
-    const alignPromptLabel = isTouchDevice ? 'ВЫРОВНЯТЬ ШАССИ' : 'ВЫРОВНЯТЬ ШАССИ [C]';
+    const pilotPanelHideLabel = t('pilot.hide');
+    const pilotPanelShowLabel = t('pilot.show');
+    const alignPromptLabel = t(isTouchDevice ? 'hud.alignChassis' : 'hud.alignChassisHotkey');
+    const localeLabel = `${t('locale.label')}: ${t(locale === 'ru' ? 'locale.ru' : 'locale.en')}`;
     return (
         <div className="relative h-[100dvh] w-full overflow-hidden bg-[#100d0b] font-mono text-[#f2ddb1]">
             <canvas ref={canvasRef} className={`block h-full w-full ${inLobby ? 'hidden' : ''}`} />
@@ -575,7 +587,7 @@ export default function App() {
             {inLobby ? (
                 <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[radial-gradient(circle_at_center,#2a1c12_0%,#130e0b_60%,#090807_100%)] px-4 text-white">
                     <h1 className="mb-6 text-center text-2xl font-bold tracking-[0.22em] text-[#efb768] drop-shadow-[0_0_14px_rgba(239,183,104,0.45)] sm:mb-8 sm:text-4xl sm:tracking-[0.35em]">
-                        ПАРОМАГИЧЕСКИЙ КОКПИТ
+                        {t('lobby.title')}
                     </h1>
 
                     <div className="flex w-[min(92vw,24rem)] flex-col gap-5 rounded-2xl border border-[#8f6a38]/40 bg-black/45 p-5 backdrop-blur-sm sm:gap-6 sm:p-8">
@@ -583,12 +595,12 @@ export default function App() {
                             onClick={() => startGame('solo')}
                             className="rounded bg-[#7d4f22] py-3 font-bold tracking-[0.22em] text-white shadow-[0_0_15px_rgba(125,79,34,0.35)] transition-colors hover:bg-[#99622d]"
                         >
-                            БОЙ С БОТОМ
+                            {t('lobby.soloBot')}
                         </button>
 
                         <div className="flex items-center gap-4">
                             <div className="h-px flex-1 bg-[#8f6a38]/30" />
-                            <span className="text-sm tracking-[0.35em] text-[#d2b78d]/60">СЕТЬ</span>
+                            <span className="text-sm tracking-[0.35em] text-[#d2b78d]/60">{t('common.network')}</span>
                             <div className="h-px flex-1 bg-[#8f6a38]/30" />
                         </div>
 
@@ -596,19 +608,19 @@ export default function App() {
                             onClick={() => startGame('host')}
                             className="rounded bg-[#b0622d] py-3 font-bold tracking-[0.22em] text-white shadow-[0_0_15px_rgba(176,98,45,0.35)] transition-colors hover:bg-[#ca7240]"
                         >
-                            СОЗДАТЬ СЕССИЮ
+                            {t('lobby.createSession')}
                         </button>
 
                         <div className="flex items-center gap-4">
                             <div className="h-px flex-1 bg-[#8f6a38]/30" />
-                            <span className="text-sm tracking-[0.35em] text-[#d2b78d]/60">ИЛИ</span>
+                            <span className="text-sm tracking-[0.35em] text-[#d2b78d]/60">{t('common.or')}</span>
                             <div className="h-px flex-1 bg-[#8f6a38]/30" />
                         </div>
 
                         <div className="flex flex-col gap-2">
                             <input
                                 type="text"
-                                placeholder="ID ХОСТА"
+                                placeholder={t('lobby.hostIdPlaceholder')}
                                 value={hostId}
                                 onChange={(e) => setHostId(e.target.value)}
                                 className="rounded border border-[#8f6a38]/40 bg-black/65 px-4 py-2 text-[#f5dba8] outline-none focus:border-[#efb768]"
@@ -618,7 +630,7 @@ export default function App() {
                                 disabled={!hostId}
                                 className="rounded bg-[#24677e] py-3 font-bold tracking-[0.22em] text-white shadow-[0_0_15px_rgba(36,103,126,0.35)] transition-colors hover:bg-[#2f7d99] disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                                ПОДКЛЮЧИТЬСЯ
+                                {t('lobby.connect')}
                             </button>
                         </div>
                     </div>
@@ -628,7 +640,7 @@ export default function App() {
             {loading && !inLobby ? (
                 <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#130e0b]/95">
                     <div className="rounded-full border border-[#8f6a38]/50 bg-black/55 px-8 py-4 text-xl tracking-[0.35em] text-[#efb768]">
-                        ГЕРМЕТИЗАЦИЯ КАБИНЫ
+                        {t('lobby.sealingCabin')}
                     </div>
                 </div>
             ) : null}
@@ -652,6 +664,8 @@ export default function App() {
                             leftHanded={mobileLeftHanded}
                             aimSensitivity={mobileAimSensitivity}
                             game={gameInstance}
+                            locale={locale}
+                            t={t}
                             onOpenSettings={() => setShowMobileSettings(true)}
                         />
                     ) : null}
@@ -659,7 +673,7 @@ export default function App() {
                     {sessionMode === 'host' && myId && !isTouchDevice ? (
                         <div className={hostBadgeClass}>
                             <div className="min-w-0">
-                                <div className="text-[10px] tracking-[0.34em] text-[#8fb8c2]">ID ХОСТА</div>
+                                <div className="text-[10px] tracking-[0.34em] text-[#8fb8c2]">{t('pilot.hostId')}</div>
                                 <div className="mt-1 select-all font-bold tracking-[0.18em] text-[#efb768]">{myId}</div>
                             </div>
 
@@ -679,14 +693,21 @@ export default function App() {
                             <div className={`pointer-events-auto rounded-2xl border border-[#8f6a38]/35 bg-[rgba(10,10,10,0.62)] p-4 text-sm text-[#d7c5a1] shadow-[0_0_20px_rgba(0,0,0,0.38)] backdrop-blur-sm ${isTouchDevice ? 'max-w-[220px] text-xs' : 'max-w-[280px]'}`}>
                                 <div className="mb-3 flex items-start justify-between gap-3">
                                     <div className="min-w-0">
-                                        <h1 className="text-lg font-bold tracking-[0.32em] text-[#efb768]">ПАНЕЛЬ ПИЛОТА</h1>
+                                        <h1 className="text-lg font-bold tracking-[0.32em] text-[#efb768]">{t('pilot.title')}</h1>
                                         <p className="mt-2 text-xs tracking-[0.22em] text-[#8fb8c2]">
-                                            {sessionMode === 'solo' ? `${sessionLabel} | ${cameraModeLabel}` : `${sessionLabel} | ${cameraModeLabel} | ID ${myId || 'СИНХРОНИЗАЦИЯ'}`}
+                                            {sessionMode === 'solo' ? `${sessionLabel} | ${cameraModeLabel}` : `${sessionLabel} | ${cameraModeLabel} | ID ${myId || t('session.sync')}`}
                                         </p>
                                         <div className={`mt-2 text-[10px] tracking-[0.24em] ${terrainDebugTone}`}>
                                             {terrainDebugLabel}
                                             {terrainDebugError ? ` | ${terrainDebugError}` : ''}
                                         </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setLocale((current) => current === 'ru' ? 'en' : 'ru')}
+                                            className="mt-3 rounded-full border border-[#8f6a38]/55 bg-black/35 px-3 py-1 text-[10px] tracking-[0.24em] text-[#d8c19a] transition-colors hover:border-[#efb768]/70 hover:text-[#efb768]"
+                                        >
+                                            {localeLabel}
+                                        </button>
                                         {sessionMode === 'host' && myId ? (
                                             <button
                                                 type="button"
@@ -708,15 +729,15 @@ export default function App() {
                                 </div>
 
                                 <ul className="space-y-1 text-[11px] tracking-[0.18em] text-[#b9c7c8]">
-                                    <li><span className="text-[#efb768]">МЫШЬ</span> наводка торса</li>
-                                    <li><span className="text-[#efb768]">W / S</span> поднять / сбросить тягу</li>
-                                    <li><span className="text-[#efb768]">A / D</span> повернуть шасси</li>
-                                    <li><span className="text-[#efb768]">C</span> центрировать торс</li>
-                                    <li><span className="text-[#efb768]">X</span> отсечь тягу</li>
-                                    <li><span className="text-[#efb768]">V</span> сменить вид</li>
-                                    <li><span className="text-[#efb768]">ЛКМ</span> рунный болт</li>
-                                    <li><span className="text-[#efb768]">SHIFT</span> рывок</li>
-                                    <li><span className="text-[#efb768]">SPACE</span> сброс пара</li>
+                                    <li>{t('pilot.controls.mouse')}</li>
+                                    <li>{t('pilot.controls.ws')}</li>
+                                    <li>{t('pilot.controls.ad')}</li>
+                                    <li>{t('pilot.controls.c')}</li>
+                                    <li>{t('pilot.controls.x')}</li>
+                                    <li>{t('pilot.controls.v')}</li>
+                                    <li>{t('pilot.controls.fire')}</li>
+                                    <li>{t('pilot.controls.shift')}</li>
+                                    <li>{t('pilot.controls.space')}</li>
                                 </ul>
                             </div>
                         ) : !isTouchDevice ? (
@@ -731,7 +752,7 @@ export default function App() {
                     </div>
                     ) : null}
 
-                    {!isTouchDevice ? <TorsoTwistArc twistRatio={twistRatio} maxTwist={gameState.maxTwist} /> : null}
+                    {!isTouchDevice ? <TorsoTwistArc twistRatio={twistRatio} maxTwist={gameState.maxTwist} t={t} /> : null}
 
                     <CombatOverlayCore
                         reticleX={reticleX}
@@ -740,13 +761,14 @@ export default function App() {
                         hitTargetRatio={hitTargetRatio}
                         showAlignPrompt={!isTouchDevice && Math.abs(twistRatio) > 0.55}
                         alignPromptLabel={alignPromptLabel}
+                        t={t}
                     />
 
                     {!isTouchDevice ? (
                     <div className="pointer-events-none absolute bottom-0 left-1/2 z-20 flex h-[248px] w-[min(1040px,96vw)] -translate-x-1/2 items-end justify-between px-8 pb-8">
                         <div className="flex w-[190px] items-end gap-4">
                             <div className="relative h-[188px] w-20 rounded-[26px] border border-[#8f6a38]/70 bg-[linear-gradient(180deg,rgba(13,13,13,0.94),rgba(28,20,15,0.96))] p-3 shadow-[inset_0_0_18px_rgba(0,0,0,0.5)]">
-                                <div className="mb-2 text-center text-[10px] tracking-[0.42em] text-[#efb768]">ТЯГА</div>
+                                <div className="mb-2 text-center text-[10px] tracking-[0.42em] text-[#efb768]">{t('hud.throttle.label')}</div>
                                 <div className="relative mx-auto h-[136px] w-7 rounded-full border border-[#6c5330]/70 bg-[#060606]/80">
                                     <div className="absolute inset-x-[4px] top-[69%] h-px bg-[#d1b17d]/75" />
                                     <div
@@ -758,43 +780,43 @@ export default function App() {
                                         style={{ height: reverseFillHeight }}
                                     />
                                 </div>
-                                <div className="absolute left-3 top-[44px] text-[9px] tracking-[0.28em] text-[#b8a17a]">ВПР</div>
+                                <div className="absolute left-3 top-[44px] text-[9px] tracking-[0.28em] text-[#b8a17a]">{t('hud.throttle.forwardShort')}</div>
                                 <div className="absolute left-3 top-[112px] text-[9px] tracking-[0.32em] text-[#b8a17a]">0</div>
-                                <div className="absolute left-3 bottom-[18px] text-[9px] tracking-[0.28em] text-[#9dc2cc]">НАЗ</div>
+                                <div className="absolute left-3 bottom-[18px] text-[9px] tracking-[0.28em] text-[#9dc2cc]">{t('hud.throttle.reverseShort')}</div>
                             </div>
 
                             <div className="flex-1 rounded-[26px] border border-[#8f6a38]/70 bg-[linear-gradient(180deg,rgba(13,13,13,0.94),rgba(28,20,15,0.96))] p-4 shadow-[inset_0_0_18px_rgba(0,0,0,0.5)]">
-                                <div className="text-[10px] tracking-[0.34em] text-[#efb768]">ХОД</div>
+                                <div className="text-[10px] tracking-[0.34em] text-[#efb768]">{t('hud.move.label')}</div>
                                 <div className="mt-3 text-3xl font-bold tracking-[0.2em] text-[#f3deb5]">
                                     {Math.round(throttleRatio * 100)}
                                 </div>
                                 <div className="mt-1 text-[11px] tracking-[0.28em] text-[#a5bcc2]">
-                                    {throttleRatio > 0.05 ? 'ВПЕРЕД' : throttleRatio < -0.05 ? 'РЕВЕРС' : 'СТОП'}
+                                    {throttleRatio > 0.05 ? t('hud.move.forward') : throttleRatio < -0.05 ? t('hud.move.reverse') : t('hud.move.stop')}
                                 </div>
                                 <div className="mt-4 text-[10px] tracking-[0.32em] text-[#8db0b7]">
-                                    УВОД ТОРСА {Math.round(toDegrees(torsoOffset)).toString().padStart(3, ' ')} ГР
+                                    {t('hud.torsoOffset', { degrees: Math.round(toDegrees(torsoOffset)).toString().padStart(3, ' ') })}
                                 </div>
                             </div>
                         </div>
 
                         <div className="mx-6 flex min-w-0 flex-1 flex-col items-center gap-4">
-                            <HeadingTape legYaw={gameState.legYaw} torsoYaw={gameState.torsoYaw} maxTwist={gameState.maxTwist} />
+                            <HeadingTape legYaw={gameState.legYaw} torsoYaw={gameState.torsoYaw} maxTwist={gameState.maxTwist} t={t} />
 
                             <div className="grid w-full grid-cols-3 gap-3 text-center">
                                 <div className="rounded-2xl border border-[#8f6a38]/60 bg-black/35 px-4 py-3">
-                                    <div className="text-[10px] tracking-[0.34em] text-[#a1bdc4]">КОРПУС</div>
+                                    <div className="text-[10px] tracking-[0.34em] text-[#a1bdc4]">{t('hud.body')}</div>
                                     <div className="mt-1 text-xl font-bold tracking-[0.22em] text-[#efb768]">
                                         {wrapDegrees(Math.round(toDegrees(gameState.legYaw))).toString().padStart(3, '0')}
                                     </div>
                                 </div>
                                 <div className="rounded-2xl border border-[#8f6a38]/60 bg-black/35 px-4 py-3">
-                                    <div className="text-[10px] tracking-[0.34em] text-[#a1bdc4]">ТОРС</div>
+                                    <div className="text-[10px] tracking-[0.34em] text-[#a1bdc4]">{t('hud.torso')}</div>
                                     <div className="mt-1 text-xl font-bold tracking-[0.22em] text-[#7ee6f0]">
                                         {wrapDegrees(Math.round(toDegrees(gameState.torsoYaw))).toString().padStart(3, '0')}
                                     </div>
                                 </div>
                                 <div className="rounded-2xl border border-[#8f6a38]/60 bg-black/35 px-4 py-3">
-                                    <div className="text-[10px] tracking-[0.34em] text-[#a1bdc4]">СКРУТКА</div>
+                                    <div className="text-[10px] tracking-[0.34em] text-[#a1bdc4]">{t('hud.twist')}</div>
                                     <div className="mt-1 text-xl font-bold tracking-[0.18em] text-[#f3deb5]">
                                         {Math.round(toDegrees(torsoOffset))}
                                     </div>
@@ -804,21 +826,21 @@ export default function App() {
 
                         <div className="flex w-[250px] gap-4">
                             <div className="flex-1 rounded-[26px] border border-[#8f6a38]/70 bg-[linear-gradient(180deg,rgba(13,13,13,0.94),rgba(28,20,15,0.96))] p-4 shadow-[inset_0_0_18px_rgba(0,0,0,0.5)]">
-                                <div className="text-[10px] tracking-[0.34em] text-[#efb768]">СКОРОСТЬ</div>
+                                <div className="text-[10px] tracking-[0.34em] text-[#efb768]">{t('hud.speed')}</div>
                                 <div className="mt-3 text-4xl font-bold tracking-[0.18em] text-[#f3deb5]">
                                     {displaySpeed}
                                 </div>
-                                <div className="mt-1 text-[11px] tracking-[0.28em] text-[#a5bcc2]">КМ/Ч</div>
+                                <div className="mt-1 text-[11px] tracking-[0.28em] text-[#a5bcc2]">{formatSpeedUnit(locale)}</div>
                                 <div className="mt-4 h-2 rounded-full bg-[#241c16]">
                                     <div className="h-full rounded-full bg-[linear-gradient(90deg,#7ee6f0,#efb768)]" style={{ width: `${clamp((gameState.speed / Math.max(gameState.maxSpeed, 0.1)) * 100, 0, 100)}%` }} />
                                 </div>
                             </div>
 
                             <div className="flex w-[132px] flex-col gap-3">
-                                <SectionArmorDisplay sections={gameState.sections} maxSections={gameState.maxSections} />
+                                <SectionArmorDisplay sections={gameState.sections} maxSections={gameState.maxSections} t={t} />
 
                                 <div className="rounded-[24px] border border-[#8f6a38]/70 bg-[linear-gradient(180deg,rgba(13,13,13,0.94),rgba(28,20,15,0.96))] p-3 shadow-[inset_0_0_18px_rgba(0,0,0,0.5)]">
-                                    <div className="text-[9px] tracking-[0.3em] text-[#efb768]">БРОНЯ</div>
+                                    <div className="text-[9px] tracking-[0.3em] text-[#efb768]">{t('hud.armor')}</div>
                                     <div className="mt-2 h-2 rounded-full bg-[#241c16]">
                                         <div className="h-full rounded-full bg-[linear-gradient(90deg,#d04838,#f0b371)]" style={{ width: `${clamp(hpRatio * 100, 0, 100)}%` }} />
                                     </div>
@@ -826,12 +848,12 @@ export default function App() {
                                 </div>
 
                                 <div className={`rounded-[24px] border p-3 shadow-[inset_0_0_18px_rgba(0,0,0,0.5)] ${gameState.isOverheated ? 'border-[#f25c54]/70 bg-[linear-gradient(180deg,rgba(64,18,18,0.94),rgba(28,12,12,0.96))]' : 'border-[#8f6a38]/70 bg-[linear-gradient(180deg,rgba(13,13,13,0.94),rgba(28,20,15,0.96))]'}`}>
-                                    <div className="text-[9px] tracking-[0.28em] text-[#efb768]">ДАВЛЕНИЕ</div>
+                                    <div className="text-[9px] tracking-[0.28em] text-[#efb768]">{t('hud.pressure')}</div>
                                     <div className="mt-2 h-2 rounded-full bg-[#241c16]">
                                         <div className={`h-full rounded-full ${gameState.isOverheated ? 'bg-[linear-gradient(90deg,#ff8855,#f25c54)]' : 'bg-[linear-gradient(90deg,#efb768,#7ee6f0)]'}`} style={{ width: `${clamp(steamRatio * 100, 0, 100)}%` }} />
                                     </div>
                                     <div className="mt-2 text-xs tracking-[0.14em] text-[#f3deb5]">
-                                        {gameState.isOverheated ? `СБРОС ${gameState.overheatTimer.toFixed(1)}С` : `${Math.ceil(gameState.steam)} / ${gameState.maxSteam}`}
+                                        {gameState.isOverheated ? t('hud.venting', { seconds: formatSeconds(locale, gameState.overheatTimer) }) : `${Math.ceil(gameState.steam)} / ${gameState.maxSteam}`}
                                     </div>
                                 </div>
                             </div>
@@ -850,11 +872,14 @@ export default function App() {
                             copyLabel={copyLabel}
                             leftHanded={mobileLeftHanded}
                             aimPreset={mobileAimPreset}
+                            locale={locale}
+                            t={t}
                             onClose={() => setShowMobileSettings(false)}
                             onCopyHostId={copyHostId}
                             onToggleCameraMode={() => gameInstance?.toggleCameraMode?.()}
                             onToggleHanded={() => setMobileLeftHanded((current) => !current)}
                             onCycleAimPreset={() => setMobileAimPreset((current) => current === 'LOW' ? 'MID' : current === 'MID' ? 'HIGH' : 'LOW')}
+                            onToggleLocale={() => setLocale((current) => current === 'ru' ? 'en' : 'ru')}
                         />
                     ) : null}
                 </>

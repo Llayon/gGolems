@@ -1,11 +1,13 @@
 import { useRef, useState } from 'react';
 import { clamp } from './helpers';
+import type { Translator } from '../../i18n';
 
 type MobileControlsProps = {
     game: any;
     leftHanded: boolean;
     isPortrait: boolean;
     aimSensitivity: number;
+    t: Translator;
 };
 
 export function MobileControls(props: MobileControlsProps) {
@@ -123,7 +125,7 @@ export function MobileControls(props: MobileControlsProps) {
                     }}
                 >
                     <div className="absolute inset-5 rounded-full border border-[#6f5631]/40" />
-                    <div className="absolute inset-x-0 top-2 text-center text-[9px] tracking-[0.28em] text-[#d1b17d]">ХОД / ПОВОРОТ</div>
+                    <div className="absolute inset-x-0 top-2 text-center text-[9px] tracking-[0.28em] text-[#d1b17d]">{props.t('mobile.controls.moveTurn')}</div>
                     <div
                         className="absolute left-1/2 top-1/2 h-12 w-12 rounded-full border border-[#efb768]/75 bg-[radial-gradient(circle_at_35%_35%,#efb768,#704623)] shadow-[0_0_18px_rgba(239,183,104,0.35)]"
                         style={{ transform: `translate(calc(-50% + ${stick.x * knobOffset}px), calc(-50% + ${stick.y * knobOffset}px))` }}
@@ -144,7 +146,7 @@ export function MobileControls(props: MobileControlsProps) {
                         props.game?.input?.triggerVirtualAction?.('fire');
                     }}
                 >
-                    ОГОНЬ
+                    {props.t('mobile.controls.fire')}
                 </button>
 
                 <div className={`flex gap-2 ${props.isPortrait ? 'max-w-[220px] flex-wrap' : 'w-[156px]'}`}>
@@ -156,7 +158,7 @@ export function MobileControls(props: MobileControlsProps) {
                             props.game?.input?.triggerVirtualAction?.('dash');
                         }}
                     >
-                        РЫВОК
+                        {props.t('mobile.controls.dash')}
                     </button>
                     <button
                         type="button"
@@ -166,7 +168,7 @@ export function MobileControls(props: MobileControlsProps) {
                             props.game?.input?.triggerVirtualAction?.('vent');
                         }}
                     >
-                        ПАР
+                        {props.t('mobile.controls.vent')}
                     </button>
                 </div>
 
@@ -176,14 +178,14 @@ export function MobileControls(props: MobileControlsProps) {
                         className={`pointer-events-auto rounded-2xl border border-[#8f6a38]/60 bg-[rgba(10,10,10,0.78)] text-[10px] tracking-[0.2em] text-[#d7c5a1] ${props.isPortrait ? 'px-3 py-2' : 'flex-1 px-3 py-2.5'}`}
                         onPointerDown={() => props.game?.input?.triggerVirtualAction?.('centerTorso')}
                     >
-                        ЦЕНТР ТОРС
+                        {props.t('mobile.controls.centerTorso')}
                     </button>
                     <button
                         type="button"
                         className={`pointer-events-auto rounded-2xl border border-[#8f6a38]/60 bg-[rgba(10,10,10,0.78)] text-[10px] tracking-[0.2em] text-[#d7c5a1] ${props.isPortrait ? 'px-3 py-2' : 'flex-1 px-3 py-2.5'}`}
                         onPointerDown={() => props.game?.input?.triggerVirtualAction?.('stopThrottle')}
                     >
-                        СТОП ХОД
+                        {props.t('mobile.controls.stopThrottle')}
                     </button>
                 </div>
             </div>

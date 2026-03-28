@@ -1,6 +1,9 @@
 import { angleDiff, clamp, polarToCartesian, toDegrees, wrapDegrees } from './helpers';
 import { MobileControls } from './MobileControls';
 import type { RadarContact } from './types';
+import type { Translator } from '../../i18n';
+import type { Locale } from '../../i18n/types';
+import { formatDistance } from '../../i18n/format';
 
 type MobileCombatLayoutProps = {
     warning: string;
@@ -17,6 +20,8 @@ type MobileCombatLayoutProps = {
     leftHanded: boolean;
     aimSensitivity: number;
     game: any;
+    locale: Locale;
+    t: Translator;
     onOpenSettings: () => void;
 };
 
@@ -32,10 +37,12 @@ type HudMetrics = {
     nearestText: string;
 };
 
-function buildHudMetrics(props: Pick<MobileCombatLayoutProps, 'legYaw' | 'torsoYaw' | 'twistRatio' | 'speed' | 'maxSpeed' | 'radarContacts'>): HudMetrics {
+function buildHudMetrics(props: Pick<MobileCombatLayoutProps, 'legYaw' | 'torsoYaw' | 'twistRatio' | 'speed' | 'maxSpeed' | 'radarContacts' | 'locale' | 't'>): HudMetrics {
     const twistDegrees = Math.round(toDegrees(angleDiff(props.legYaw, props.torsoYaw)));
     const nearestContact = props.radarContacts[0] ?? null;
-    const nearestLabel = nearestContact ? (nearestContact.kind === 'bot' ? 'БОТ' : 'ВРАГ') : 'ЧИСТО';
+    const nearestText = nearestContact
+        ? props.t(nearestContact.kind === 'bot' ? 'mobile.nearest.bot' : 'mobile.nearest.enemy', { distance: formatDistance(props.locale, nearestContact.meters) })
+        : props.t('mobile.nearest.clear');
 
     return {
         chassisHeading: wrapDegrees(Math.round(toDegrees(props.legYaw))).toString().padStart(3, '0'),
@@ -44,7 +51,7 @@ function buildHudMetrics(props: Pick<MobileCombatLayoutProps, 'legYaw' | 'torsoY
         speedDisplay: Math.round((props.speed / Math.max(props.maxSpeed, 0.1)) * 68),
         nearestContact,
         nearestColor: nearestContact?.kind === 'bot' ? '#f25c54' : '#efb768',
-        nearestText: nearestContact ? `${nearestLabel} ${nearestContact.meters}М` : 'ЧИСТО'
+        nearestText
     };
 }
 
@@ -76,7 +83,7 @@ function MeterBadge(props: { label: string; ratio: number; gradient: string }) {
     );
 }
 
-function RadarDial(props: { radarContacts: RadarContact[]; twistRatio: number; variant: Variant }) {
+function RadarDial(props: { radarContacts: RadarContact[]; twistRatio: number; variant: Variant; t: Translator }) {
     const size = props.variant === 'portrait' ? 88 : 96;
     const center = 48;
     const radius = 28;
@@ -108,12 +115,12 @@ function RadarDial(props: { radarContacts: RadarContact[]; twistRatio: number; v
                 <circle cx={center} cy={center} r="3.4" fill="#efb768" />
             </svg>
             <div className="absolute left-1/2 top-[10px] h-0 w-0 -translate-x-1/2 border-x-[5px] border-x-transparent border-b-[10px] border-b-[#efb768]" />
-            <div className="absolute inset-x-0 bottom-[7px] text-center text-[7px] tracking-[0.24em] text-[#9fc4cc]">РАДАР</div>
+            <div className="absolute inset-x-0 bottom-[7px] text-center text-[7px] tracking-[0.24em] text-[#9fc4cc]">{props.t('mobile.radar')}</div>
         </div>
     );
 }
 
-function PortraitRadarDock(props: Pick<MobileCombatLayoutProps, 'legYaw' | 'torsoYaw' | 'twistRatio' | 'hpRatio' | 'steamRatio' | 'speed' | 'maxSpeed' | 'radarContacts'>) {
+function PortraitRadarDock(props: Pick<MobileCombatLayoutProps, 'legYaw' | 'torsoYaw' | 'twistRatio' | 'hpRatio' | 'steamRatio' | 'speed' | 'maxSpeed' | 'radarContacts' | 'locale' | 't'>) {
     const metrics = buildHudMetrics(props);
 
     return (
@@ -129,24 +136,24 @@ function PortraitRadarDock(props: Pick<MobileCombatLayoutProps, 'legYaw' | 'tors
                 ) : null}
 
                 <div className="flex items-center gap-1.5">
-                    <ValueBadge label="ШАССИ" value={metrics.chassisHeading} tone="chassis" />
-                    <ValueBadge label="ТОРС" value={metrics.torsoHeading} tone="torso" />
-                    <ValueBadge label="СДВИГ" value={metrics.twistText} tone="twist" />
+                    <ValueBadge label={props.t('mobile.status.chassis')} value={metrics.chassisHeading} tone="chassis" />
+                    <ValueBadge label={props.t('mobile.status.torso')} value={metrics.torsoHeading} tone="torso" />
+                    <ValueBadge label={props.t('mobile.status.shift')} value={metrics.twistText} tone="twist" />
                 </div>
 
-                <RadarDial radarContacts={props.radarContacts} twistRatio={props.twistRatio} variant="portrait" />
+                <RadarDial radarContacts={props.radarContacts} twistRatio={props.twistRatio} variant="portrait" t={props.t} />
 
                 <div className="flex items-center gap-1.5">
-                    <MeterBadge label="БРОНЯ" ratio={props.hpRatio} gradient="bg-[linear-gradient(90deg,#d04838,#f0b371)]" />
-                    <ValueBadge label="ХОД" value={metrics.speedDisplay} tone="speed" />
-                    <MeterBadge label="ПАР" ratio={props.steamRatio} gradient="bg-[linear-gradient(90deg,#efb768,#7ee6f0)]" />
+                    <MeterBadge label={props.t('mobile.status.armor')} ratio={props.hpRatio} gradient="bg-[linear-gradient(90deg,#d04838,#f0b371)]" />
+                    <ValueBadge label={props.t('mobile.status.speed')} value={metrics.speedDisplay} tone="speed" />
+                    <MeterBadge label={props.t('mobile.status.steam')} ratio={props.steamRatio} gradient="bg-[linear-gradient(90deg,#efb768,#7ee6f0)]" />
                 </div>
             </div>
         </div>
     );
 }
 
-function LandscapeTopStrip(props: Pick<MobileCombatLayoutProps, 'warning' | 'legYaw' | 'torsoYaw' | 'twistRatio' | 'hpRatio' | 'steamRatio' | 'speed' | 'maxSpeed' | 'radarContacts' | 'onOpenSettings'>) {
+function LandscapeTopStrip(props: Pick<MobileCombatLayoutProps, 'warning' | 'legYaw' | 'torsoYaw' | 'twistRatio' | 'hpRatio' | 'steamRatio' | 'speed' | 'maxSpeed' | 'radarContacts' | 'onOpenSettings' | 'locale' | 't'>) {
     const metrics = buildHudMetrics(props);
 
     return (
@@ -157,15 +164,15 @@ function LandscapeTopStrip(props: Pick<MobileCombatLayoutProps, 'warning' | 'leg
                 </div>
 
                 <div className="flex items-center gap-1.5">
-                    <ValueBadge label="ШАССИ" value={metrics.chassisHeading} tone="chassis" />
-                    <ValueBadge label="ТОРС" value={metrics.torsoHeading} tone="torso" />
-                    <ValueBadge label="СДВИГ" value={metrics.twistText} tone="twist" />
+                    <ValueBadge label={props.t('mobile.status.chassis')} value={metrics.chassisHeading} tone="chassis" />
+                    <ValueBadge label={props.t('mobile.status.torso')} value={metrics.torsoHeading} tone="torso" />
+                    <ValueBadge label={props.t('mobile.status.shift')} value={metrics.twistText} tone="twist" />
                 </div>
 
                 <div className="flex items-center gap-1.5">
-                    <MeterBadge label="БРОНЯ" ratio={props.hpRatio} gradient="bg-[linear-gradient(90deg,#d04838,#f0b371)]" />
-                    <MeterBadge label="ПАР" ratio={props.steamRatio} gradient="bg-[linear-gradient(90deg,#efb768,#7ee6f0)]" />
-                    <ValueBadge label="ХОД" value={metrics.speedDisplay} tone="speed" />
+                    <MeterBadge label={props.t('mobile.status.armor')} ratio={props.hpRatio} gradient="bg-[linear-gradient(90deg,#d04838,#f0b371)]" />
+                    <MeterBadge label={props.t('mobile.status.steam')} ratio={props.steamRatio} gradient="bg-[linear-gradient(90deg,#efb768,#7ee6f0)]" />
+                    <ValueBadge label={props.t('mobile.status.speed')} value={metrics.speedDisplay} tone="speed" />
                 </div>
 
                 <button
@@ -173,14 +180,14 @@ function LandscapeTopStrip(props: Pick<MobileCombatLayoutProps, 'warning' | 'leg
                     className="pointer-events-auto shrink-0 rounded-full border border-[#8f6a38]/60 bg-[rgba(10,10,10,0.8)] px-4 py-2 text-[9px] tracking-[0.2em] text-[#d7c5a1]"
                     onClick={props.onOpenSettings}
                 >
-                    МЕНЮ
+                    {props.t('common.menu')}
                 </button>
             </div>
         </div>
     );
 }
 
-function LandscapeRadarDock(props: Pick<MobileCombatLayoutProps, 'radarContacts' | 'twistRatio'> & { nearestText: string; nearestColor: string; showContact: boolean }) {
+function LandscapeRadarDock(props: Pick<MobileCombatLayoutProps, 'radarContacts' | 'twistRatio' | 't'> & { nearestText: string; nearestColor: string; showContact: boolean }) {
     return (
         <div className="pointer-events-none absolute bottom-[calc(env(safe-area-inset-bottom,0px)+12px)] left-1/2 z-20 -translate-x-1/2">
             <div className="flex flex-col items-center gap-1.5">
@@ -192,13 +199,13 @@ function LandscapeRadarDock(props: Pick<MobileCombatLayoutProps, 'radarContacts'
                         {props.nearestText}
                     </div>
                 ) : null}
-                <RadarDial radarContacts={props.radarContacts} twistRatio={props.twistRatio} variant="landscape" />
+                <RadarDial radarContacts={props.radarContacts} twistRatio={props.twistRatio} variant="landscape" t={props.t} />
             </div>
         </div>
     );
 }
 
-function PortraitTopStrip(props: Pick<MobileCombatLayoutProps, 'warning' | 'onOpenSettings'>) {
+function PortraitTopStrip(props: Pick<MobileCombatLayoutProps, 'warning' | 'onOpenSettings' | 't'>) {
     return (
         <div className="pointer-events-none absolute inset-x-0 top-0 z-20 px-3" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 8px)' }}>
             <div className="mx-auto flex max-w-[min(96vw,420px)] items-start justify-between gap-2">
@@ -210,7 +217,7 @@ function PortraitTopStrip(props: Pick<MobileCombatLayoutProps, 'warning' | 'onOp
                     className="pointer-events-auto shrink-0 rounded-full border border-[#8f6a38]/60 bg-[rgba(10,10,10,0.8)] px-4 py-2.5 text-[9px] tracking-[0.2em] text-[#d7c5a1]"
                     onClick={props.onOpenSettings}
                 >
-                    МЕНЮ
+                    {props.t('common.menu')}
                 </button>
             </div>
         </div>
@@ -220,7 +227,7 @@ function PortraitTopStrip(props: Pick<MobileCombatLayoutProps, 'warning' | 'onOp
 function PortraitCombatLayout(props: MobileCombatLayoutProps) {
     return (
         <>
-            <PortraitTopStrip warning={props.warning} onOpenSettings={props.onOpenSettings} />
+            <PortraitTopStrip warning={props.warning} onOpenSettings={props.onOpenSettings} t={props.t} />
             <PortraitRadarDock
                 legYaw={props.legYaw}
                 torsoYaw={props.torsoYaw}
@@ -230,12 +237,15 @@ function PortraitCombatLayout(props: MobileCombatLayoutProps) {
                 speed={props.speed}
                 maxSpeed={props.maxSpeed}
                 radarContacts={props.radarContacts}
+                locale={props.locale}
+                t={props.t}
             />
             <MobileControls
                 game={props.game}
                 leftHanded={props.leftHanded}
                 isPortrait
                 aimSensitivity={props.aimSensitivity}
+                t={props.t}
             />
         </>
     );
@@ -257,6 +267,8 @@ function LandscapeCombatLayout(props: MobileCombatLayoutProps) {
                 maxSpeed={props.maxSpeed}
                 radarContacts={props.radarContacts}
                 onOpenSettings={props.onOpenSettings}
+                locale={props.locale}
+                t={props.t}
             />
             <LandscapeRadarDock
                 radarContacts={props.radarContacts}
@@ -264,12 +276,14 @@ function LandscapeCombatLayout(props: MobileCombatLayoutProps) {
                 nearestText={metrics.nearestText}
                 nearestColor={metrics.nearestColor}
                 showContact={Boolean(metrics.nearestContact)}
+                t={props.t}
             />
             <MobileControls
                 game={props.game}
                 leftHanded={props.leftHanded}
                 isPortrait={false}
                 aimSensitivity={props.aimSensitivity}
+                t={props.t}
             />
         </>
     );

@@ -1,3 +1,5 @@
+import type { Translator } from '../../i18n';
+
 type CombatOverlayCoreProps = {
     reticleX: number;
     reticleY: number;
@@ -5,6 +7,7 @@ type CombatOverlayCoreProps = {
     hitTargetRatio: number;
     showAlignPrompt: boolean;
     alignPromptLabel: string;
+    t: Translator;
 };
 
 export function CombatOverlayCore(props: CombatOverlayCoreProps) {
@@ -47,7 +50,7 @@ export function CombatOverlayCore(props: CombatOverlayCoreProps) {
                     }}
                 >
                     <div className="rounded-full border border-[#8f6a38]/60 bg-[rgba(8,8,8,0.84)] px-4 py-2 shadow-[0_0_18px_rgba(0,0,0,0.28)]">
-                        <div className="text-center text-[10px] tracking-[0.34em] text-[#fff0c9]">ПОПАДАНИЕ</div>
+                        <div className="text-center text-[10px] tracking-[0.34em] text-[#fff0c9]">{props.t('mobile.hit')}</div>
                         <div className="mt-2 h-1.5 w-28 rounded-full bg-[#2b231d]">
                             <div
                                 className="h-full rounded-full bg-[linear-gradient(90deg,#f25c54,#efb768,#7ee6f0)]"
