@@ -2,7 +2,7 @@ import en from './en';
 
 const ru: typeof en = {
     'locale.label': 'ЯЗЫК',
-    'locale.en': 'ENGLISH',
+    'locale.en': 'АНГЛИЙСКИЙ',
     'locale.ru': 'РУССКИЙ',
 
     'common.close': 'ЗАКРЫТЬ',
@@ -12,6 +12,7 @@ const ru: typeof en = {
     'common.failed': 'НЕ УДАЛОСЬ',
     'common.or': 'ИЛИ',
     'common.network': 'СЕТЬ',
+    'common.id': 'ID',
 
     'lobby.title': 'ПАРОМАГИЧЕСКИЙ КОКПИТ',
     'lobby.soloBot': 'БОЙ С БОТОМ',
@@ -25,8 +26,8 @@ const ru: typeof en = {
     'session.client': 'КАНАЛ КЛИЕНТА',
     'session.sync': 'СИНХРОНИЗАЦИЯ',
 
-    'camera.fp': 'VIEW FP',
-    'camera.3p': 'VIEW 3P',
+    'camera.fp': 'ВИД 1Л',
+    'camera.3p': 'ВИД 3Л',
 
     'errors.unknown': 'Неизвестная ошибка',
     'errors.startup': 'Ошибка запуска: {{message}}',
@@ -41,6 +42,14 @@ const ru: typeof en = {
     'hud.heading.torso': 'ТОРС',
     'hud.torsoLimitDegrees': 'ПРЕДЕЛ СКРУТКИ {{degrees}} ГР',
     'hud.sections': 'СЕКЦИИ',
+    'hud.section.head': 'ГОЛОВА',
+    'hud.section.centerTorso': 'ЦЕНТР ТОРСА',
+    'hud.section.leftTorso': 'ЛЕВЫЙ ТОРС',
+    'hud.section.rightTorso': 'ПРАВЫЙ ТОРС',
+    'hud.section.leftArm': 'ЛЕВАЯ РУКА',
+    'hud.section.rightArm': 'ПРАВАЯ РУКА',
+    'hud.section.leftLeg': 'ЛЕВАЯ НОГА',
+    'hud.section.rightLeg': 'ПРАВАЯ НОГА',
     'hud.debug.terrainHF': 'ГРУНТ HF',
     'hud.debug.terrainTMFallback': 'ГРУНТ TM FALLBACK',
 
@@ -117,7 +126,7 @@ const ru: typeof en = {
     'mobile.settings.hint.leftCircle': 'ЛЕВЫЙ КРУГ ход и поворот шасси',
     'mobile.settings.hint.rightZone': 'СВОБОДНЫЙ ЭКРАН обзор и наведение торса',
     'mobile.settings.hint.fire': 'ОГОНЬ рунный болт',
-    'mobile.settings.hint.dashVent': 'РЫВОК / ПАР манёвр и сброс давления',
+    'mobile.settings.hint.dashVent': 'РЫВОК / ПАР маневр и сброс давления',
     'mobile.settings.hint.centerTorso': 'ЦЕНТР ТОРС выровнять торс по шасси',
     'mobile.settings.hint.stopThrottle': 'СТОП ХОД мгновенно сбросить тягу'
 };

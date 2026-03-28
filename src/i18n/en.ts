@@ -12,6 +12,7 @@ const en = {
     'common.failed': 'FAILED',
     'common.or': 'OR',
     'common.network': 'NETWORK',
+    'common.id': 'ID',
 
     'lobby.title': 'STEAMMAGE COCKPIT',
     'lobby.soloBot': 'BOT SKIRMISH',
@@ -41,6 +42,14 @@ const en = {
     'hud.heading.torso': 'TORSO',
     'hud.torsoLimitDegrees': 'TORSO LIMIT {{degrees}} DEG',
     'hud.sections': 'SECTIONS',
+    'hud.section.head': 'HEAD',
+    'hud.section.centerTorso': 'CENTER TORSO',
+    'hud.section.leftTorso': 'LEFT TORSO',
+    'hud.section.rightTorso': 'RIGHT TORSO',
+    'hud.section.leftArm': 'LEFT ARM',
+    'hud.section.rightArm': 'RIGHT ARM',
+    'hud.section.leftLeg': 'LEFT LEG',
+    'hud.section.rightLeg': 'RIGHT LEG',
     'hud.debug.terrainHF': 'GROUND HF',
     'hud.debug.terrainTMFallback': 'GROUND TM FALLBACK',
 

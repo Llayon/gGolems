@@ -12,6 +12,31 @@ const dictionaries: Record<Locale, TranslationDict> = {
     ru
 };
 
+function validateDictionaries() {
+    const baseKeys = Object.keys(en) as TranslationKey[];
+
+    (Object.entries(dictionaries) as Array<[Locale, TranslationDict]>).forEach(([locale, dict]) => {
+        if (locale === 'en') return;
+
+        const missing = baseKeys.filter((key) => !(key in dict));
+        const extra = Object.keys(dict).filter((key) => !(key in en));
+
+        if (missing.length > 0) {
+            console.warn(`[i18n] Missing keys for ${locale}:`, missing);
+        }
+
+        if (extra.length > 0) {
+            console.warn(`[i18n] Extra keys for ${locale}:`, extra);
+        }
+    });
+}
+
+const isDev = Boolean((import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV);
+
+if (isDev) {
+    validateDictionaries();
+}
+
 function interpolate(template: string, params?: TranslationParams) {
     if (!params) return template;
     return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => {

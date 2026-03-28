@@ -60,6 +60,17 @@ const defaultSections: SectionState = {
     rightLeg: 36
 };
 
+const sectionLabelKeys: Record<SectionName, TranslationKey> = {
+    head: 'hud.section.head',
+    centerTorso: 'hud.section.centerTorso',
+    leftTorso: 'hud.section.leftTorso',
+    rightTorso: 'hud.section.rightTorso',
+    leftArm: 'hud.section.leftArm',
+    rightArm: 'hud.section.rightArm',
+    leftLeg: 'hud.section.leftLeg',
+    rightLeg: 'hud.section.rightLeg'
+};
+
 const initialGameState: GameHudState = {
     hp: 100,
     maxHp: 100,
@@ -318,7 +329,7 @@ function SectionArmorDisplay(props: { sections: SectionState; maxSections: Secti
         <div
             className={`absolute rounded-[12px] border border-[#5b4427]/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] ${className}`}
             style={{ backgroundColor: colorOf(section), opacity: 0.2 + ratioOf(section) * 0.8 }}
-            title={section}
+            title={props.t(sectionLabelKeys[section])}
         />
     );
 
@@ -695,7 +706,7 @@ export default function App() {
                                     <div className="min-w-0">
                                         <h1 className="text-lg font-bold tracking-[0.32em] text-[#efb768]">{t('pilot.title')}</h1>
                                         <p className="mt-2 text-xs tracking-[0.22em] text-[#8fb8c2]">
-                                            {sessionMode === 'solo' ? `${sessionLabel} | ${cameraModeLabel}` : `${sessionLabel} | ${cameraModeLabel} | ID ${myId || t('session.sync')}`}
+                                            {sessionMode === 'solo' ? `${sessionLabel} | ${cameraModeLabel}` : `${sessionLabel} | ${cameraModeLabel} | ${t('common.id')} ${myId || t('session.sync')}`}
                                         </p>
                                         <div className={`mt-2 text-[10px] tracking-[0.24em] ${terrainDebugTone}`}>
                                             {terrainDebugLabel}
