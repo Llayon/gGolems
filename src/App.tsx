@@ -210,29 +210,33 @@ function toStartupFailure(error: unknown, phase?: StartupPhase): StartupFailure 
 }
 
 function getStartupFailureMessage(t: Translator, locale: Locale, failure: StartupFailure) {
+    const withDetail = (message: string) => failure.detail
+        ? `${message}\n\n${t('errors.detail', { detail: failure.detail })}`
+        : message;
+
     switch (failure.code) {
         case 'timeout':
-            return t('errors.timeout', {
+            return withDetail(t('errors.timeout', {
                 label: failure.phase ? t(startupPhaseLabelKeys[failure.phase]) : t('errors.startWorld'),
                 seconds: formatSeconds(locale, failure.seconds ?? 15)
-            });
+            }));
         case 'hostIdRequired':
             return t('errors.hostIdRequired');
         case 'peerUnavailable':
-            return t('errors.peerUnavailable');
+            return withDetail(t('errors.peerUnavailable'));
         case 'peerIdUnavailable':
-            return t('errors.peerIdUnavailable');
+            return withDetail(t('errors.peerIdUnavailable'));
         case 'networkUnavailable':
-            return t('errors.networkUnavailable');
+            return withDetail(t('errors.networkUnavailable'));
         case 'serverError':
-            return t('errors.serverError');
+            return withDetail(t('errors.serverError'));
         case 'connectionFailed':
-            return t('errors.connectionFailed');
+            return withDetail(t('errors.connectionFailed'));
         case 'invalidHostId':
-            return t('errors.invalidHostId');
+            return withDetail(t('errors.invalidHostId'));
         default:
             if (failure.phase) {
-                return t('errors.phaseFailed', { label: t(startupPhaseLabelKeys[failure.phase]) });
+                return withDetail(t('errors.phaseFailed', { label: t(startupPhaseLabelKeys[failure.phase]) }));
             }
             return t('errors.startup', { message: failure.detail || t('errors.unknown') });
     }

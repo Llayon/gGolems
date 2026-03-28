@@ -51,6 +51,7 @@ const ru: typeof en = {
     'errors.serverError': 'Ошибка сервера сессий',
     'errors.connectionFailed': 'Не удалось установить соединение',
     'errors.invalidHostId': 'Некорректный ID хоста',
+    'errors.detail': 'Детали: {{detail}}',
 
     'hud.heading.gaze': 'ВЗГЛЯД',
     'hud.heading.chassis': 'ШАССИ',

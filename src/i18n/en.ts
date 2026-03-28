@@ -51,6 +51,7 @@ const en = {
     'errors.serverError': 'Session server error',
     'errors.connectionFailed': 'Connection failed',
     'errors.invalidHostId': 'Invalid host ID',
+    'errors.detail': 'Detail: {{detail}}',
 
     'hud.heading.gaze': 'GAZE',
     'hud.heading.chassis': 'CHASSIS',

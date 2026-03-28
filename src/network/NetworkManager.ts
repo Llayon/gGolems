@@ -16,7 +16,7 @@ export type NetworkStartupError = {
 };
 
 function normalizePeerError(error: any): NetworkStartupError {
-    const detail = error instanceof Error
+    const rawDetail = error instanceof Error
         ? error.message
         : typeof error?.message === 'string'
             ? error.message
@@ -25,6 +25,9 @@ function normalizePeerError(error: any): NetworkStartupError {
                 : undefined;
 
     const type = typeof error?.type === 'string' ? error.type : '';
+    const detail = type && rawDetail
+        ? `${type}: ${rawDetail}`
+        : rawDetail || type || undefined;
 
     switch (type) {
         case 'peer-unavailable':
