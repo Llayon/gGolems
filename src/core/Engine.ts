@@ -17,7 +17,7 @@ import { ControlPointManager } from '../gameplay/ControlPointManager';
 import { GOLEM, ROTATION } from '../utils/constants';
 import { QualityProfile, detectQualityProfile } from '../utils/quality';
 import type { ProjectileProfileId, WeaponFireRequest, WeaponId } from '../combat/weaponTypes';
-import type { BotStateView, TeamId, TeamScoreState } from '../gameplay/types';
+import type { BotStateView, TeamId, TeamOverview, TeamScoreState } from '../gameplay/types';
 
 const _weaponOrigin = new THREE.Vector3();
 const _weaponDir = new THREE.Vector3();
@@ -73,7 +73,7 @@ type RemotePlayerState = PlayerRespawnState & {
 
 const TEAM_SIZE = 5;
 const SCORE_TO_WIN = 200;
-const RESPAWN_DELAY = 6;
+const RESPAWN_WAVE_DELAY = 8;
 const LOCAL_PLAYER_ID = 'local-player';
 
 export class Game {
@@ -100,6 +100,7 @@ export class Game {
     remoteSpawnSlots: Map<string, number> = new Map();
     teamScores: TeamScoreState = { blue: 0, red: 0, scoreToWin: SCORE_TO_WIN, winner: null };
     localRespawnState: PlayerRespawnState = { alive: true, timer: 0, slot: 0 };
+    respawnWaves: Record<TeamId, number> = { blue: 0, red: 0 };
     hitConfirmTimer = 0;
     hitTargetHp = 0;
     hitTargetMaxHp = 100;
@@ -337,14 +338,67 @@ export class Game {
         this.remotePlayerStates.set(id, { ...current, ...patch });
     }
 
-    queueLocalRespawn(delay = RESPAWN_DELAY) {
+    applyTeamWaveTimer(team: TeamId, timer: number) {
+        const clamped = Math.max(0, timer);
+        if (team === 'blue') {
+            if (!this.localRespawnState.alive) {
+                this.localRespawnState.timer = clamped;
+            }
+            for (const [id, state] of this.remotePlayerStates) {
+                if (state.team === 'blue' && !state.alive) {
+                    this.setRemotePlayerState(id, { timer: clamped });
+                }
+            }
+        } else {
+            for (const [id, state] of this.remotePlayerStates) {
+                if (state.team === 'red' && !state.alive) {
+                    this.setRemotePlayerState(id, { timer: clamped });
+                }
+            }
+        }
+
+        for (const bot of this.bots.values()) {
+            if (bot.team === team && !bot.alive) {
+                bot.respawnTimer = clamped;
+            }
+        }
+    }
+
+    teamHasPendingRespawns(team: TeamId) {
+        if (team === 'blue') {
+            if (!this.localRespawnState.alive) return true;
+            for (const state of this.remotePlayerStates.values()) {
+                if (state.team === 'blue' && !state.alive) return true;
+            }
+        } else {
+            for (const state of this.remotePlayerStates.values()) {
+                if (state.team === 'red' && !state.alive) return true;
+            }
+        }
+
+        for (const bot of this.bots.values()) {
+            if (bot.team === team && !bot.alive) return true;
+        }
+
+        return false;
+    }
+
+    scheduleRespawnWave(team: TeamId, delay = RESPAWN_WAVE_DELAY) {
+        if (this.respawnWaves[team] <= 0) {
+            this.respawnWaves[team] = delay;
+        }
+        this.applyTeamWaveTimer(team, this.respawnWaves[team]);
+    }
+
+    queueLocalRespawn() {
         this.localRespawnState.alive = false;
-        this.localRespawnState.timer = delay;
+        this.localRespawnState.timer = 0;
         this.golem.resetSections();
         this.golem.hp = 0;
         this.setGolemPresence(this.golem, false);
         const spawn = this.getTeamSpawn('blue', this.localRespawnState.slot);
         this.placeGolemAtSpawn(this.golem, spawn);
+        this.scheduleRespawnWave('blue');
     }
 
     respawnLocalPlayer() {
@@ -359,16 +413,17 @@ export class Game {
         this.mechCamera.addTrauma(1.0);
     }
 
-    queueRemoteRespawn(id: string, delay = RESPAWN_DELAY) {
+    queueRemoteRespawn(id: string) {
         const player = this.remotePlayers.get(id);
         if (!player) return;
         const slot = this.remoteSpawnSlots.get(id) ?? 1;
-        this.setRemotePlayerState(id, { alive: false, timer: delay, slot });
+        this.setRemotePlayerState(id, { alive: false, timer: 0, slot });
         player.resetSections();
         player.hp = 0;
         this.setGolemPresence(player, false);
         const spawn = this.getTeamSpawn('blue', slot);
         this.placeGolemAtSpawn(player, spawn);
+        this.scheduleRespawnWave('blue');
     }
 
     respawnRemotePlayer(id: string) {
@@ -385,32 +440,98 @@ export class Game {
         this.network.sendTo(id, { type: 'respawn', x: spawn.x, y: spawn.y, z: spawn.z, yaw: this.getSpawnYaw(spawn), slot });
     }
 
-    updateRespawns(dt: number) {
-        if (this.sessionMode === 'client') {
-            this.localRespawnState.timer = Math.max(0, this.localRespawnState.timer - dt);
-            return;
-        }
-
-        if (!this.localRespawnState.alive) {
-            this.localRespawnState.timer = Math.max(0, this.localRespawnState.timer - dt);
-            if (this.localRespawnState.timer <= 0) {
+    resolveRespawnWave(team: TeamId) {
+        if (team === 'blue') {
+            if (!this.localRespawnState.alive) {
                 this.respawnLocalPlayer();
             }
-        }
-
-        for (const [id, state] of this.remotePlayerStates) {
-            if (!state.alive) {
-                state.timer = Math.max(0, state.timer - dt);
-                if (state.timer <= 0) {
+            for (const [id, state] of this.remotePlayerStates) {
+                if (state.team === 'blue' && !state.alive) {
+                    this.respawnRemotePlayer(id);
+                }
+            }
+        } else {
+            for (const [id, state] of this.remotePlayerStates) {
+                if (state.team === 'red' && !state.alive) {
                     this.respawnRemotePlayer(id);
                 }
             }
         }
 
         for (const [id, bot] of this.bots) {
-            if (!bot.alive && bot.respawnTimer <= 0) {
+            if (bot.team === team && !bot.alive) {
                 const slot = Number(id.split('-').pop() ?? 0) || 0;
                 bot.respawnAt(this.getTeamSpawn(bot.team, slot));
+            }
+        }
+
+        this.respawnWaves[team] = 0;
+        this.applyTeamWaveTimer(team, 0);
+    }
+
+    getTeamOverview(): TeamOverview {
+        let blueAlive = this.localRespawnState.alive ? 1 : 0;
+        let blueTotal = 1;
+        let blueWave = this.localRespawnState.alive ? 0 : this.localRespawnState.timer;
+        let redAlive = 0;
+        let redTotal = 0;
+        let redWave = 0;
+
+        for (const state of this.remotePlayerStates.values()) {
+            if (state.team === 'blue') {
+                blueTotal += 1;
+                if (state.alive) blueAlive += 1;
+                else blueWave = Math.max(blueWave, state.timer);
+            } else if (state.team === 'red') {
+                redTotal += 1;
+                if (state.alive) redAlive += 1;
+                else redWave = Math.max(redWave, state.timer);
+            }
+        }
+
+        for (const bot of this.bots.values()) {
+            if (bot.team === 'blue') {
+                blueTotal += 1;
+                if (bot.alive) blueAlive += 1;
+                else blueWave = Math.max(blueWave, bot.respawnTimer);
+            } else {
+                redTotal += 1;
+                if (bot.alive) redAlive += 1;
+                else redWave = Math.max(redWave, bot.respawnTimer);
+            }
+        }
+
+        return {
+            blue: {
+                alive: blueAlive,
+                total: blueTotal,
+                waveTimer: blueWave
+            },
+            red: {
+                alive: redAlive,
+                total: redTotal,
+                waveTimer: redWave
+            }
+        };
+    }
+
+    updateRespawns(dt: number) {
+        if (this.sessionMode === 'client') {
+            this.localRespawnState.timer = Math.max(0, this.localRespawnState.timer - dt);
+            return;
+        }
+
+        for (const team of ['blue', 'red'] as TeamId[]) {
+            if (this.teamHasPendingRespawns(team) && this.respawnWaves[team] <= 0) {
+                this.scheduleRespawnWave(team);
+            }
+
+            if (this.respawnWaves[team] > 0) {
+                this.respawnWaves[team] = Math.max(0, this.respawnWaves[team] - dt);
+                this.applyTeamWaveTimer(team, this.respawnWaves[team]);
+                if (this.respawnWaves[team] <= 0) {
+                    this.resolveRespawnWave(team);
+                }
             }
         }
     }
@@ -599,6 +720,9 @@ export class Game {
             const bot = this.bots.get(targetId);
             if (!bot) return;
             const remainingHp = bot.takeDamage(damage);
+            if (remainingHp <= 0) {
+                this.scheduleRespawnWave(bot.team);
+            }
             this.confirmHitForOwner(ownerId, remainingHp, bot.maxHp);
             return;
         }
@@ -1211,6 +1335,7 @@ export class Game {
             radarContacts: this.buildRadarContacts(),
             controlPoints: this.controlPoints.getSnapshot(),
             teamScores: { ...this.teamScores },
+            teamOverview: this.getTeamOverview(),
             respawnTimer: this.localRespawnState.timer,
             terrainColliderMode: this.world.terrain.groundColliderMode,
             terrainColliderError: this.world.terrain.groundColliderError

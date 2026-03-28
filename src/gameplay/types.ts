@@ -31,3 +31,9 @@ export type BotStateView = {
     alive: boolean;
     respawnTimer: number;
 };
+
+export type TeamOverview = Record<TeamId, {
+    alive: number;
+    total: number;
+    waveTimer: number;
+}>;

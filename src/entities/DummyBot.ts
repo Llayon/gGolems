@@ -158,7 +158,7 @@ export class DummyBot {
         this.flashDamage();
         const remainingHp = Math.max(0, this.hp);
         if (this.hp <= 0) {
-            this.queueRespawn(5);
+            this.queueRespawn(0);
         }
         return remainingHp;
     }
@@ -167,10 +167,7 @@ export class DummyBot {
         let shot: { shots: BotShot[] } | null = null;
 
         if (this.respawnTimer > 0) {
-            this.respawnTimer = Math.max(0, this.respawnTimer - dt);
-            if (this.respawnTimer > 0) {
-                return null;
-            }
+            return null;
         }
 
         if (this.damageTimer > 0) {
