@@ -3,6 +3,7 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import { getWeaponDefinition } from '../combat/weapons';
 import type { ProjectileProfileId, WeaponId } from '../combat/weaponTypes';
 import { GolemFactory } from './GolemFactory';
+import type { TeamId } from '../gameplay/types';
 
 const _currentPos = new THREE.Vector3();
 const _toTarget = new THREE.Vector3();
@@ -25,6 +26,8 @@ type BotShot = {
 };
 
 export class DummyBot {
+    id: string;
+    team: TeamId;
     mesh: THREE.Group;
     visual: THREE.Group;
     body: RAPIER.RigidBody;
@@ -47,8 +50,23 @@ export class DummyBot {
     respawnRadius = 62;
     surfaceY?: (x: number, z: number) => number;
     walkCycle = 0;
+    maxHp = 100;
+    alive = true;
+    respawnTimer = 0;
 
-    constructor(scene: THREE.Scene, physics: RAPIER.World, x: number, y: number, z: number, isHost: boolean = true, surfaceY?: (x: number, z: number) => number) {
+    constructor(
+        scene: THREE.Scene,
+        physics: RAPIER.World,
+        id: string,
+        team: TeamId,
+        x: number,
+        y: number,
+        z: number,
+        isHost: boolean = true,
+        surfaceY?: (x: number, z: number) => number
+    ) {
+        this.id = id;
+        this.team = team;
         this.isHost = isHost;
         this.surfaceY = surfaceY;
         const parts = GolemFactory.create();
@@ -65,13 +83,7 @@ export class DummyBot {
         this.bronzeMaterial = parts.materials.bronze;
         this.mat = parts.materials.rune;
         this.boilerMaterial = parts.materials.boiler;
-        this.bronzeMaterial.color.setHex(0x845244);
-        this.mat.color.setHex(0xff6c52);
-        this.mat.emissive.setHex(0xff5d45);
-        this.mat.emissiveIntensity = 2.3;
-        this.boilerMaterial.color.setHex(0xff8f3b);
-        this.boilerMaterial.emissive.setHex(0xff7b29);
-        this.boilerMaterial.emissiveIntensity = 1.7;
+        this.applyTeamStyle(team);
         this.mesh.position.set(x, y, z);
         this.targetPos.set(x, y, z);
         scene.add(this.mesh);
@@ -81,6 +93,45 @@ export class DummyBot {
         this.body = physics.createRigidBody(bodyDesc);
         const colliderDesc = RAPIER.ColliderDesc.capsule(0.75, 0.8);
         physics.createCollider(colliderDesc, this.body);
+    }
+
+    applyTeamStyle(team: TeamId) {
+        if (team === 'blue') {
+            this.bronzeMaterial.color.setHex(0x5f5f74);
+            this.mat.color.setHex(0x6ad7ff);
+            this.mat.emissive.setHex(0x46c6ff);
+            this.boilerMaterial.color.setHex(0x69a3ff);
+            this.boilerMaterial.emissive.setHex(0x3f8cff);
+        } else {
+            this.bronzeMaterial.color.setHex(0x845244);
+            this.mat.color.setHex(0xff6c52);
+            this.mat.emissive.setHex(0xff5d45);
+            this.boilerMaterial.color.setHex(0xff8f3b);
+            this.boilerMaterial.emissive.setHex(0xff7b29);
+        }
+        this.mat.emissiveIntensity = 2.3;
+        this.boilerMaterial.emissiveIntensity = 1.7;
+    }
+
+    queueRespawn(delay: number) {
+        this.alive = false;
+        this.respawnTimer = delay;
+        this.hp = 0;
+        this.mesh.visible = false;
+        this.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+        this.body.setTranslation({ x: 0, y: -120, z: 0 }, true);
+    }
+
+    respawnAt(spawn: THREE.Vector3) {
+        this.hp = this.maxHp;
+        this.alive = true;
+        this.respawnTimer = 0;
+        this.mesh.visible = true;
+        this.targetPos.copy(spawn);
+        this.mesh.position.copy(spawn);
+        this.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+        this.body.setTranslation({ x: spawn.x, y: spawn.y, z: spawn.z }, true);
+        this.fireCooldown = 1.2;
     }
 
     flashDamage(duration = 0.12) {
@@ -102,26 +153,25 @@ export class DummyBot {
     }
 
     takeDamage(amount: number) {
+        if (!this.alive) return 0;
         this.hp -= amount;
         this.flashDamage();
         const remainingHp = Math.max(0, this.hp);
         if (this.hp <= 0) {
-            this.hp = 100;
-            const nextX = (Math.random() - 0.5) * this.respawnRadius * 2;
-            const nextZ = (Math.random() - 0.5) * this.respawnRadius * 2;
-            const nextY = (this.surfaceY ? this.surfaceY(nextX, nextZ) : 1.4) + 3;
-            this.body.setTranslation({
-                x: nextX,
-                y: nextY,
-                z: nextZ
-            }, true);
-            this.fireCooldown = 1.5;
+            this.queueRespawn(5);
         }
         return remainingHp;
     }
 
     update(dt: number, target?: THREE.Vector3) {
         let shot: { shots: BotShot[] } | null = null;
+
+        if (this.respawnTimer > 0) {
+            this.respawnTimer = Math.max(0, this.respawnTimer - dt);
+            if (this.respawnTimer > 0) {
+                return null;
+            }
+        }
 
         if (this.damageTimer > 0) {
             this.damageTimer -= dt;
@@ -132,6 +182,10 @@ export class DummyBot {
         this.mat.emissiveIntensity = 2.3 + flashRatio * 0.8;
         this.boilerMaterial.emissiveIntensity = 1.7 + flashRatio * 0.5;
         
+        if (!this.alive) {
+            return null;
+        }
+
         if (!this.isHost) {
             const currentPos = this.body.translation();
             const dist = this.targetPos.distanceTo(new THREE.Vector3(currentPos.x, currentPos.y, currentPos.z));

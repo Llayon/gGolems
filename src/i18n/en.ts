@@ -98,6 +98,12 @@ const en = {
     'hud.pressure': 'PRESSURE',
     'hud.venting': 'VENT {{seconds}}',
     'hud.weapons': 'WEAPONS',
+    'hud.team.blue': 'BLUE',
+    'hud.team.red': 'RED',
+    'hud.scoreTarget': 'TARGET {{score}}',
+    'hud.respawn': 'RESPAWN',
+    'hud.victory.blue': 'BLUE VICTORY',
+    'hud.victory.red': 'RED VICTORY',
 
     'weapon.runeBolt': 'RUNE BOLT',
     'weapon.arcEmitter': 'ARC EMITTER',

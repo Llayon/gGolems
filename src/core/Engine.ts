@@ -6,16 +6,18 @@ import { InputManager } from './InputManager';
 import { AudioManager } from './AudioManager';
 import { NetworkManager } from '../network/NetworkManager';
 import { Arena } from '../world/Arena';
-import { GolemController } from '../entities/GolemController';
+import { GolemController, type GolemSection } from '../entities/GolemController';
 import { DummyBot } from '../entities/DummyBot';
 import { ParticleManager } from '../fx/ParticleManager';
 import { DebrisManager } from '../fx/DebrisManager';
 import { DecalManager } from '../fx/DecalManager';
 import { ProjectileManager } from '../combat/ProjectileManager';
 import { MechCamera } from '../camera/MechCamera';
+import { ControlPointManager } from '../gameplay/ControlPointManager';
 import { GOLEM, ROTATION } from '../utils/constants';
 import { QualityProfile, detectQualityProfile } from '../utils/quality';
 import type { ProjectileProfileId, WeaponFireRequest, WeaponId } from '../combat/weaponTypes';
+import type { BotStateView, TeamId, TeamScoreState } from '../gameplay/types';
 
 const _weaponOrigin = new THREE.Vector3();
 const _weaponDir = new THREE.Vector3();
@@ -59,6 +61,21 @@ type RadarContact = {
     meters: number;
 };
 
+type PlayerRespawnState = {
+    alive: boolean;
+    timer: number;
+    slot: number;
+};
+
+type RemotePlayerState = PlayerRespawnState & {
+    team: TeamId;
+};
+
+const TEAM_SIZE = 5;
+const SCORE_TO_WIN = 200;
+const RESPAWN_DELAY = 6;
+const LOCAL_PLAYER_ID = 'local-player';
+
 export class Game {
     renderer: Renderer;
     input: InputManager;
@@ -66,10 +83,12 @@ export class Game {
     golem: GolemController;
     mechCamera: MechCamera;
     remotePlayers: Map<string, GolemController> = new Map();
+    remotePlayerStates: Map<string, RemotePlayerState> = new Map();
     particles: ParticleManager;
     debris: DebrisManager;
     projectiles: ProjectileManager;
-    dummy: DummyBot;
+    bots: Map<string, DummyBot> = new Map();
+    controlPoints: ControlPointManager;
     physicsWrapper: Physics;
     physics: RAPIER.World;
     network: NetworkManager;
@@ -79,6 +98,8 @@ export class Game {
     onStateUpdate: (state: any) => void;
     sessionMode: SessionMode;
     remoteSpawnSlots: Map<string, number> = new Map();
+    teamScores: TeamScoreState = { blue: 0, red: 0, scoreToWin: SCORE_TO_WIN, winner: null };
+    localRespawnState: PlayerRespawnState = { alive: true, timer: 0, slot: 0 };
     hitConfirmTimer = 0;
     hitTargetHp = 0;
     hitTargetMaxHp = 100;
@@ -110,15 +131,7 @@ export class Game {
         this.particles = new ParticleManager(this.renderer.scene, this.quality);
         this.debris = new DebrisManager(this.renderer.scene, this.quality);
         this.projectiles = new ProjectileManager(this.renderer.scene);
-        this.dummy = new DummyBot(
-            this.renderer.scene,
-            this.physics,
-            this.world.botSpawn.x,
-            this.world.botSpawn.y,
-            this.world.botSpawn.z,
-            sessionMode !== 'client',
-            this.world.surfaceY.bind(this.world)
-        );
+        this.controlPoints = new ControlPointManager(this.renderer.scene, this.world.controlPointPositions);
 
         if (sessionMode === 'client') {
             this.setClientMode();
@@ -126,7 +139,9 @@ export class Game {
 
         this.placeGolemAtSpawn(this.golem, this.getInitialLocalSpawn());
         this.syncLocalCameraMode();
-        this.dummy.respawnRadius = this.world.spawnRadius;
+        if (sessionMode !== 'client') {
+            this.syncTeamBotRoster();
+        }
 
         canvas.addEventListener('click', () => {
             canvas.requestPointerLock();
@@ -238,6 +253,319 @@ export class Game {
         }
     }
 
+    getLocalUnitId() {
+        return this.network.myId || LOCAL_PLAYER_ID;
+    }
+
+    getTeamSpawns(team: TeamId) {
+        return team === 'blue' ? this.world.blueSpawns : this.world.redSpawns;
+    }
+
+    getTeamSpawn(team: TeamId, slot: number) {
+        const spawns = this.getTeamSpawns(team);
+        return spawns[slot % spawns.length].clone();
+    }
+
+    createBot(id: string, team: TeamId, slot: number) {
+        const spawn = this.getTeamSpawn(team, slot);
+        const bot = new DummyBot(
+            this.renderer.scene,
+            this.physics,
+            id,
+            team,
+            spawn.x,
+            spawn.y,
+            spawn.z,
+            this.sessionMode !== 'client',
+            this.world.surfaceY.bind(this.world)
+        );
+        bot.respawnRadius = this.world.spawnRadius;
+        this.bots.set(id, bot);
+        return bot;
+    }
+
+    destroyBot(id: string) {
+        const bot = this.bots.get(id);
+        if (!bot) return;
+        this.renderer.scene.remove(bot.mesh);
+        this.physics.removeRigidBody(bot.body);
+        this.bots.delete(id);
+    }
+
+    syncTeamBotRoster() {
+        if (this.sessionMode === 'client') return;
+
+        const desired = new Map<string, { team: TeamId; slot: number }>();
+        const occupiedBlueSlots = new Set<number>([this.localRespawnState.slot, ...this.remoteSpawnSlots.values()]);
+
+        for (let slot = 0; slot < TEAM_SIZE; slot++) {
+            if (!occupiedBlueSlots.has(slot)) {
+                desired.set(`bot-blue-${slot}`, { team: 'blue', slot });
+            }
+        }
+
+        for (let slot = 0; slot < TEAM_SIZE; slot++) {
+            desired.set(`bot-red-${slot}`, { team: 'red', slot });
+        }
+
+        for (const [id] of this.bots) {
+            if (!desired.has(id)) {
+                this.destroyBot(id);
+            }
+        }
+
+        for (const [id, info] of desired) {
+            if (!this.bots.has(id)) {
+                this.createBot(id, info.team, info.slot);
+            }
+        }
+    }
+
+    setGolemPresence(golem: GolemController, alive: boolean) {
+        if (golem.isLocal) {
+            golem.model.visible = alive && this.mechCamera.mode === 'thirdPerson';
+        } else {
+            golem.model.visible = alive;
+        }
+        if (!alive) {
+            golem.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+        }
+    }
+
+    setRemotePlayerState(id: string, patch: Partial<RemotePlayerState>) {
+        const current = this.remotePlayerStates.get(id) ?? { alive: true, timer: 0, slot: 1, team: 'blue' as TeamId };
+        this.remotePlayerStates.set(id, { ...current, ...patch });
+    }
+
+    queueLocalRespawn(delay = RESPAWN_DELAY) {
+        this.localRespawnState.alive = false;
+        this.localRespawnState.timer = delay;
+        this.golem.resetSections();
+        this.golem.hp = 0;
+        this.setGolemPresence(this.golem, false);
+        const spawn = this.getTeamSpawn('blue', this.localRespawnState.slot);
+        this.placeGolemAtSpawn(this.golem, spawn);
+    }
+
+    respawnLocalPlayer() {
+        this.localRespawnState.alive = true;
+        this.localRespawnState.timer = 0;
+        const spawn = this.getTeamSpawn('blue', this.localRespawnState.slot);
+        this.placeGolemAtSpawn(this.golem, spawn);
+        this.golem.steam = this.golem.maxSteam;
+        this.golem.isOverheated = false;
+        this.golem.overheatTimer = 0;
+        this.setGolemPresence(this.golem, true);
+        this.mechCamera.addTrauma(1.0);
+    }
+
+    queueRemoteRespawn(id: string, delay = RESPAWN_DELAY) {
+        const player = this.remotePlayers.get(id);
+        if (!player) return;
+        const slot = this.remoteSpawnSlots.get(id) ?? 1;
+        this.setRemotePlayerState(id, { alive: false, timer: delay, slot });
+        player.resetSections();
+        player.hp = 0;
+        this.setGolemPresence(player, false);
+        const spawn = this.getTeamSpawn('blue', slot);
+        this.placeGolemAtSpawn(player, spawn);
+    }
+
+    respawnRemotePlayer(id: string) {
+        const player = this.remotePlayers.get(id);
+        if (!player) return;
+        const slot = this.remoteSpawnSlots.get(id) ?? 1;
+        const spawn = this.getTeamSpawn('blue', slot);
+        this.placeGolemAtSpawn(player, spawn);
+        player.steam = player.maxSteam;
+        player.isOverheated = false;
+        player.overheatTimer = 0;
+        this.setGolemPresence(player, true);
+        this.setRemotePlayerState(id, { alive: true, timer: 0, slot });
+        this.network.sendTo(id, { type: 'respawn', x: spawn.x, y: spawn.y, z: spawn.z, yaw: this.getSpawnYaw(spawn), slot });
+    }
+
+    updateRespawns(dt: number) {
+        if (this.sessionMode === 'client') {
+            this.localRespawnState.timer = Math.max(0, this.localRespawnState.timer - dt);
+            return;
+        }
+
+        if (!this.localRespawnState.alive) {
+            this.localRespawnState.timer = Math.max(0, this.localRespawnState.timer - dt);
+            if (this.localRespawnState.timer <= 0) {
+                this.respawnLocalPlayer();
+            }
+        }
+
+        for (const [id, state] of this.remotePlayerStates) {
+            if (!state.alive) {
+                state.timer = Math.max(0, state.timer - dt);
+                if (state.timer <= 0) {
+                    this.respawnRemotePlayer(id);
+                }
+            }
+        }
+
+        for (const [id, bot] of this.bots) {
+            if (!bot.alive && bot.respawnTimer <= 0) {
+                const slot = Number(id.split('-').pop() ?? 0) || 0;
+                bot.respawnAt(this.getTeamSpawn(bot.team, slot));
+            }
+        }
+    }
+
+    getUnitTeam(id: string): TeamId | null {
+        if (!id) return 'blue';
+        if (id === this.getLocalUnitId()) return 'blue';
+        if (id.startsWith('bot-blue')) return 'blue';
+        if (id.startsWith('bot-red')) return 'red';
+        if (this.remotePlayers.has(id) || this.remotePlayerStates.has(id)) return 'blue';
+        return null;
+    }
+
+    getNearestEnemyTarget(team: TeamId, from: THREE.Vector3) {
+        let bestDistanceSq = Number.POSITIVE_INFINITY;
+        let bestTarget: THREE.Vector3 | null = null;
+
+        const consider = (target: THREE.Vector3, enemyTeam: TeamId, alive: boolean) => {
+            if (!alive || enemyTeam === team) return;
+            const distanceSq = from.distanceToSquared(target);
+            if (distanceSq < bestDistanceSq) {
+                bestDistanceSq = distanceSq;
+                bestTarget = target.clone();
+            }
+        };
+
+        const localPos = this.golem.body.translation();
+        consider(_botTarget.set(localPos.x, localPos.y + 1.4, localPos.z), 'blue', this.localRespawnState.alive);
+
+        this.remotePlayers.forEach((player, id) => {
+            const state = this.remotePlayerStates.get(id);
+            const alive = state ? state.alive : true;
+            const pos = player.body.translation();
+            consider(_weaponOrigin.set(pos.x, pos.y + 1.4, pos.z), 'blue', alive);
+        });
+
+        for (const bot of this.bots.values()) {
+            const pos = bot.body.translation();
+            consider(_weaponOrigin.set(pos.x, pos.y + 1.3, pos.z), bot.team, bot.alive);
+        }
+
+        return bestTarget;
+    }
+
+    collectControlUnits() {
+        const units: Array<{ team: TeamId; position: THREE.Vector3; alive: boolean }> = [];
+        const localPos = this.golem.body.translation();
+        units.push({
+            team: 'blue',
+            position: new THREE.Vector3(localPos.x, localPos.y, localPos.z),
+            alive: this.localRespawnState.alive
+        });
+
+        this.remotePlayers.forEach((player, id) => {
+            const state = this.remotePlayerStates.get(id);
+            const pos = player.body.translation();
+            units.push({
+                team: 'blue',
+                position: new THREE.Vector3(pos.x, pos.y, pos.z),
+                alive: state ? state.alive : true
+            });
+        });
+
+        for (const bot of this.bots.values()) {
+            const pos = bot.body.translation();
+            units.push({
+                team: bot.team,
+                position: new THREE.Vector3(pos.x, pos.y, pos.z),
+                alive: bot.alive
+            });
+        }
+
+        return units;
+    }
+
+    buildBotSnapshots(): BotStateView[] {
+        return [...this.bots.values()].map((bot) => {
+            const pos = bot.body.translation();
+            return {
+                id: bot.id,
+                team: bot.team,
+                x: Number(pos.x.toFixed(2)),
+                y: Number(pos.y.toFixed(2)),
+                z: Number(pos.z.toFixed(2)),
+                yaw: Number(bot.mesh.rotation.y.toFixed(2)),
+                hp: Math.max(0, Math.round(bot.hp)),
+                maxHp: bot.maxHp,
+                alive: bot.alive,
+                respawnTimer: Number(bot.respawnTimer.toFixed(2))
+            };
+        });
+    }
+
+    applyBotSnapshots(botStates: BotStateView[]) {
+        const nextIds = new Set(botStates.map((entry) => entry.id));
+
+        for (const [id] of this.bots) {
+            if (!nextIds.has(id)) {
+                this.destroyBot(id);
+            }
+        }
+
+        for (const botState of botStates) {
+            let bot = this.bots.get(botState.id);
+            if (!bot) {
+                bot = this.createBot(botState.id, botState.team, 0);
+                bot.isHost = false;
+                bot.body.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
+            }
+
+            bot.team = botState.team;
+            bot.applyTeamStyle(botState.team);
+            bot.hp = botState.hp;
+            bot.maxHp = botState.maxHp;
+            bot.alive = botState.alive;
+            bot.respawnTimer = botState.respawnTimer;
+            bot.targetPos.set(botState.x, botState.y, botState.z);
+            bot.mesh.rotation.y = botState.yaw;
+            bot.mesh.visible = botState.alive;
+            if (!botState.alive) {
+                bot.body.setNextKinematicTranslation(new THREE.Vector3(botState.x, -120, botState.z));
+            }
+        }
+    }
+
+    handlePlayerHit(ownerId: string, targetId: string, damage: number, section: GolemSection | '__bot__') {
+        if (targetId.startsWith('bot-')) {
+            const bot = this.bots.get(targetId);
+            if (!bot) return;
+            const remainingHp = bot.takeDamage(damage);
+            this.confirmHitForOwner(ownerId, remainingHp, bot.maxHp);
+            return;
+        }
+
+        const hitSection = section === '__bot__' ? 'centerTorso' : section;
+
+        if (targetId === this.getLocalUnitId()) {
+            const result = this.golem.applySectionDamage(hitSection, damage);
+            this.mechCamera.onHit(damage);
+            if (result.lethal) {
+                this.queueLocalRespawn();
+            }
+            this.confirmHitForOwner(ownerId, result.totalHp, this.golem.maxHp);
+            return;
+        }
+
+        const player = this.remotePlayers.get(targetId);
+        if (!player) return;
+        const result = player.applySectionDamage(hitSection, damage);
+        if (result.lethal) {
+            this.queueRemoteRespawn(targetId);
+        }
+        this.confirmHitForOwner(ownerId, result.totalHp, player.maxHp);
+    }
+
     setupNetwork() {
         this.network.onConnect = (id) => {
             console.log("Player connected:", id);
@@ -247,12 +575,15 @@ export class Game {
             if (this.sessionMode === 'host') {
                 const spawnSlot = this.allocateRemoteSpawnSlot();
                 this.remoteSpawnSlots.set(id, spawnSlot);
-                const spawn = this.getPlayerSpawn(spawnSlot);
+                this.setRemotePlayerState(id, { alive: true, timer: 0, slot: spawnSlot, team: 'blue' });
+                const spawn = this.getTeamSpawn('blue', spawnSlot);
                 const yaw = this.getSpawnYaw(spawn);
                 this.placeGolemAtSpawn(remoteGolem, spawn, yaw);
-                this.network.sendTo(id, { type: 'respawn', x: spawn.x, y: spawn.y, z: spawn.z, yaw });
+                this.network.sendTo(id, { type: 'respawn', x: spawn.x, y: spawn.y, z: spawn.z, yaw, slot: spawnSlot });
+                this.syncTeamBotRoster();
             } else if (this.sessionMode === 'client') {
-                this.placeGolemAtSpawn(remoteGolem, this.getPlayerSpawn(0));
+                this.setRemotePlayerState(id, { alive: true, timer: 0, slot: 0, team: 'blue' });
+                this.placeGolemAtSpawn(remoteGolem, this.getTeamSpawn('blue', 0));
             }
         };
 
@@ -264,25 +595,29 @@ export class Game {
                 this.physics.removeRigidBody(remoteGolem.body);
                 this.remotePlayers.delete(id);
             }
+            this.remotePlayerStates.delete(id);
             this.remoteSpawnSlots.delete(id);
+            if (this.sessionMode === 'host') {
+                this.syncTeamBotRoster();
+            }
         };
 
         this.network.onData = (id, data) => {
             if (data.type === 'state' && !this.network.isHost) {
-                // Host sent state to client
-                if (data.dummy) {
-                    if (this.dummy.hp > data.dummy.hp) {
-                        this.dummy.flashDamage();
-                    }
-                    this.dummy.hp = data.dummy.hp;
-                    this.dummy.targetPos.set(data.dummy.x, data.dummy.y, data.dummy.z);
-                }
                 if (data.props) {
                     this.world.propManager.applySnapshot(data.props);
                 }
+                if (data.points) {
+                    this.controlPoints.setState(data.points);
+                }
+                if (data.scores) {
+                    this.teamScores = data.scores;
+                }
+                if (data.bots) {
+                    this.applyBotSnapshots(data.bots);
+                }
                 
                 if (data.players) {
-                    // Remove players that are no longer in the state
                     for (const pid of this.remotePlayers.keys()) {
                         if (!data.players[pid]) {
                             const remoteGolem = this.remotePlayers.get(pid);
@@ -291,20 +626,27 @@ export class Game {
                                 this.physics.removeRigidBody(remoteGolem.body);
                                 this.remotePlayers.delete(pid);
                             }
+                            this.remotePlayerStates.delete(pid);
                         }
                     }
 
                     for (const pid in data.players) {
                         const pState = data.players[pid];
                         
-                        if (pid === this.network.myId) {
-                            // Update my own HP from Host
-                            if (pState.hp !== undefined) {
-                                if (this.golem.hp > pState.hp) {
-                                    this.mechCamera.onHit(this.golem.hp - pState.hp); // I took damage
-                                }
+                        if (pid === this.network.myId || (pid === LOCAL_PLAYER_ID && !this.network.myId)) {
+                            this.localRespawnState.slot = typeof pState.slot === 'number' ? pState.slot : this.localRespawnState.slot;
+                            this.localRespawnState.alive = pState.alive !== false;
+                            this.localRespawnState.timer = typeof pState.respawnTimer === 'number' ? pState.respawnTimer : 0;
+                            if (pState.hp !== undefined && this.golem.hp > pState.hp) {
+                                this.mechCamera.onHit(this.golem.hp - pState.hp);
                             }
-                            if (pState.sections) this.golem.setSectionState(pState.sections);
+                            if (pState.sections) {
+                                this.golem.setSectionState(pState.sections);
+                            }
+                            if (typeof pState.hp === 'number') {
+                                this.golem.hp = pState.hp;
+                            }
+                            this.setGolemPresence(this.golem, this.localRespawnState.alive);
                             continue;
                         }
                         
@@ -312,14 +654,21 @@ export class Game {
                         if (!remoteGolem) {
                             remoteGolem = new GolemController(this.renderer.scene, this.physics, false);
                             this.remotePlayers.set(pid, remoteGolem);
-                            this.placeGolemAtSpawn(remoteGolem, new THREE.Vector3(pState.x, pState.y, pState.z), pState.ly);
+                            this.placeGolemAtSpawn(remoteGolem, new THREE.Vector3(pState.x, pState.y, pState.z), pState.ly ?? 0);
                         }
+
+                        this.setRemotePlayerState(pid, {
+                            alive: pState.alive !== false,
+                            timer: typeof pState.respawnTimer === 'number' ? pState.respawnTimer : 0,
+                            slot: typeof pState.slot === 'number' ? pState.slot : (this.remotePlayerStates.get(pid)?.slot ?? 1),
+                            team: 'blue'
+                        });
                         
                         remoteGolem.targetPos.set(pState.x, pState.y, pState.z);
-                        remoteGolem.targetLegYaw = pState.ly;
-                        remoteGolem.targetTorsoYaw = pState.ty;
+                        remoteGolem.targetLegYaw = pState.ly ?? 0;
+                        remoteGolem.targetTorsoYaw = pState.ty ?? 0;
                         if (pState.sections) {
-                            if (remoteGolem.hp > pState.hp) {
+                            if (typeof pState.hp === 'number' && remoteGolem.hp > pState.hp) {
                                 remoteGolem.flashDamage();
                             }
                             remoteGolem.setSectionState(pState.sections);
@@ -329,18 +678,21 @@ export class Game {
                             }
                             remoteGolem.hp = pState.hp;
                         }
+                        this.setGolemPresence(remoteGolem, pState.alive !== false);
                     }
                 }
             } else if (data.type === 'input' && this.network.isHost) {
-                // Client sent input to Host
+                if (!this.remotePlayerStates.get(id)?.alive) return;
                 const remoteGolem = this.remotePlayers.get(id);
                 if (remoteGolem) {
-                    // Apply client inputs (simplified)
                     remoteGolem.targetLegYaw = data.ly;
                     remoteGolem.targetTorsoYaw = data.ty;
                     remoteGolem.targetPos.set(data.pos.x, data.pos.y, data.pos.z);
                 }
             } else if (data.type === 'respawn') {
+                if (typeof data.slot === 'number') {
+                    this.localRespawnState.slot = data.slot;
+                }
                 this.golem.body.setTranslation({ x: data.x, y: data.y, z: data.z }, true);
                 this.golem.targetPos.set(data.x, data.y, data.z);
                 if (typeof data.yaw === 'number') {
@@ -350,7 +702,13 @@ export class Game {
                     this.golem.targetTorsoYaw = data.yaw;
                     this.mechCamera.aimYaw = data.yaw;
                 }
+                this.localRespawnState.alive = true;
+                this.localRespawnState.timer = 0;
                 this.golem.resetSections();
+                this.golem.steam = this.golem.maxSteam;
+                this.golem.isOverheated = false;
+                this.golem.overheatTimer = 0;
+                this.setGolemPresence(this.golem, true);
                 this.mechCamera.addTrauma(1.0); // Big shake on respawn
             } else if (data.type === 'fire') {
                 if (id !== this.network.myId) {
@@ -390,20 +748,15 @@ export class Game {
 
     setClientMode() {
         this.sessionMode = 'client';
-        this.dummy.isHost = false;
-        this.dummy.body.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
+        this.localRespawnState.slot = 1;
     }
 
     getInitialLocalSpawn() {
-        if (this.sessionMode === 'solo') {
-            return this.world.soloSpawn;
-        }
-        return this.getPlayerSpawn(this.sessionMode === 'client' ? 1 : 0);
+        return this.getTeamSpawn('blue', this.sessionMode === 'client' ? this.localRespawnState.slot : 0);
     }
 
     getPlayerSpawn(slot: number) {
-        const spawn = this.world.playerSpawns[slot % this.world.playerSpawns.length];
-        return spawn.clone();
+        return this.getTeamSpawn('blue', slot);
     }
 
     getSpawnYaw(spawn: THREE.Vector3) {
@@ -431,7 +784,7 @@ export class Game {
     }
 
     syncLocalCameraMode() {
-        this.golem.model.visible = this.mechCamera.mode === 'thirdPerson';
+        this.golem.model.visible = this.localRespawnState.alive && this.mechCamera.mode === 'thirdPerson';
     }
 
     setCameraMode(mode: 'cockpit' | 'thirdPerson') {
@@ -447,12 +800,12 @@ export class Game {
     }
 
     allocateRemoteSpawnSlot() {
-        for (let slot = 1; slot < this.world.playerSpawns.length; slot++) {
+        for (let slot = 1; slot < TEAM_SIZE; slot++) {
             if (![...this.remoteSpawnSlots.values()].includes(slot)) {
                 return slot;
             }
         }
-        return ((this.remotePlayers.size - 1) % Math.max(1, this.world.playerSpawns.length - 1)) + 1;
+        return ((this.remotePlayers.size - 1) % Math.max(1, TEAM_SIZE - 1)) + 1;
     }
 
     registerHitConfirm(targetHp: number, targetMaxHp: number) {
@@ -462,11 +815,11 @@ export class Game {
     }
 
     confirmHitForOwner(ownerId: string, targetHp: number, targetMaxHp: number) {
-        if (ownerId === 'solo-bot') return;
+        if (!ownerId || ownerId.startsWith('bot-')) return;
 
         const isLocalShooter = this.sessionMode === 'solo'
-            ? ownerId !== 'solo-bot'
-            : ownerId === this.network.myId;
+            ? ownerId === this.getLocalUnitId()
+            : ownerId === this.network.myId || ownerId === this.getLocalUnitId();
 
         if (isLocalShooter) {
             this.registerHitConfirm(targetHp, targetMaxHp);
@@ -509,13 +862,19 @@ export class Game {
             });
         };
 
-        this.remotePlayers.forEach((player) => {
+        this.remotePlayers.forEach((player, id) => {
             const pos = player.body.translation();
-            pushContact(pos.x, pos.z, 'enemy');
+            const state = this.remotePlayerStates.get(id);
+            if (state?.team === 'red' && state.alive) {
+                pushContact(pos.x, pos.z, 'enemy');
+            }
         });
 
-        if (this.sessionMode === 'solo' && this.dummy.hp > 0) {
-            pushContact(this.dummy.mesh.position.x, this.dummy.mesh.position.z, 'bot');
+        for (const bot of this.bots.values()) {
+            if (bot.team === 'red' && bot.alive) {
+                const pos = bot.body.translation();
+                pushContact(pos.x, pos.z, 'bot');
+            }
         }
 
         contacts.sort((left, right) => left.distance - right.distance);
@@ -563,13 +922,13 @@ export class Game {
         const centerTorso = this.input.consumeKey('KeyC') || this.input.consumeVirtualAction('centerTorso');
         const stopThrottle = this.input.consumeKey('KeyX') || this.input.consumeVirtualAction('stopThrottle');
 
-        const events = this.golem.update(
+        this.golem.update(
             dt,
             this.mechCamera.aimYaw,
-            throttleInput,
-            turnInput,
-            centerTorso,
-            stopThrottle,
+            this.localRespawnState.alive ? throttleInput : 0,
+            this.localRespawnState.alive ? turnInput : 0,
+            this.localRespawnState.alive ? centerTorso : false,
+            this.localRespawnState.alive ? stopThrottle : false,
             this.sounds,
             this.decals
         );
@@ -580,27 +939,32 @@ export class Game {
         const torsoTurnSpeed = (this.golem.targetTorsoYaw - this.golem.torsoYaw) / dt;
         this.sounds.update(torsoTurnSpeed);
         
-        this.remotePlayers.forEach(player => {
+        this.remotePlayers.forEach((player, id) => {
+            const state = this.remotePlayerStates.get(id);
+            if (state?.alive === false) return;
             player.update(dt, player.targetTorsoYaw, 0, 0, false, false, this.sounds, this.decals);
         });
 
         const authorityMode = this.sessionMode !== 'client';
-        const localPos = this.golem.body.translation();
-        const botFireSolution = this.sessionMode === 'solo'
-            ? this.dummy.update(dt, _botTarget.set(localPos.x, localPos.y + 1.4, localPos.z))
-            : this.dummy.update(dt);
-        if (botFireSolution) {
-            for (const shot of botFireSolution.shots) {
-                this.projectiles.fire({
-                    origin: shot.origin,
-                    dir: shot.dir,
-                    ownerId: 'solo-bot',
-                    weaponId: shot.weaponId,
-                    profile: shot.profile,
-                    damage: shot.damage,
-                    speed: shot.speed,
-                    range: shot.range
-                });
+        for (const bot of this.bots.values()) {
+            const botPos = bot.body.translation();
+            const target = authorityMode
+                ? this.getNearestEnemyTarget(bot.team, _botTarget.set(botPos.x, botPos.y, botPos.z))
+                : undefined;
+            const botFireSolution = bot.update(dt, target ?? undefined);
+            if (botFireSolution) {
+                for (const shot of botFireSolution.shots) {
+                    this.projectiles.fire({
+                        origin: shot.origin,
+                        dir: shot.dir,
+                        ownerId: bot.id,
+                        weaponId: shot.weaponId,
+                        profile: shot.profile,
+                        damage: shot.damage,
+                        speed: shot.speed,
+                        range: shot.range
+                    });
+                }
             }
         }
 
@@ -616,77 +980,70 @@ export class Game {
         const fireGroup3 = this.input.consumeKey('KeyQ') || this.input.consumeFireGroup(3);
         const alphaStrike = this.input.consumeKey('KeyE') || this.input.consumeVirtualAction('alphaStrike');
 
-        if (fireGroup1) {
-            this.fireWeaponRequests(this.network.myId, this.golem.tryFireGroup(1));
-        }
-        if (fireGroup2) {
-            this.fireWeaponRequests(this.network.myId, this.golem.tryFireGroup(2));
-        }
-        if (fireGroup3) {
-            this.fireWeaponRequests(this.network.myId, this.golem.tryFireGroup(3));
-        }
-        if (alphaStrike) {
-            this.fireWeaponRequests(this.network.myId, this.golem.tryFireAlpha());
+        if (this.localRespawnState.alive) {
+            const localOwnerId = this.getLocalUnitId();
+            if (fireGroup1) {
+                this.fireWeaponRequests(localOwnerId, this.golem.tryFireGroup(1));
+            }
+            if (fireGroup2) {
+                this.fireWeaponRequests(localOwnerId, this.golem.tryFireGroup(2));
+            }
+            if (fireGroup3) {
+                this.fireWeaponRequests(localOwnerId, this.golem.tryFireGroup(3));
+            }
+            if (alphaStrike) {
+                this.fireWeaponRequests(localOwnerId, this.golem.tryFireAlpha());
+            }
         }
         
-        if (this.input.consumeKey('ShiftLeft') || this.input.consumeVirtualAction('dash')) {
+        if (this.localRespawnState.alive && (this.input.consumeKey('ShiftLeft') || this.input.consumeVirtualAction('dash'))) {
             if (this.golem.tryAction(30)) {
                 this.golem.dash();
                 this.mechCamera.onDash();
             }
         }
         
-        if (this.input.consumeKey('Space') || this.input.consumeVirtualAction('vent')) {
+        if (this.localRespawnState.alive && (this.input.consumeKey('Space') || this.input.consumeVirtualAction('vent'))) {
             if (this.golem.tryAction(0)) {
                 this.golem.vent(this.particles);
                 this.mechCamera.addTrauma(0.5);
             }
         }
 
+        if (authorityMode) {
+            this.controlPoints.update(dt, this.collectControlUnits());
+            if (!this.teamScores.winner) {
+                const scoreDelta = this.controlPoints.tickScore(dt);
+                this.teamScores.blue += scoreDelta.blue;
+                this.teamScores.red += scoreDelta.red;
+                if (this.teamScores.blue >= this.teamScores.scoreToWin) {
+                    this.teamScores.blue = this.teamScores.scoreToWin;
+                    this.teamScores.winner = 'blue';
+                } else if (this.teamScores.red >= this.teamScores.scoreToWin) {
+                    this.teamScores.red = this.teamScores.scoreToWin;
+                    this.teamScores.winner = 'red';
+                }
+            }
+        }
+
         this.projectiles.checkCollisions(
-            this.dummy, 
+            this.bots,
             this.remotePlayers, 
             this.golem, 
-            this.network.myId, 
+            this.getLocalUnitId(), 
             authorityMode,
             this.world.getCollisionMeshes(),
             this.world.propManager,
             this.decals,
-            (ownerId, targetId, damage, section) => {
-                if (targetId === '__dummy__') {
-                    const remainingHp = this.dummy.takeDamage(damage);
-                    this.confirmHitForOwner(ownerId, remainingHp, 100);
-                    return;
-                }
-
-                const hitSection = section === '__dummy__' ? 'centerTorso' : section;
-
-                if (targetId === this.network.myId) {
-                    const result = this.golem.applySectionDamage(hitSection, damage);
-                    this.mechCamera.onHit(damage);
-                    if (result.lethal) {
-                        this.placeGolemAtSpawn(this.golem, this.getInitialLocalSpawn());
-                        this.mechCamera.addTrauma(1.0); // Big shake on respawn
-                    }
-                    this.confirmHitForOwner(ownerId, result.totalHp, this.golem.maxHp);
-                } else {
-                    const p = this.remotePlayers.get(targetId);
-                    if (p) {
-                        const result = p.applySectionDamage(hitSection, damage);
-                        if (result.lethal) {
-                            const spawnSlot = this.remoteSpawnSlots.get(targetId) ?? 1;
-                            const spawn = this.getPlayerSpawn(spawnSlot);
-                            const yaw = this.getSpawnYaw(spawn);
-                            this.placeGolemAtSpawn(p, spawn, yaw);
-                            this.network.sendTo(targetId, { type: 'respawn', x: spawn.x, y: spawn.y, z: spawn.z, yaw });
-                        }
-                        this.confirmHitForOwner(ownerId, result.totalHp, p.maxHp);
-                    }
-                }
-            }
+            (unitId) => this.getUnitTeam(unitId),
+            (targetId) => targetId === this.getLocalUnitId()
+                ? this.localRespawnState.alive
+                : (this.remotePlayerStates.get(targetId)?.alive ?? true),
+            (ownerId, targetId, damage, section) => this.handlePlayerHit(ownerId, targetId, damage, section)
         );
 
         this.playPropFx();
+        this.updateRespawns(dt);
         
         this.boilerParticleTimer += dt;
         if (this.boilerParticleTimer >= this.quality.boilerParticleInterval) {
@@ -706,39 +1063,48 @@ export class Game {
             const pos = this.golem.body.translation();
             
             if (this.sessionMode === 'host') {
-                // Host broadcasts all states
                 const playersState: any = {};
-                playersState[this.network.myId] = {
+                playersState[this.getLocalUnitId()] = {
                     x: Number(pos.x.toFixed(2)), y: Number(pos.y.toFixed(2)), z: Number(pos.z.toFixed(2)),
                     ly: Number(this.golem.legYaw.toFixed(2)), ty: Number(this.golem.torsoYaw.toFixed(2)),
                     hp: this.golem.hp,
-                    sections: { ...this.golem.sections }
+                    sections: { ...this.golem.sections },
+                    alive: this.localRespawnState.alive,
+                    respawnTimer: Number(this.localRespawnState.timer.toFixed(2)),
+                    slot: this.localRespawnState.slot
                 };
                 
                 this.remotePlayers.forEach((player, id) => {
+                    const state = this.remotePlayerStates.get(id) ?? { alive: true, timer: 0, slot: this.remoteSpawnSlots.get(id) ?? 1, team: 'blue' as TeamId };
                     const pPos = player.body.translation();
                     playersState[id] = {
                         x: Number(pPos.x.toFixed(2)), y: Number(pPos.y.toFixed(2)), z: Number(pPos.z.toFixed(2)),
                         ly: Number(player.legYaw.toFixed(2)), ty: Number(player.torsoYaw.toFixed(2)),
                         hp: player.hp,
-                        sections: { ...player.sections }
+                        sections: { ...player.sections },
+                        alive: state.alive,
+                        respawnTimer: Number(state.timer.toFixed(2)),
+                        slot: state.slot
                     };
                 });
                 
                 this.network.broadcast({ 
                     type: 'state', 
                     players: playersState,
-                    dummy: { x: this.dummy.mesh.position.x, y: this.dummy.mesh.position.y, z: this.dummy.mesh.position.z, hp: this.dummy.hp },
+                    bots: this.buildBotSnapshots(),
+                    points: this.controlPoints.getSnapshot(),
+                    scores: { ...this.teamScores },
                     props: this.world.propManager.getSnapshot()
                 });
             } else if (this.sessionMode === 'client') {
-                // Client sends input/position to Host
-                this.network.sendToHost({
-                    type: 'input',
-                    pos: { x: pos.x, y: pos.y, z: pos.z },
-                    ly: this.golem.legYaw,
-                    ty: this.golem.torsoYaw
-                });
+                if (this.localRespawnState.alive) {
+                    this.network.sendToHost({
+                        type: 'input',
+                        pos: { x: pos.x, y: pos.y, z: pos.z },
+                        ly: this.golem.legYaw,
+                        ty: this.golem.torsoYaw
+                    });
+                }
             }
         }
 
@@ -749,7 +1115,7 @@ export class Game {
         const aimScreenY = THREE.MathUtils.clamp(_aimPoint.y, -1.2, 1.2);
 
         this.onStateUpdate({
-            hp: this.golem.hp,
+            hp: this.localRespawnState.alive ? this.golem.hp : 0,
             maxHp: this.golem.maxHp,
             steam: this.golem.steam,
             maxSteam: this.golem.maxSteam,
@@ -771,6 +1137,9 @@ export class Game {
             maxSections: { ...golemState.maxSections },
             weaponStatus: golemState.weaponStatus,
             radarContacts: this.buildRadarContacts(),
+            controlPoints: this.controlPoints.getSnapshot(),
+            teamScores: { ...this.teamScores },
+            respawnTimer: this.localRespawnState.timer,
             terrainColliderMode: this.world.terrain.groundColliderMode,
             terrainColliderError: this.world.terrain.groundColliderError
         });

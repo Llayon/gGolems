@@ -15,6 +15,7 @@ import { createTranslator, getInitialLocale, saveLocale, translateMessage, type 
 import { formatPercent, formatSeconds, formatSpeedUnit } from './i18n/format';
 import type { Locale } from './i18n/types';
 import type { WeaponStatusView } from './combat/weaponTypes';
+import type { ControlPointView, TeamScoreState } from './gameplay/types';
 
 type SessionMode = 'solo' | 'host' | 'client';
 type SectionName = 'head' | 'centerTorso' | 'leftTorso' | 'rightTorso' | 'leftArm' | 'rightArm' | 'leftLeg' | 'rightLeg';
@@ -50,6 +51,9 @@ type GameHudState = {
     maxSections: SectionState;
     weaponStatus: WeaponStatusView[];
     radarContacts: RadarContact[];
+    controlPoints: ControlPointView[];
+    teamScores: TeamScoreState;
+    respawnTimer: number;
     terrainColliderMode: 'heightfield' | 'trimeshFallback';
     terrainColliderError: string;
 };
@@ -117,6 +121,9 @@ const initialGameState: GameHudState = {
     maxSections: { ...defaultSections },
     weaponStatus: [],
     radarContacts: [],
+    controlPoints: [],
+    teamScores: { blue: 0, red: 0, scoreToWin: 200, winner: null },
+    respawnTimer: 0,
     terrainColliderMode: 'heightfield',
     terrainColliderError: ''
 };
@@ -469,6 +476,65 @@ function WeaponRack(props: { weapons: WeaponStatusView[]; locale: Locale; t: Tra
     );
 }
 
+function MatchStatusOverlay(props: { scores: TeamScoreState; points: ControlPointView[]; respawnTimer: number; isTouchDevice: boolean; t: Translator }) {
+    const pointTone = (owner: ControlPointView['owner']) => owner === 'blue'
+        ? 'border-[#3d8fb4]/60 bg-[#57bde8]/20 text-[#8ee6ff]'
+        : owner === 'red'
+            ? 'border-[#a24f39]/60 bg-[#f26b4a]/18 text-[#ffb49b]'
+            : 'border-[#8f6a38]/55 bg-black/25 text-[#e6c78c]';
+
+    return (
+        <>
+            <div
+                className="pointer-events-none absolute left-1/2 z-40 -translate-x-1/2"
+                style={{
+                    top: props.isTouchDevice ? 'calc(env(safe-area-inset-top, 0px) + 72px)' : '58px'
+                }}
+            >
+                <div className={`rounded-[26px] border border-[#8f6a38]/55 bg-[rgba(8,8,8,0.78)] px-4 py-2 shadow-[0_0_18px_rgba(0,0,0,0.32)] ${props.isTouchDevice ? 'min-w-[260px]' : 'min-w-[360px]'}`}>
+                    <div className="flex items-center justify-between gap-3">
+                        <div className="text-center">
+                            <div className="text-[9px] tracking-[0.28em] text-[#7ee6f0]">{props.t('hud.team.blue')}</div>
+                            <div className="mt-0.5 text-2xl font-bold tracking-[0.14em] text-[#8ee6ff]">{props.scores.blue}</div>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                            {props.points.map((point) => (
+                                <div key={point.id} className={`min-w-[42px] rounded-full border px-3 py-1 text-center text-xs font-bold tracking-[0.18em] ${pointTone(point.owner)}`}>
+                                    {point.id}
+                                </div>
+                            ))}
+                        </div>
+                        <div className="text-center">
+                            <div className="text-[9px] tracking-[0.28em] text-[#f39f7a]">{props.t('hud.team.red')}</div>
+                            <div className="mt-0.5 text-2xl font-bold tracking-[0.14em] text-[#ffb49b]">{props.scores.red}</div>
+                        </div>
+                    </div>
+                    <div className="mt-1 text-center text-[9px] tracking-[0.24em] text-[#cbb48a]">
+                        {props.t('hud.scoreTarget', { score: props.scores.scoreToWin })}
+                    </div>
+                </div>
+            </div>
+
+            {props.scores.winner ? (
+                <div className="pointer-events-none absolute inset-x-0 top-[126px] z-40 flex justify-center">
+                    <div className={`rounded-full border px-5 py-2 text-[11px] tracking-[0.3em] shadow-[0_0_18px_rgba(0,0,0,0.34)] ${props.scores.winner === 'blue' ? 'border-[#3d8fb4]/60 bg-[rgba(12,28,34,0.84)] text-[#8ee6ff]' : 'border-[#a24f39]/60 bg-[rgba(36,18,14,0.84)] text-[#ffb49b]'}`}>
+                        {props.t(props.scores.winner === 'blue' ? 'hud.victory.blue' : 'hud.victory.red')}
+                    </div>
+                </div>
+            ) : null}
+
+            {props.respawnTimer > 0 ? (
+                <div className="pointer-events-none absolute left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2">
+                    <div className="rounded-[30px] border border-[#8f6a38]/60 bg-[rgba(8,8,8,0.86)] px-8 py-5 text-center shadow-[0_0_24px_rgba(0,0,0,0.42)]">
+                        <div className="text-[11px] tracking-[0.34em] text-[#efb768]">{props.t('hud.respawn')}</div>
+                        <div className="mt-2 text-4xl font-bold tracking-[0.14em] text-[#f3deb5]">{Math.ceil(props.respawnTimer)}</div>
+                    </div>
+                </div>
+            ) : null}
+        </>
+    );
+}
+
 export default function App() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const copyResetRef = useRef<number | null>(null);
@@ -748,6 +814,16 @@ export default function App() {
     return (
         <div className="relative h-[100dvh] w-full overflow-hidden bg-[#100d0b] font-mono text-[#f2ddb1]">
             <canvas ref={canvasRef} className={`block h-full w-full ${inLobby ? 'hidden' : ''}`} />
+
+            {!inLobby ? (
+                <MatchStatusOverlay
+                    scores={gameState.teamScores}
+                    points={gameState.controlPoints}
+                    respawnTimer={gameState.respawnTimer}
+                    isTouchDevice={isTouchDevice}
+                    t={t}
+                />
+            ) : null}
 
             {inLobby ? (
                 <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[radial-gradient(circle_at_center,#2a1c12_0%,#130e0b_60%,#090807_100%)] px-4 text-white">

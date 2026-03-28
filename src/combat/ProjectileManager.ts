@@ -5,6 +5,7 @@ import { DummyBot } from '../entities/DummyBot';
 import { GolemController, GolemSection } from '../entities/GolemController';
 import { DecalManager } from '../fx/DecalManager';
 import { PropManager } from '../world/PropManager';
+import type { TeamId } from '../gameplay/types';
 
 const _segment = new THREE.Vector3();
 const _segmentDir = new THREE.Vector3();
@@ -109,7 +110,7 @@ export class ProjectileManager {
     }
 
     checkCollisions(
-        dummy: DummyBot, 
+        bots: Map<string, DummyBot>,
         players: Map<string, GolemController>, 
         localPlayer: GolemController, 
         localId: string, 
@@ -117,9 +118,10 @@ export class ProjectileManager {
         colliders: THREE.Mesh[],
         props: PropManager,
         decals: DecalManager,
-        onPlayerHit: (ownerId: string, targetId: string, damage: number, section: GolemSection | '__dummy__') => void
+        getTeamForUnit: (id: string) => TeamId | null,
+        canTargetPlayer: (id: string) => boolean,
+        onPlayerHit: (ownerId: string, targetId: string, damage: number, section: GolemSection | '__bot__') => void
     ) {
-        const dummyPos = dummy.mesh.position;
         for (const p of this.projectiles) {
             if (!p.active) continue;
 
@@ -144,19 +146,29 @@ export class ProjectileManager {
                 continue;
             }
 
-            // Dummy collision
-            _travelLine.closestPointToPoint(dummyPos, true, _closestPoint);
-            if (p.ownerId !== 'solo-bot' && _closestPoint.distanceToSquared(dummyPos) < 2.5 * 2.5) {
-                p.active = false;
-                this.scene.remove(p.mesh);
-                if (isHost) onPlayerHit(p.ownerId, '__dummy__', p.damage, '__dummy__');
-                continue;
+            const ownerTeam = getTeamForUnit(p.ownerId);
+
+            let hitBot = false;
+            for (const [botId, bot] of bots.entries()) {
+                if (!bot.alive || botId === p.ownerId) continue;
+                const targetTeam = getTeamForUnit(botId);
+                if (ownerTeam && targetTeam && ownerTeam === targetTeam) continue;
+                _travelLine.closestPointToPoint(bot.mesh.position, true, _closestPoint);
+                if (_closestPoint.distanceToSquared(bot.mesh.position) < 2.5 * 2.5) {
+                    p.active = false;
+                    this.scene.remove(p.mesh);
+                    if (isHost) onPlayerHit(p.ownerId, botId, p.damage, '__bot__');
+                    hitBot = true;
+                    break;
+                }
             }
+            if (hitBot) continue;
 
             // Player collisions
             // Check local player
             const localHit = this.getGolemHitSection(localPlayer);
-            if (p.ownerId !== localId && localHit) {
+            const localTeam = getTeamForUnit(localId);
+            if (canTargetPlayer(localId) && p.ownerId !== localId && (!ownerTeam || !localTeam || ownerTeam !== localTeam) && localHit) {
                 p.active = false;
                 this.scene.remove(p.mesh);
                 if (isHost) onPlayerHit(p.ownerId, localId, p.damage, localHit.section);
@@ -166,8 +178,10 @@ export class ProjectileManager {
             // Check remote players
             let hitRemote = false;
             for (const [pid, player] of players.entries()) {
+                if (!canTargetPlayer(pid)) continue;
                 const remoteHit = this.getGolemHitSection(player);
-                if (p.ownerId !== pid && remoteHit) {
+                const targetTeam = getTeamForUnit(pid);
+                if (p.ownerId !== pid && (!ownerTeam || !targetTeam || ownerTeam !== targetTeam) && remoteHit) {
                     p.active = false;
                     this.scene.remove(p.mesh);
                     if (isHost) onPlayerHit(p.ownerId, pid, p.damage, remoteHit.section);

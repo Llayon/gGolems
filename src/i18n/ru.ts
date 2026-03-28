@@ -98,6 +98,12 @@ const ru: typeof en = {
     'hud.pressure': 'ДАВЛЕНИЕ',
     'hud.venting': 'СБРОС {{seconds}}',
     'hud.weapons': 'ОРУЖИЕ',
+    'hud.team.blue': 'СИНИЕ',
+    'hud.team.red': 'КРАСНЫЕ',
+    'hud.scoreTarget': 'ЦЕЛЬ {{score}}',
+    'hud.respawn': 'РЕСПАВН',
+    'hud.victory.blue': 'СИНИЕ ПОБЕДИЛИ',
+    'hud.victory.red': 'КРАСНЫЕ ПОБЕДИЛИ',
 
     'weapon.runeBolt': 'РУННЫЙ БОЛТ',
     'weapon.arcEmitter': 'ДУГОВОЙ ИЗЛУЧАТЕЛЬ',

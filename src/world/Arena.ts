@@ -23,6 +23,9 @@ export class Arena {
     readonly soloSpawn: THREE.Vector3;
     readonly botSpawn: THREE.Vector3;
     readonly playerSpawns: THREE.Vector3[];
+    readonly blueSpawns: THREE.Vector3[];
+    readonly redSpawns: THREE.Vector3[];
+    readonly controlPointPositions: Record<'A' | 'B' | 'C', THREE.Vector3>;
 
     constructor(scene: THREE.Scene, physics: RAPIER.World) {
         const arenaHalfSize = this.halfSize;
@@ -33,12 +36,31 @@ export class Arena {
         this.terrain = new TerrainBuilder(scene, physics, arenaHalfSize);
         this.soloSpawn = this.createSpawnPoint(-46, 92);
         this.botSpawn = this.createSpawnPoint(46, -92);
+        this.blueSpawns = [
+            this.createSpawnPoint(-110, 8),
+            this.createSpawnPoint(-102, 34),
+            this.createSpawnPoint(-94, -18),
+            this.createSpawnPoint(-86, 58),
+            this.createSpawnPoint(-80, -46)
+        ];
+        this.redSpawns = [
+            this.createSpawnPoint(110, -8),
+            this.createSpawnPoint(102, -34),
+            this.createSpawnPoint(94, 18),
+            this.createSpawnPoint(86, -58),
+            this.createSpawnPoint(80, 46)
+        ];
         this.playerSpawns = [
             this.createSpawnPoint(-92, 30),
             this.createSpawnPoint(92, -30),
             this.createSpawnPoint(-30, -92),
             this.createSpawnPoint(30, 92)
         ];
+        this.controlPointPositions = {
+            A: this.createSpawnPoint(-54, 8),
+            B: this.createSpawnPoint(0, -6),
+            C: this.createSpawnPoint(58, 12)
+        };
 
         this.createBox(scene, physics, { x: 0, z: -arenaHalfSize, w: wallSpan, h: wallHeight, d: wallThickness, color: 0x2e2f39, yOffset: wallHeight / 2 });
         this.createBox(scene, physics, { x: 0, z: arenaHalfSize, w: wallSpan, h: wallHeight, d: wallThickness, color: 0x2e2f39, yOffset: wallHeight / 2 });
