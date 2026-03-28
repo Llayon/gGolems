@@ -5,12 +5,13 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { initGame } from './core/Engine';
+import type { NetworkStartupErrorCode } from './network/NetworkManager';
 import { CombatOverlayCore } from './ui/mobile/CombatOverlayCore';
 import { MobileCombatLayout } from './ui/mobile/MobileCombatLayout';
 import { MobileSettingsOverlay } from './ui/mobile/MobileSettingsOverlay';
 import { createTranslator, getInitialLocale, saveLocale, translateMessage, type TranslationDescriptor, type TranslationKey, type Translator } from './i18n';
 import { formatPercent, formatSeconds, formatSpeedUnit } from './i18n/format';
-import type { Locale, TranslationParams } from './i18n/types';
+import type { Locale } from './i18n/types';
 
 type SessionMode = 'solo' | 'host' | 'client';
 type SectionName = 'head' | 'centerTorso' | 'leftTorso' | 'rightTorso' | 'leftArm' | 'rightArm' | 'leftLeg' | 'rightLeg';
@@ -69,6 +70,24 @@ const sectionLabelKeys: Record<SectionName, TranslationKey> = {
     rightArm: 'hud.section.rightArm',
     leftLeg: 'hud.section.leftLeg',
     rightLeg: 'hud.section.rightLeg'
+};
+
+type StartupPhase = 'startWorld' | 'createSession' | 'connectToHost';
+
+type StartupFailureCode = NetworkStartupErrorCode | 'timeout' | 'hostIdRequired' | 'unknown';
+
+type StartupFailure = {
+    code: StartupFailureCode;
+    phase?: StartupPhase;
+    seconds?: number;
+    detail?: string;
+    cause?: unknown;
+};
+
+const startupPhaseLabelKeys: Record<StartupPhase, TranslationKey> = {
+    startWorld: 'errors.startWorld',
+    createSession: 'errors.createSession',
+    connectToHost: 'errors.connectToHost'
 };
 
 const initialGameState: GameHudState = {
@@ -168,10 +187,59 @@ function describeError(error: unknown, fallback: string) {
     return typeof error === 'string' ? error : fallback;
 }
 
-function withTimeout<T>(promiseFactory: () => Promise<T>, timeoutMs: number, timeoutMessage: string) {
+function isStartupFailure(error: unknown): error is StartupFailure {
+    if (!error || typeof error !== 'object') return false;
+    return 'code' in error && typeof (error as { code?: unknown }).code === 'string';
+}
+
+function toStartupFailure(error: unknown, phase?: StartupPhase): StartupFailure {
+    if (isStartupFailure(error)) {
+        return phase && !error.phase
+            ? { ...error, phase }
+            : error;
+    }
+
+    return {
+        code: 'unknown',
+        phase,
+        detail: describeError(error, ''),
+        cause: error
+    };
+}
+
+function getStartupFailureMessage(t: Translator, locale: Locale, failure: StartupFailure) {
+    switch (failure.code) {
+        case 'timeout':
+            return t('errors.timeout', {
+                label: failure.phase ? t(startupPhaseLabelKeys[failure.phase]) : t('errors.startWorld'),
+                seconds: formatSeconds(locale, failure.seconds ?? 15)
+            });
+        case 'hostIdRequired':
+            return t('errors.hostIdRequired');
+        case 'peerUnavailable':
+            return t('errors.peerUnavailable');
+        case 'peerIdUnavailable':
+            return t('errors.peerIdUnavailable');
+        case 'networkUnavailable':
+            return t('errors.networkUnavailable');
+        case 'serverError':
+            return t('errors.serverError');
+        case 'connectionFailed':
+            return t('errors.connectionFailed');
+        case 'invalidHostId':
+            return t('errors.invalidHostId');
+        default:
+            if (failure.phase) {
+                return t('errors.phaseFailed', { label: t(startupPhaseLabelKeys[failure.phase]) });
+            }
+            return t('errors.startup', { message: failure.detail || t('errors.unknown') });
+    }
+}
+
+function withTimeout<T>(promiseFactory: () => Promise<T>, timeoutMs: number, timeoutFailure: StartupFailure) {
     return new Promise<T>((resolve, reject) => {
         const timeoutId = window.setTimeout(() => {
-            reject(new Error(timeoutMessage));
+            reject(timeoutFailure);
         }, timeoutMs);
 
         try {
@@ -409,16 +477,22 @@ export default function App() {
             setMyId('');
             setInLobby(true);
             setLoading(false);
-            alert(t('errors.startup', { message: describeError(error, t('errors.unknown')) }));
+            alert(getStartupFailureMessage(t, locale, toStartupFailure(error)));
         };
 
         try {
             game = await withTimeout(
-                () => initGame(canvasRef.current!, (state: GameHudState) => {
-                    setGameState({ ...state });
-                }, mode),
+                async () => {
+                    try {
+                        return await initGame(canvasRef.current!, (state: GameHudState) => {
+                            setGameState({ ...state });
+                        }, mode);
+                    } catch (error) {
+                        throw toStartupFailure(error, 'startWorld');
+                    }
+                },
                 15000,
-                t('errors.timeout', { label: t('errors.startWorld'), seconds: formatSeconds(locale, 15) })
+                { code: 'timeout', phase: 'startWorld', seconds: 15 }
             );
 
             setGameInstance(game);
@@ -433,10 +507,10 @@ export default function App() {
             if (mode === 'host') {
                 const createdHostId = await withTimeout(
                     () => new Promise<string>((resolve, reject) => {
-                        game.network.initAsHost(resolve, reject);
+                        game.network.initAsHost(resolve, (error) => reject(toStartupFailure(error, 'createSession')));
                     }),
                     15000,
-                    t('errors.timeout', { label: t('errors.createSession'), seconds: formatSeconds(locale, 15) })
+                    { code: 'timeout', phase: 'createSession', seconds: 15 }
                 );
                 setMyId(createdHostId);
                 setIsHost(true);
@@ -448,10 +522,10 @@ export default function App() {
                 game.setClientMode();
                 const clientId = await withTimeout(
                     () => new Promise<string>((resolve, reject) => {
-                        game.network.initAsClient(targetHostId, resolve, reject);
+                        game.network.initAsClient(targetHostId, resolve, (error) => reject(toStartupFailure(error, 'connectToHost')));
                     }),
                     15000,
-                    t('errors.timeout', { label: t('errors.connectToHost'), seconds: formatSeconds(locale, 15) })
+                    { code: 'timeout', phase: 'connectToHost', seconds: 15 }
                 );
                 setMyId(clientId);
                 setIsHost(false);
@@ -459,7 +533,7 @@ export default function App() {
                 return;
             }
 
-            throw new Error(t('errors.hostIdRequired'));
+            throw { code: 'hostIdRequired' } satisfies StartupFailure;
         } catch (error) {
             failStart(error);
         }
@@ -579,9 +653,6 @@ export default function App() {
     const terrainDebugTone = gameState.terrainColliderMode === 'heightfield'
         ? 'text-[#8fb8c2]'
         : 'text-[#f3b56c]';
-    const terrainDebugError = gameState.terrainColliderError
-        ? gameState.terrainColliderError.slice(0, 72)
-        : '';
     const sessionLabel = translateMessage(t, sessionMessage);
     const copyTextLabel = translateMessage(t, copyMessage);
     const cameraModeLabel = translateMessage(t, cameraModeMessage);
@@ -717,7 +788,6 @@ export default function App() {
                                         </p>
                                         <div className={`mt-2 text-[10px] tracking-[0.24em] ${terrainDebugTone}`}>
                                             {terrainDebugLabel}
-                                            {terrainDebugError ? ` | ${terrainDebugError}` : ''}
                                         </div>
                                         <button
                                             type="button"

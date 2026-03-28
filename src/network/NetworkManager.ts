@@ -1,5 +1,52 @@
 import Peer, { DataConnection } from 'peerjs';
 
+export type NetworkStartupErrorCode =
+    | 'peerUnavailable'
+    | 'peerIdUnavailable'
+    | 'networkUnavailable'
+    | 'serverError'
+    | 'connectionFailed'
+    | 'invalidHostId'
+    | 'unknown';
+
+export type NetworkStartupError = {
+    code: NetworkStartupErrorCode;
+    detail?: string;
+    cause?: unknown;
+};
+
+function normalizePeerError(error: any): NetworkStartupError {
+    const detail = error instanceof Error
+        ? error.message
+        : typeof error?.message === 'string'
+            ? error.message
+            : typeof error === 'string'
+                ? error
+                : undefined;
+
+    const type = typeof error?.type === 'string' ? error.type : '';
+
+    switch (type) {
+        case 'peer-unavailable':
+            return { code: 'peerUnavailable', detail, cause: error };
+        case 'unavailable-id':
+            return { code: 'peerIdUnavailable', detail, cause: error };
+        case 'network':
+        case 'socket-error':
+        case 'socket-closed':
+            return { code: 'networkUnavailable', detail, cause: error };
+        case 'server-error':
+        case 'ssl-unavailable':
+            return { code: 'serverError', detail, cause: error };
+        case 'invalid-id':
+            return { code: 'invalidHostId', detail, cause: error };
+        case 'webrtc':
+            return { code: 'connectionFailed', detail, cause: error };
+        default:
+            return { code: 'unknown', detail, cause: error };
+    }
+}
+
 export class NetworkManager {
     peer: Peer | null = null;
     connections: Map<string, DataConnection> = new Map();
@@ -12,7 +59,7 @@ export class NetworkManager {
 
     constructor() {}
 
-    initAsHost(onReady: (id: string) => void, onError?: (err: any) => void) {
+    initAsHost(onReady: (id: string) => void, onError?: (err: NetworkStartupError) => void) {
         this.isHost = true;
         this.peer = new Peer();
         
@@ -26,11 +73,11 @@ export class NetworkManager {
         });
 
         if (onError) {
-            this.peer.on('error', onError);
+            this.peer.on('error', (error) => onError(normalizePeerError(error)));
         }
     }
 
-    initAsClient(hostId: string, onReady: (id: string) => void, onError: (err: any) => void) {
+    initAsClient(hostId: string, onReady: (id: string) => void, onError: (err: NetworkStartupError) => void) {
         this.isHost = false;
         this.peer = new Peer();
         
@@ -41,10 +88,10 @@ export class NetworkManager {
                 this.setupConnection(conn);
                 onReady(id);
             });
-            conn.on('error', onError);
+            conn.on('error', (error) => onError(normalizePeerError(error)));
         });
         
-        this.peer.on('error', onError);
+        this.peer.on('error', (error) => onError(normalizePeerError(error)));
     }
 
     private setupConnection(conn: DataConnection) {

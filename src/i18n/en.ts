@@ -37,6 +37,13 @@ const en = {
     'errors.connectToHost': 'Connect to host',
     'errors.hostIdRequired': 'Host ID is required',
     'errors.timeout': '{{label}}: timeout {{seconds}}',
+    'errors.phaseFailed': '{{label}} failed',
+    'errors.peerUnavailable': 'Host is unavailable',
+    'errors.peerIdUnavailable': 'Session ID is unavailable',
+    'errors.networkUnavailable': 'Network is unavailable',
+    'errors.serverError': 'Session server error',
+    'errors.connectionFailed': 'Connection failed',
+    'errors.invalidHostId': 'Invalid host ID',
 
     'hud.heading.gaze': 'GAZE',
     'hud.heading.chassis': 'CHASSIS',

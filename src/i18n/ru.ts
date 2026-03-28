@@ -37,6 +37,13 @@ const ru: typeof en = {
     'errors.connectToHost': 'Подключение к хосту',
     'errors.hostIdRequired': 'Не указан ID хоста',
     'errors.timeout': '{{label}}: превышен таймаут {{seconds}}',
+    'errors.phaseFailed': '{{label}}: сбой',
+    'errors.peerUnavailable': 'Хост недоступен',
+    'errors.peerIdUnavailable': 'ID сессии недоступен',
+    'errors.networkUnavailable': 'Сеть недоступна',
+    'errors.serverError': 'Ошибка сервера сессий',
+    'errors.connectionFailed': 'Не удалось установить соединение',
+    'errors.invalidHostId': 'Некорректный ID хоста',
 
     'hud.heading.gaze': 'ВЗГЛЯД',
     'hud.heading.chassis': 'ШАССИ',
