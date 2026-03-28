@@ -364,6 +364,7 @@ export class GolemController {
             projectileProfile: definition.projectileProfile,
             projectileCount: definition.projectileCount,
             fireTrauma: definition.fireTrauma,
+            cockpitRecoil: definition.cockpitRecoil,
             muzzleOffset: definition.muzzleOffset
         };
     }

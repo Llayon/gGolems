@@ -320,6 +320,7 @@ export class Game {
         for (const request of requests) {
             this.golem.getWeaponMuzzleOrigin(request.mountId, _muzzleOrigin);
             this.golem.triggerWeaponRecoil(request.weaponId);
+            this.mechCamera.onWeaponFire(request.mountId, request.cockpitRecoil, request.fireTrauma);
             trauma = Math.max(trauma, request.fireTrauma);
             _shotBaseDir.copy(aimTarget).sub(_muzzleOrigin);
             if (_shotBaseDir.lengthSq() <= 0.0001) {
@@ -1497,6 +1498,7 @@ export class Game {
 
         const aimScreenX = THREE.MathUtils.clamp(_aimPoint.x, -1.2, 1.2);
         const aimScreenY = THREE.MathUtils.clamp(_aimPoint.y, -1.2, 1.2);
+        const cockpitRecoil = this.mechCamera.getCockpitRecoilState();
 
         this.onStateUpdate({
             hp: this.localRespawnState.alive ? this.golem.hp : 0,
@@ -1514,6 +1516,11 @@ export class Game {
             cameraMode: this.mechCamera.mode,
             aimOffsetX: aimScreenX,
             aimOffsetY: aimScreenY,
+            cockpitKickX: cockpitRecoil.x,
+            cockpitKickY: cockpitRecoil.y,
+            cockpitKickRoll: cockpitRecoil.roll,
+            cockpitFrameKick: cockpitRecoil.frame,
+            cockpitFlash: cockpitRecoil.flash,
             hitConfirm: this.hitConfirmTimer,
             hitTargetHp: this.hitTargetHp,
             hitTargetMaxHp: this.hitTargetMaxHp,

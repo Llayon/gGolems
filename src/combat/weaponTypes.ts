@@ -7,6 +7,17 @@ export type ProjectileProfileId = 'bolt' | 'arc_pulse' | 'steam_slug';
 export type WeaponSection = 'leftArm' | 'rightArm' | 'leftTorso' | 'rightTorso' | 'centerTorso';
 export type WeaponState = 'ready' | 'recycle' | 'offline' | 'heat';
 
+export type CockpitRecoilProfile = {
+    cameraKickBack: number;
+    cameraPitchKick: number;
+    cameraYawKick: number;
+    frameKick: number;
+    recoveryTime: number;
+    pulseCount: number;
+    pulseInterval: number;
+    fovKick: number;
+};
+
 export type WeaponDefinition = {
     id: WeaponId;
     nameKey: TranslationKey;
@@ -23,6 +34,7 @@ export type WeaponDefinition = {
     projectileProfile: ProjectileProfileId;
     projectileCount: number;
     fireTrauma: number;
+    cockpitRecoil: CockpitRecoilProfile;
     muzzleOffset: { x: number; y: number; z: number };
 };
 
@@ -70,5 +82,6 @@ export type WeaponFireRequest = {
     projectileProfile: ProjectileProfileId;
     projectileCount: number;
     fireTrauma: number;
+    cockpitRecoil: CockpitRecoilProfile;
     muzzleOffset: { x: number; y: number; z: number };
 };

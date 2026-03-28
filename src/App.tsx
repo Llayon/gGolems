@@ -45,6 +45,11 @@ type GameHudState = {
     cameraMode: 'cockpit' | 'thirdPerson';
     aimOffsetX: number;
     aimOffsetY: number;
+    cockpitKickX: number;
+    cockpitKickY: number;
+    cockpitKickRoll: number;
+    cockpitFrameKick: number;
+    cockpitFlash: number;
     hitConfirm: number;
     hitTargetHp: number;
     hitTargetMaxHp: number;
@@ -124,6 +129,11 @@ const initialGameState: GameHudState = {
     cameraMode: 'cockpit',
     aimOffsetX: 0,
     aimOffsetY: 0,
+    cockpitKickX: 0,
+    cockpitKickY: 0,
+    cockpitKickRoll: 0,
+    cockpitFrameKick: 0,
+    cockpitFlash: 0,
     hitConfirm: 0,
     hitTargetHp: 0,
     hitTargetMaxHp: 100,
@@ -367,14 +377,28 @@ function TorsoTwistArc(props: { twistRatio: number; maxTwist: number; t: Transla
     );
 }
 
-function CockpitFrame(props: { warning: TranslationDescriptor; throttleLabel: TranslationDescriptor; t: Translator }) {
+function CockpitFrame(props: {
+    warning: TranslationDescriptor;
+    throttleLabel: TranslationDescriptor;
+    kickX: number;
+    kickY: number;
+    kickRoll: number;
+    frameKick: number;
+    flash: number;
+    t: Translator;
+}) {
     const { warning, throttleLabel, t } = props;
+    const frameTransform = `translate3d(${props.kickX * 0.38}px, ${props.kickY * 0.34 - props.frameKick * 2.4}px, 0) rotate(${props.kickRoll * 0.45}deg)`;
 
     return (
-        <div className="pointer-events-none absolute inset-0 z-10 overflow-hidden">
+        <div className="pointer-events-none absolute inset-0 z-10 overflow-hidden" style={{ transform: frameTransform }}>
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,0,0,0)_0%,rgba(0,0,0,0.08)_48%,rgba(0,0,0,0.32)_100%)]" />
             <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0)_18%,rgba(0,0,0,0)_68%,rgba(255,164,63,0.05)_100%)]" />
             <div className="absolute inset-0 bg-[linear-gradient(105deg,rgba(255,255,255,0.045),rgba(255,255,255,0)_22%,rgba(255,255,255,0)_76%,rgba(255,255,255,0.03))]" />
+            <div
+                className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,208,148,0.32),rgba(255,208,148,0.06)_32%,rgba(255,208,148,0)_70%)]"
+                style={{ opacity: clamp(props.flash, 0, 1) }}
+            />
 
             <div className="absolute inset-x-0 top-0 h-20 border-b border-[#7f653e]/70 bg-[linear-gradient(180deg,rgba(80,55,30,0.95),rgba(28,20,14,0.92),rgba(0,0,0,0))] shadow-[0_8px_18px_rgba(0,0,0,0.35)]" />
             <div className="absolute left-0 top-0 bottom-0 w-28 border-r border-[#7f653e]/60 bg-[linear-gradient(90deg,rgba(54,39,24,0.96),rgba(22,17,13,0.78),rgba(0,0,0,0))]" />
@@ -1014,6 +1038,9 @@ export default function App() {
             : { session: sessionLabel, camera: cameraModeLabel, idLabel: t('common.id'), id: myId || t('session.sync') }
     );
     const showCockpitDecor = !isTouchDevice && gameState.cameraMode === 'cockpit';
+    const cockpitCanvasTransform = showCockpitDecor
+        ? `translate3d(${gameState.cockpitKickX}px, ${gameState.cockpitKickY}px, 0) rotate(${gameState.cockpitKickRoll}deg) scale(${1 + gameState.cockpitFrameKick * 0.008})`
+        : undefined;
     const hostBadgeClass = 'pointer-events-auto absolute right-4 top-4 z-30 flex items-center gap-3 rounded-2xl border border-[#8f6a38]/45 bg-[rgba(10,10,10,0.78)] px-4 py-3 text-[#e1cea7] shadow-[0_0_22px_rgba(0,0,0,0.32)] backdrop-blur-sm';
     const pilotPanelAnchorClass = 'left-4 top-4';
     const pilotPanelHideLabel = t('pilot.hide');
@@ -1022,7 +1049,11 @@ export default function App() {
     const localeLabel = t('locale.current', { label: t('locale.label'), value: t(locale === 'ru' ? 'locale.ru' : 'locale.en') });
     return (
         <div className="relative h-[100dvh] w-full overflow-hidden bg-[#100d0b] font-mono text-[#f2ddb1]">
-            <canvas ref={canvasRef} className={`block h-full w-full ${inLobby ? 'hidden' : ''}`} />
+            <canvas
+                ref={canvasRef}
+                className={`block h-full w-full ${inLobby ? 'hidden' : ''}`}
+                style={cockpitCanvasTransform ? { transform: cockpitCanvasTransform, transformOrigin: '50% 50%' } : undefined}
+            />
 
             {!inLobby ? (
                 <MatchStatusOverlay
@@ -1262,7 +1293,18 @@ export default function App() {
 
             {!loading && !inLobby ? (
                 <>
-                    {showCockpitDecor ? <CockpitFrame warning={warningMessage} throttleLabel={throttleMessage} t={t} /> : null}
+                    {showCockpitDecor ? (
+                        <CockpitFrame
+                            warning={warningMessage}
+                            throttleLabel={throttleMessage}
+                            kickX={gameState.cockpitKickX}
+                            kickY={gameState.cockpitKickY}
+                            kickRoll={gameState.cockpitKickRoll}
+                            frameKick={gameState.cockpitFrameKick}
+                            flash={gameState.cockpitFlash}
+                            t={t}
+                        />
+                    ) : null}
                     {isTouchDevice ? (
                         <MobileCombatLayout
                             warning={warningMessage}

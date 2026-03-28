@@ -48,6 +48,16 @@ export const WEAPON_DEFINITIONS: Record<WeaponId, WeaponDefinition> = {
         projectileProfile: 'bolt',
         projectileCount: 1,
         fireTrauma: 0.18,
+        cockpitRecoil: {
+            cameraKickBack: 0.36,
+            cameraPitchKick: 0.22,
+            cameraYawKick: 0.12,
+            frameKick: 0.38,
+            recoveryTime: 0.18,
+            pulseCount: 1,
+            pulseInterval: 0,
+            fovKick: 0.25
+        },
         muzzleOffset: { x: 0, y: -1.18, z: -1.28 }
     },
     arc_emitter: {
@@ -66,6 +76,16 @@ export const WEAPON_DEFINITIONS: Record<WeaponId, WeaponDefinition> = {
         projectileProfile: 'arc_pulse',
         projectileCount: 3,
         fireTrauma: 0.24,
+        cockpitRecoil: {
+            cameraKickBack: 0.24,
+            cameraPitchKick: 0.14,
+            cameraYawKick: 0.1,
+            frameKick: 0.22,
+            recoveryTime: 0.14,
+            pulseCount: 3,
+            pulseInterval: 0.045,
+            fovKick: 0.18
+        },
         muzzleOffset: { x: 0, y: -1.15, z: -1.2 }
     },
     steam_cannon: {
@@ -84,6 +104,16 @@ export const WEAPON_DEFINITIONS: Record<WeaponId, WeaponDefinition> = {
         projectileProfile: 'steam_slug',
         projectileCount: 1,
         fireTrauma: 0.42,
+        cockpitRecoil: {
+            cameraKickBack: 0.95,
+            cameraPitchKick: 0.54,
+            cameraYawKick: 0.2,
+            frameKick: 0.82,
+            recoveryTime: 0.28,
+            pulseCount: 1,
+            pulseInterval: 0,
+            fovKick: 0.6
+        },
         muzzleOffset: { x: 0, y: -0.38, z: -1.55 }
     }
 };

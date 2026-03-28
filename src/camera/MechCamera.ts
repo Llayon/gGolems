@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { CockpitRecoilProfile, WeaponMountId } from '../combat/weaponTypes';
 import { clamp } from '../utils/math';
 import { CAMERA, WALK, SHAKE } from '../utils/constants';
 
@@ -26,6 +27,13 @@ function frameAlpha(alphaAt60Fps: number, dt: number) {
 
 export type CameraMode = 'cockpit' | 'thirdPerson';
 
+type PendingRecoilPulse = {
+    delay: number;
+    mountId: WeaponMountId;
+    profile: CockpitRecoilProfile;
+    trauma: number;
+};
+
 export class MechCamera {
     camera: THREE.PerspectiveCamera;
     aimYaw = 0;
@@ -46,6 +54,13 @@ export class MechCamera {
     trauma = 0;
     shakeOffset = new THREE.Vector3();
     shakeRotation = 0;
+    recoilQueue: PendingRecoilPulse[] = [];
+    cockpitKickX = 0;
+    cockpitKickY = 0;
+    cockpitKickRoll = 0;
+    cockpitFrameKick = 0;
+    cockpitFlash = 0;
+    recoilRecoveryRate = 10;
 
     baseFOV: number;
     targetFOV: number;
@@ -116,6 +131,7 @@ export class MechCamera {
         this.currentPos.lerp(_targetPos, frameAlpha(CAMERA.posLerp, dt));
         this.currentLookAt.lerp(_targetLookAt, frameAlpha(CAMERA.lookLerp, dt));
 
+        this.updateWeaponRecoil(dt);
         this.updateWalkBob(speed, mass, dt);
         this.updateShake(dt);
         this.updateFOV(speed, dt);
@@ -187,6 +203,45 @@ export class MechCamera {
         }
     }
 
+    updateWeaponRecoil(dt: number) {
+        if (this.recoilQueue.length > 0) {
+            for (let index = this.recoilQueue.length - 1; index >= 0; index--) {
+                const pulse = this.recoilQueue[index];
+                pulse.delay -= dt;
+                if (pulse.delay <= 0) {
+                    this.fireRecoilPulse(pulse);
+                    this.recoilQueue.splice(index, 1);
+                }
+            }
+        }
+
+        const decay = Math.exp(-dt * this.recoilRecoveryRate);
+        this.cockpitKickX *= decay;
+        this.cockpitKickY *= decay;
+        this.cockpitKickRoll *= Math.exp(-dt * this.recoilRecoveryRate * 1.1);
+        this.cockpitFrameKick *= Math.exp(-dt * this.recoilRecoveryRate * 0.95);
+        this.cockpitFlash *= Math.exp(-dt * this.recoilRecoveryRate * 1.45);
+        this.recoilRecoveryRate += (10 - this.recoilRecoveryRate) * frameAlpha(0.08, dt);
+
+        if (Math.abs(this.cockpitKickX) < 0.01) this.cockpitKickX = 0;
+        if (Math.abs(this.cockpitKickY) < 0.01) this.cockpitKickY = 0;
+        if (Math.abs(this.cockpitKickRoll) < 0.001) this.cockpitKickRoll = 0;
+        if (this.cockpitFrameKick < 0.002) this.cockpitFrameKick = 0;
+        if (this.cockpitFlash < 0.002) this.cockpitFlash = 0;
+    }
+
+    fireRecoilPulse(pulse: PendingRecoilPulse) {
+        const side = pulse.mountId === 'leftArmMount' ? -1 : pulse.mountId === 'rightArmMount' ? 1 : 0;
+        this.cockpitKickY -= pulse.profile.cameraKickBack * 12 + pulse.profile.cameraPitchKick * 22;
+        this.cockpitKickX += side * pulse.profile.cameraYawKick * 14;
+        this.cockpitKickRoll += side * pulse.profile.cameraYawKick * 0.55;
+        this.cockpitFrameKick = Math.min(1.5, this.cockpitFrameKick + pulse.profile.frameKick);
+        this.cockpitFlash = Math.min(1, this.cockpitFlash + pulse.profile.frameKick * 0.42);
+        this.recoilRecoveryRate = Math.max(this.recoilRecoveryRate, 2.8 / Math.max(0.08, pulse.profile.recoveryTime));
+        this.targetFOV = Math.max(this.targetFOV, this.baseFOV + pulse.profile.fovKick);
+        this.addTrauma(pulse.trauma);
+    }
+
     updateFOV(speed: number, dt: number) {
         const speedFOV = this.baseFOV + (speed / 15) * 4;
         this.targetFOV = Math.max(this.targetFOV, speedFOV);
@@ -207,5 +262,28 @@ export class MechCamera {
 
     onFire(weaponWeight: number) {
         this.addTrauma(weaponWeight * SHAKE.fireTraumaScale);
+    }
+
+    onWeaponFire(mountId: WeaponMountId, profile: CockpitRecoilProfile, fireTrauma: number) {
+        const pulses = Math.max(1, profile.pulseCount);
+        const pulseTrauma = (fireTrauma * SHAKE.fireTraumaScale) / pulses;
+        for (let index = 0; index < pulses; index++) {
+            this.recoilQueue.push({
+                delay: profile.pulseInterval * index,
+                mountId,
+                profile,
+                trauma: pulseTrauma
+            });
+        }
+    }
+
+    getCockpitRecoilState() {
+        return {
+            x: this.cockpitKickX,
+            y: this.cockpitKickY,
+            roll: this.cockpitKickRoll,
+            frame: this.cockpitFrameKick,
+            flash: this.cockpitFlash
+        };
     }
 }
