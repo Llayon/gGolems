@@ -141,9 +141,17 @@ export class TerrainBuilder {
         this.addBoxMass({ x: -36, y: 1.7, z: 24, w: 20, h: 3.4, d: 22, color: rock, rotationY: 0.18 });
         this.addBoxMass({ x: 26, y: 1.4, z: -38, w: 16, h: 2.8, d: 18, color: 0x64584c, rotationY: -0.16 });
         this.addBoxMass({ x: 32, y: 1.5, z: 36, w: 18, h: 3.0, d: 18, color: 0x64584c, rotationY: 0.14 });
+        this.addBoxMass({ x: -94, y: 2.7, z: -78, w: 26, h: 5.4, d: 22, color: darkRock, rotationY: 0.18 });
+        this.addBoxMass({ x: -102, y: 2.6, z: 46, w: 24, h: 5.2, d: 20, color: darkRock, rotationY: -0.1 });
+        this.addBoxMass({ x: 102, y: 2.2, z: -96, w: 18, h: 4.4, d: 26, color: rock, rotationY: -0.12 });
+        this.addBoxMass({ x: 86, y: 1.9, z: 86, w: 24, h: 3.8, d: 18, color: rock, rotationY: 0.22 });
+        this.addBoxMass({ x: -6, y: 1.6, z: 86, w: 30, h: 3.2, d: 12, color: 0x5c4f43, rotationY: 0.04 });
+        this.addBoxMass({ x: 8, y: 1.6, z: -86, w: 26, h: 3.2, d: 12, color: 0x5c4f43, rotationY: -0.08 });
 
         this.addCylinderMass({ x: -16, y: 2.8, z: 82, radius: 8, height: 5.6, color: 0x5e5146 });
         this.addCylinderMass({ x: 52, y: 2.3, z: -78, radius: 6, height: 4.6, color: 0x5b4d42 });
+        this.addCylinderMass({ x: -78, y: 2.6, z: 92, radius: 7.4, height: 5.2, color: 0x5d5147 });
+        this.addCylinderMass({ x: 98, y: 2.8, z: 74, radius: 7.6, height: 5.4, color: 0x61544a });
     }
 
     addBoxMass(config: BoxMassConfig) {
