@@ -62,6 +62,9 @@ export class Arena {
             C: this.createSpawnPoint(58, 12)
         };
 
+        this.createTeamBase(scene, 'blue', this.blueSpawns);
+        this.createTeamBase(scene, 'red', this.redSpawns);
+
         this.createBox(scene, physics, { x: 0, z: -arenaHalfSize, w: wallSpan, h: wallHeight, d: wallThickness, color: 0x2e2f39, yOffset: wallHeight / 2 });
         this.createBox(scene, physics, { x: 0, z: arenaHalfSize, w: wallSpan, h: wallHeight, d: wallThickness, color: 0x2e2f39, yOffset: wallHeight / 2 });
         this.createBox(scene, physics, { x: -arenaHalfSize, z: 0, w: wallThickness, h: wallHeight, d: wallSpan, color: 0x2e2f39, yOffset: wallHeight / 2 });
@@ -87,6 +90,92 @@ export class Arena {
 
     createSpawnPoint(x: number, z: number) {
         return new THREE.Vector3(x, this.surfaceY(x, z) + 3.6, z);
+    }
+
+    createTeamBase(scene: THREE.Scene, team: 'blue' | 'red', spawns: THREE.Vector3[]) {
+        const root = new THREE.Group();
+        scene.add(root);
+
+        const teamColor = team === 'blue' ? 0x5acfff : 0xff7f59;
+        const glowColor = team === 'blue' ? 0x2b7c9c : 0x8e3f28;
+        const trimColor = team === 'blue' ? 0x415364 : 0x61453b;
+        const padMaterial = new THREE.MeshStandardMaterial({
+            color: 0x33271f,
+            roughness: 0.92,
+            metalness: 0.08
+        });
+        const ringMaterial = new THREE.MeshBasicMaterial({
+            color: teamColor,
+            transparent: true,
+            opacity: 0.36,
+            side: THREE.DoubleSide,
+            depthWrite: false
+        });
+        const beaconMaterial = new THREE.MeshStandardMaterial({
+            color: trimColor,
+            emissive: glowColor,
+            emissiveIntensity: 1.1,
+            roughness: 0.55,
+            metalness: 0.22
+        });
+
+        const anchor = new THREE.Vector3();
+        for (const spawn of spawns) {
+            anchor.add(spawn);
+        }
+        anchor.multiplyScalar(1 / Math.max(spawns.length, 1));
+
+        const deck = new THREE.Mesh(new THREE.CylinderGeometry(22, 24, 0.9, 24), padMaterial);
+        deck.position.set(anchor.x, this.surfaceY(anchor.x, anchor.z) + 0.3, anchor.z);
+        deck.receiveShadow = true;
+        root.add(deck);
+
+        const deckRing = new THREE.Mesh(new THREE.RingGeometry(19.5, 22.6, 48), ringMaterial);
+        deckRing.rotation.x = -Math.PI / 2;
+        deckRing.position.set(anchor.x, deck.position.y + 0.08, anchor.z);
+        root.add(deckRing);
+
+        const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.58, 10.5, 10), beaconMaterial);
+        mast.position.set(anchor.x, this.surfaceY(anchor.x, anchor.z) + 5.4, anchor.z);
+        mast.castShadow = true;
+        mast.receiveShadow = true;
+        root.add(mast);
+
+        const cap = new THREE.Mesh(new THREE.SphereGeometry(1.1, 10, 10), beaconMaterial.clone());
+        cap.position.set(anchor.x, mast.position.y + 5.8, anchor.z);
+        cap.castShadow = true;
+        root.add(cap);
+
+        const bridge = new THREE.Mesh(
+            new THREE.BoxGeometry(5.6, 0.28, spawns.length > 1 ? Math.abs(spawns[0].z - spawns[spawns.length - 1].z) + 8 : 12),
+            new THREE.MeshStandardMaterial({ color: trimColor, roughness: 0.88 })
+        );
+        bridge.position.set(anchor.x, deck.position.y + 0.5, anchor.z);
+        bridge.castShadow = true;
+        bridge.receiveShadow = true;
+        root.add(bridge);
+
+        for (const spawn of spawns) {
+            const pad = new THREE.Mesh(new THREE.CylinderGeometry(5.3, 5.9, 0.36, 18), padMaterial.clone());
+            pad.position.set(spawn.x, this.surfaceY(spawn.x, spawn.z) + 0.18, spawn.z);
+            pad.receiveShadow = true;
+            root.add(pad);
+
+            const ring = new THREE.Mesh(new THREE.RingGeometry(4.1, 5.2, 36), ringMaterial.clone());
+            ring.rotation.x = -Math.PI / 2;
+            ring.position.set(spawn.x, pad.position.y + 0.06, spawn.z);
+            root.add(ring);
+
+            const node = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 4.4, 8), beaconMaterial.clone());
+            node.position.set(spawn.x, this.surfaceY(spawn.x, spawn.z) + 2.2, spawn.z);
+            node.castShadow = true;
+            root.add(node);
+
+            const nodeTop = new THREE.Mesh(new THREE.SphereGeometry(0.62, 8, 8), beaconMaterial.clone());
+            nodeTop.position.set(spawn.x, node.position.y + 2.4, spawn.z);
+            nodeTop.castShadow = true;
+            root.add(nodeTop);
+        }
     }
 
     createCombatCover(scene: THREE.Scene, physics: RAPIER.World) {
