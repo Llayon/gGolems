@@ -26,6 +26,20 @@ type CylinderMassConfig = {
     rotationY?: number;
 };
 
+type RockMoundConfig = {
+    x: number;
+    y: number;
+    z: number;
+    sx: number;
+    sy: number;
+    sz: number;
+    color: number;
+    roughness?: number;
+    rotationX?: number;
+    rotationY?: number;
+    rotationZ?: number;
+};
+
 const _quat = new THREE.Quaternion();
 const _euler = new THREE.Euler();
 const _color = new THREE.Color();
@@ -72,17 +86,35 @@ export class TerrainBuilder {
         const nz = z / this.halfSize;
         const radial = Math.sqrt(nx * nx + nz * nz);
 
-        const centerBowl = Math.max(0, 1 - radial / 0.6) * 0.18;
-        const subtleWave = Math.sin(x * 0.021) * Math.cos(z * 0.018) * 0.22;
-        const flankChannel = Math.exp(-Math.pow((x + z * 0.24) / 42, 2)) * 0.18;
-        const westChannel = Math.exp(-Math.pow((x + 84) / 26, 2) - Math.pow((z - 4) / 84, 2)) * 0.42;
-        const northRise = Math.exp(-Math.pow((z - 94) / 24, 2)) * Math.exp(-Math.pow(x / 76, 2)) * 0.46;
+        const centerBowl = -Math.max(0, 1 - radial / 0.58) * 1.3;
+        const subtleWave = Math.sin(x * 0.038) * Math.cos(z * 0.034) * 0.75;
+        const flankChannel = -Math.exp(-Math.pow((x + z * 0.22) / 34, 2)) * 0.9;
+        const westChannel = -Math.exp(-Math.pow((x + 82) / 20, 2) - Math.pow((z - 6) / 72, 2)) * 1.35;
+        const northRise = Math.exp(-Math.pow((z - 96) / 22, 2)) * Math.exp(-Math.pow(x / 74, 2)) * 2.2;
         const eastShelf = Math.max(0, 1 - Math.abs(x - this.halfSize * 0.58) / (this.halfSize * 0.24))
             * Math.max(0, 1 - Math.abs(z) / (this.halfSize * 0.86))
-            * 0.62;
-        const perimeterLift = smoothstep(0.74, 0.98, radial) * 4.6;
+            * 3.2;
+        const southRise = Math.exp(-Math.pow((z + 88) / 20, 2)) * Math.exp(-Math.pow((x - 14) / 68, 2)) * 1.8;
+        const centerKnoll = Math.exp(-Math.pow((x - 16) / 18, 2) - Math.pow((z + 4) / 16, 2)) * 1.1;
+        const eastKnoll = Math.exp(-Math.pow((x - 54) / 22, 2) - Math.pow((z + 42) / 18, 2)) * 1.3;
+        const westKnoll = Math.exp(-Math.pow((x + 42) / 26, 2) - Math.pow((z - 26) / 22, 2)) * 1.15;
+        const perimeterLift = smoothstep(0.72, 0.98, radial) * 8.4;
 
-        return Math.max(0, 0.04 + centerBowl + subtleWave + flankChannel + westChannel + northRise + eastShelf + perimeterLift);
+        return Math.max(
+            0.35,
+            1.1
+            + centerBowl
+            + subtleWave
+            + flankChannel
+            + westChannel
+            + northRise
+            + eastShelf
+            + southRise
+            + centerKnoll
+            + eastKnoll
+            + westKnoll
+            + perimeterLift
+        );
     }
 
     buildGround() {
@@ -103,11 +135,11 @@ export class TerrainBuilder {
                 positions.setY(vertexIndex, y);
                 heights[col * this.groundRows + row] = y;
 
-                const ridgeFactor = clamp(y / 4.8, 0, 1);
+                const ridgeFactor = clamp((y - 0.4) / 8.8, 0, 1);
                 _color.setRGB(
-                    THREE.MathUtils.lerp(0.17, 0.36, ridgeFactor),
-                    THREE.MathUtils.lerp(0.14, 0.29, ridgeFactor),
-                    THREE.MathUtils.lerp(0.15, 0.23, ridgeFactor)
+                    THREE.MathUtils.lerp(0.15, 0.39, ridgeFactor),
+                    THREE.MathUtils.lerp(0.12, 0.31, ridgeFactor),
+                    THREE.MathUtils.lerp(0.13, 0.24, ridgeFactor)
                 );
                 colors.push(_color.r, _color.g, _color.b);
             }
@@ -134,8 +166,8 @@ export class TerrainBuilder {
     createGroundCollider(geometry: THREE.BufferGeometry, heights: Float32Array, size: number) {
         try {
             const groundCollider = RAPIER.ColliderDesc.heightfield(
-                this.groundRows,
-                this.groundCols,
+                this.groundRows - 1,
+                this.groundCols - 1,
                 heights,
                 { x: size, y: 1, z: size }
             );
@@ -172,27 +204,37 @@ export class TerrainBuilder {
         const rock = 0x56493f;
         const darkRock = 0x473c34;
 
-        this.addBoxMass({ x: -102, y: 4.8, z: -12, w: 22, h: 9.6, d: 92, color: darkRock, rotationY: 0.08 });
-        this.addBoxMass({ x: 0, y: 3.2, z: -102, w: 88, h: 6.4, d: 20, color: darkRock, rotationY: -0.04 });
-        this.addBoxMass({ x: 14, y: 3.3, z: 104, w: 98, h: 6.6, d: 22, color: darkRock, rotationY: 0.05 });
-        this.addBoxMass({ x: -80, y: 2.5, z: 68, w: 34, h: 5, d: 28, color: rock, rotationY: -0.18 });
+        const ridgeMounds: RockMoundConfig[] = [
+            { x: -108, y: 6.2, z: -74, sx: 11, sy: 7.2, sz: 12, color: darkRock, rotationY: 0.24 },
+            { x: -110, y: 7.0, z: -30, sx: 13, sy: 8.6, sz: 14, color: darkRock, rotationY: 0.18 },
+            { x: -108, y: 7.4, z: 12, sx: 12, sy: 8.8, sz: 16, color: darkRock, rotationY: -0.12 },
+            { x: -104, y: 6.4, z: 58, sx: 11, sy: 7.4, sz: 13, color: darkRock, rotationY: -0.24 },
+            { x: -84, y: 4.6, z: 70, sx: 15, sy: 6.1, sz: 11, color: rock, rotationY: -0.18 },
 
-        this.addBoxMass({ x: 96, y: 3.2, z: 0, w: 22, h: 6.4, d: 86, color: rock });
-        this.addBoxMass({ x: 108, y: 1.9, z: -58, w: 20, h: 2.4, d: 36, color: 0x62564c, rotationX: -0.17 });
-        this.addBoxMass({ x: 108, y: 1.9, z: 58, w: 20, h: 2.4, d: 36, color: 0x62564c, rotationX: 0.17 });
-        this.addBoxMass({ x: 84, y: 2.1, z: -18, w: 14, h: 4.2, d: 24, color: 0x605348, rotationY: 0.12 });
-        this.addBoxMass({ x: 82, y: 2.2, z: 28, w: 16, h: 4.4, d: 26, color: 0x605348, rotationY: -0.12 });
+            { x: -76, y: 5.6, z: -108, sx: 16, sy: 7.4, sz: 10, color: darkRock, rotationY: 0.04 },
+            { x: -26, y: 5.2, z: -108, sx: 18, sy: 6.6, sz: 9, color: darkRock, rotationY: -0.08 },
+            { x: 24, y: 5.4, z: -106, sx: 18, sy: 6.4, sz: 10, color: darkRock, rotationY: 0.1 },
+            { x: 74, y: 5.1, z: -104, sx: 15, sy: 6.2, sz: 9, color: darkRock, rotationY: -0.1 },
 
-        this.addBoxMass({ x: -42, y: 1.8, z: -24, w: 18, h: 3.6, d: 24, color: rock, rotationY: -0.22 });
-        this.addBoxMass({ x: -36, y: 1.7, z: 24, w: 20, h: 3.4, d: 22, color: rock, rotationY: 0.18 });
-        this.addBoxMass({ x: 26, y: 1.4, z: -38, w: 16, h: 2.8, d: 18, color: 0x64584c, rotationY: -0.16 });
-        this.addBoxMass({ x: 32, y: 1.5, z: 36, w: 18, h: 3.0, d: 18, color: 0x64584c, rotationY: 0.14 });
-        this.addBoxMass({ x: -94, y: 2.7, z: -78, w: 26, h: 5.4, d: 22, color: darkRock, rotationY: 0.18 });
-        this.addBoxMass({ x: -102, y: 2.6, z: 46, w: 24, h: 5.2, d: 20, color: darkRock, rotationY: -0.1 });
-        this.addBoxMass({ x: 102, y: 2.2, z: -96, w: 18, h: 4.4, d: 26, color: rock, rotationY: -0.12 });
-        this.addBoxMass({ x: 86, y: 1.9, z: 86, w: 24, h: 3.8, d: 18, color: rock, rotationY: 0.22 });
-        this.addBoxMass({ x: -6, y: 1.6, z: 86, w: 30, h: 3.2, d: 12, color: 0x5c4f43, rotationY: 0.04 });
-        this.addBoxMass({ x: 8, y: 1.6, z: -86, w: 26, h: 3.2, d: 12, color: 0x5c4f43, rotationY: -0.08 });
+            { x: -58, y: 5.4, z: 108, sx: 18, sy: 6.3, sz: 10, color: darkRock, rotationY: 0.08 },
+            { x: -4, y: 5.8, z: 106, sx: 18, sy: 6.5, sz: 11, color: darkRock, rotationY: -0.04 },
+            { x: 48, y: 5.4, z: 110, sx: 17, sy: 6.2, sz: 10, color: darkRock, rotationY: 0.06 },
+            { x: 94, y: 5.0, z: 106, sx: 14, sy: 5.8, sz: 9, color: darkRock, rotationY: -0.08 },
+
+            { x: 106, y: 6.2, z: -62, sx: 12, sy: 6.8, sz: 11, color: rock, rotationY: -0.18 },
+            { x: 102, y: 6.4, z: -10, sx: 12, sy: 7.4, sz: 14, color: rock, rotationY: 0.04 },
+            { x: 104, y: 6.3, z: 42, sx: 11, sy: 6.8, sz: 13, color: rock, rotationY: -0.12 },
+            { x: 98, y: 5.6, z: 86, sx: 11, sy: 6.1, sz: 10, color: rock, rotationY: 0.2 },
+
+            { x: -44, y: 3.0, z: -26, sx: 11, sy: 4.8, sz: 9, color: rock, rotationY: -0.22 },
+            { x: -34, y: 2.8, z: 26, sx: 10, sy: 4.4, sz: 8, color: rock, rotationY: 0.18 },
+            { x: 26, y: 2.6, z: -38, sx: 9, sy: 4.0, sz: 8, color: 0x64584c, rotationY: -0.16 },
+            { x: 34, y: 2.8, z: 34, sx: 10, sy: 4.1, sz: 8, color: 0x64584c, rotationY: 0.14 },
+            { x: -8, y: 3.2, z: 88, sx: 15, sy: 4.2, sz: 7, color: 0x5c4f43, rotationY: 0.04 },
+            { x: 10, y: 3.2, z: -86, sx: 13, sy: 4.2, sz: 7, color: 0x5c4f43, rotationY: -0.08 }
+        ];
+
+        ridgeMounds.forEach((config) => this.addRockMound(config));
 
         this.addCylinderMass({ x: -16, y: 2.8, z: 82, radius: 8, height: 5.6, color: 0x5e5146 });
         this.addCylinderMass({ x: 52, y: 2.3, z: -78, radius: 6, height: 4.6, color: 0x5b4d42 });
@@ -240,6 +282,31 @@ export class TerrainBuilder {
         const bodyDesc = RAPIER.RigidBodyDesc.fixed().setTranslation(mesh.position.x, mesh.position.y, mesh.position.z);
         const body = this.physics.createRigidBody(bodyDesc);
         const collider = RAPIER.ColliderDesc.cylinder(config.height / 2, config.radius);
+        this.physics.createCollider(collider, body);
+    }
+
+    addRockMound(config: RockMoundConfig) {
+        const geometry = new THREE.DodecahedronGeometry(1, 1);
+        const material = new THREE.MeshStandardMaterial({
+            color: config.color,
+            roughness: config.roughness ?? 0.98
+        });
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.scale.set(config.sx, config.sy, config.sz);
+        mesh.position.set(config.x, this.sampleHeight(config.x, config.z) + config.y, config.z);
+        mesh.rotation.set(config.rotationX ?? 0, config.rotationY ?? 0, config.rotationZ ?? 0);
+        markShadows(mesh);
+        this.scene.add(mesh);
+        this.collisionMeshes.push(mesh);
+
+        _euler.set(mesh.rotation.x, mesh.rotation.y, mesh.rotation.z);
+        _quat.setFromEuler(_euler);
+
+        const bodyDesc = RAPIER.RigidBodyDesc.fixed()
+            .setTranslation(mesh.position.x, mesh.position.y, mesh.position.z)
+            .setRotation({ x: _quat.x, y: _quat.y, z: _quat.z, w: _quat.w });
+        const body = this.physics.createRigidBody(bodyDesc);
+        const collider = RAPIER.ColliderDesc.cuboid(config.sx * 0.82, config.sy * 0.8, config.sz * 0.82);
         this.physics.createCollider(collider, body);
     }
 }
