@@ -16,6 +16,7 @@ import { formatPercent, formatSeconds, formatSpeedUnit } from './i18n/format';
 import type { Locale } from './i18n/types';
 import type { WeaponStatusView } from './combat/weaponTypes';
 import type { ControlPointView, GameMode, TeamOverview, TeamScoreState } from './gameplay/types';
+import type { LobbyJoinability } from './firebase/lobbyRegistry';
 
 type SessionMode = 'solo' | 'host' | 'client';
 type SectionName = 'head' | 'centerTorso' | 'leftTorso' | 'rightTorso' | 'leftArm' | 'rightArm' | 'leftLeg' | 'rightLeg';
@@ -98,6 +99,13 @@ const startupPhaseLabelKeys: Record<StartupPhase, TranslationKey> = {
     startWorld: 'errors.startWorld',
     createSession: 'errors.createSession',
     connectToHost: 'errors.connectToHost'
+};
+
+const lobbyJoinabilityKeys: Record<LobbyJoinability, TranslationKey> = {
+    open: 'lobby.joinability.open',
+    closing: 'lobby.joinability.closing',
+    full: 'lobby.joinability.full',
+    ended: 'lobby.joinability.ended'
 };
 
 const initialGameState: GameHudState = {
@@ -649,6 +657,8 @@ export default function App() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const copyResetRef = useRef<number | null>(null);
     const firebaseLobbyRef = useRef<FirebaseLobbyRegistration | null>(null);
+    const latestGameRef = useRef<any>(null);
+    const latestHudStateRef = useRef<GameHudState>(initialGameState);
     const [locale, setLocale] = useState<Locale>(() => getInitialLocale());
     const [loading, setLoading] = useState(false);
     const [inLobby, setInLobby] = useState(true);
@@ -826,15 +836,50 @@ export default function App() {
     }, []);
 
     useEffect(() => {
+        latestGameRef.current = gameInstance;
+    }, [gameInstance]);
+
+    useEffect(() => {
+        latestHudStateRef.current = gameState;
+    }, [gameState]);
+
+    useEffect(() => {
         if (!firebaseLobbyStatus.enabled || !firebaseLobbyRef.current || !isHost || inLobby) {
             return;
         }
 
+        const resolveJoinability = (room: {
+            currentPlayers: number;
+            maxPlayers: number;
+            winner: boolean;
+            leadScore: number;
+            scoreToWin: number;
+        }) => {
+            if (room.winner) return 'ended' as const;
+            if (room.currentPlayers >= room.maxPlayers) return 'full' as const;
+            if (room.scoreToWin > 0 && room.leadScore / room.scoreToWin >= 0.8) return 'closing' as const;
+            return 'open' as const;
+        };
+
         const pushLobbyMeta = () => {
-            const currentPlayers = 1 + (gameInstance?.remotePlayers?.size ?? 0);
+            const game = latestGameRef.current;
+            const hudState = latestHudStateRef.current;
+            const currentPlayers = 1 + (game?.remotePlayers?.size ?? 0);
+            const leadScore = Math.max(hudState.teamScores.blue, hudState.teamScores.red);
+            const joinability = resolveJoinability({
+                currentPlayers,
+                maxPlayers: 5,
+                winner: hudState.teamScores.winner !== null,
+                leadScore,
+                scoreToWin: hudState.teamScores.scoreToWin
+            });
             void firebaseLobbyRef.current?.updateMeta({
                 currentPlayers,
-                inProgress: true
+                inProgress: true,
+                joinability,
+                blueScore: hudState.teamScores.blue,
+                redScore: hudState.teamScores.red,
+                scoreToWin: hudState.teamScores.scoreToWin
             });
         };
 
@@ -928,6 +973,14 @@ export default function App() {
     const filteredFirebaseRooms = roomFilter === 'all'
         ? firebaseRooms
         : firebaseRooms.filter((room) => room.gameMode === roomFilter);
+    const canJoinRoom = (room: FirebaseLobbyRoom) => room.joinability !== 'full' && room.joinability !== 'ended';
+    const joinabilityTone = (room: FirebaseLobbyRoom) => room.joinability === 'ended'
+        ? 'border-[#8a4f44]/55 bg-[#5b231b]/24 text-[#ffb7a6]'
+        : room.joinability === 'full'
+            ? 'border-[#8f6a38]/55 bg-[#5e451b]/24 text-[#f3d08d]'
+            : room.joinability === 'closing'
+                ? 'border-[#b57d3c]/60 bg-[#6a4315]/24 text-[#ffd489]'
+                : 'border-[#4b7f5b]/55 bg-[#203622]/24 text-[#b8efc0]';
     const sessionLabel = translateMessage(t, sessionMessage);
     const copyTextLabel = translateMessage(t, copyMessage);
     const cameraModeLabel = translateMessage(t, cameraModeMessage);
@@ -939,6 +992,7 @@ export default function App() {
             : 'lobby.mode.control'
         : null;
     const directJoinStatusKey = directJoinRoom?.inProgress ? 'lobby.roomState.live' : 'lobby.roomState.open';
+    const directJoinAvailabilityKey = directJoinRoom ? lobbyJoinabilityKeys[directJoinRoom.joinability] : null;
     const sessionSummaryLabel = t(
         sessionMode === 'solo' ? 'pilot.summary.base' : 'pilot.summary.withId',
         sessionMode === 'solo'
@@ -1059,7 +1113,7 @@ export default function App() {
                             />
                             <button
                                 onClick={() => startGame('client', hostId)}
-                                disabled={!hostId}
+                                disabled={!hostId || (directJoinRoom ? !canJoinRoom(directJoinRoom) : false)}
                                 className="rounded bg-[#24677e] py-3 font-bold tracking-[0.22em] text-white shadow-[0_0_15px_rgba(36,103,126,0.35)] transition-colors hover:bg-[#2f7d99] disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 {t('lobby.connect')}
@@ -1071,7 +1125,7 @@ export default function App() {
                                             mode: t(directJoinModeKey),
                                             players: directJoinRoom?.currentPlayers ?? 1,
                                             max: directJoinRoom?.maxPlayers ?? 5,
-                                            state: t(directJoinStatusKey)
+                                            state: `${t(directJoinStatusKey)} / ${t(directJoinAvailabilityKey ?? lobbyJoinabilityKeys.open)}`
                                         })
                                         : firebaseLobbyStatus.enabled
                                             ? t('lobby.directJoinUnknown')
@@ -1115,12 +1169,13 @@ export default function App() {
                                             <button
                                                 key={room.id}
                                                 type="button"
+                                                disabled={!canJoinRoom(room)}
                                                 onClick={() => {
                                                     setHostId(room.hostPeerId);
                                                     setSelectedGameMode(room.gameMode);
                                                     void startGame('client', room.hostPeerId, room.gameMode);
                                                 }}
-                                                className="rounded-xl border border-[#8f6a38]/35 bg-black/35 px-4 py-3 text-left transition-colors hover:border-[#efb768]/60"
+                                                className="rounded-xl border border-[#8f6a38]/35 bg-black/35 px-4 py-3 text-left transition-colors hover:border-[#efb768]/60 disabled:cursor-not-allowed disabled:opacity-60"
                                             >
                                                 <div className="text-[10px] tracking-[0.26em] text-[#8fb8c2]">{t('lobby.roomCode')}</div>
                                                 <div className="mt-1 truncate text-[12px] font-bold tracking-[0.16em] text-[#f3deb5]">{room.roomName}</div>
@@ -1133,6 +1188,18 @@ export default function App() {
                                                 <div className="mt-1 flex items-center justify-between gap-3 text-[10px] tracking-[0.16em] text-[#bfa987]">
                                                     <div>{t('lobby.playerCount', { current: room.currentPlayers, max: room.maxPlayers })}</div>
                                                     <div>{t(room.inProgress ? 'lobby.roomState.live' : 'lobby.roomState.open')}</div>
+                                                </div>
+                                                <div className="mt-1 flex items-center justify-between gap-3 text-[10px] tracking-[0.16em]">
+                                                    <div className={`rounded-full border px-2 py-1 ${joinabilityTone(room)}`}>
+                                                        {t(lobbyJoinabilityKeys[room.joinability])}
+                                                    </div>
+                                                    <div className="text-[#d7c5a1]">
+                                                        {t('lobby.scoreSummary', {
+                                                            blue: room.blueScore,
+                                                            red: room.redScore,
+                                                            target: room.scoreToWin
+                                                        })}
+                                                    </div>
                                                 </div>
                                                 <div className="mt-1 truncate text-[11px] tracking-[0.16em] text-[#d7c5a1]">{room.hostPeerId}</div>
                                             </button>
