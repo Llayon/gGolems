@@ -5,12 +5,14 @@ type MobileSettingsOverlayProps = {
     isPortrait: boolean;
     sessionMode: SessionMode;
     sessionLabel: string;
+    cameraMode: 'cockpit' | 'thirdPerson';
     myId: string;
     copyLabel: string;
     leftHanded: boolean;
     aimPreset: AimPreset;
     onClose: () => void;
     onCopyHostId: () => void;
+    onToggleCameraMode: () => void;
     onToggleHanded: () => void;
     onCycleAimPreset: () => void;
 };
@@ -48,6 +50,13 @@ export function MobileSettingsOverlay(props: MobileSettingsOverlayProps) {
                     <div className="rounded-2xl border border-[#8f6a38]/35 bg-black/30 p-3">
                         <div className="text-[10px] tracking-[0.28em] text-[#8fb8c2]">УПРАВЛЕНИЕ</div>
                         <div className="mt-3 flex flex-wrap gap-2">
+                            <button
+                                type="button"
+                                className="rounded-full border border-[#8f6a38]/55 bg-black/35 px-3 py-2 text-[10px] tracking-[0.22em] text-[#d8c19a]"
+                                onClick={props.onToggleCameraMode}
+                            >
+                                {props.cameraMode === 'thirdPerson' ? 'VIEW 3P' : 'VIEW FP'}
+                            </button>
                             <button
                                 type="button"
                                 className="rounded-full border border-[#8f6a38]/55 bg-black/35 px-3 py-2 text-[10px] tracking-[0.22em] text-[#d8c19a]"

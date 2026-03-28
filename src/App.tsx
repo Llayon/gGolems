@@ -33,6 +33,7 @@ type GameHudState = {
     speed: number;
     maxSpeed: number;
     maxTwist: number;
+    cameraMode: 'cockpit' | 'thirdPerson';
     aimOffsetX: number;
     aimOffsetY: number;
     hitConfirm: number;
@@ -67,6 +68,7 @@ const initialGameState: GameHudState = {
     speed: 0,
     maxSpeed: 10,
     maxTwist: 1.75,
+    cameraMode: 'cockpit',
     aimOffsetX: 0,
     aimOffsetY: 0,
     hitConfirm: 0,
@@ -486,6 +488,8 @@ export default function App() {
             ? 'НЕ УДАЛОСЬ'
             : 'КОПИРОВАТЬ';
 
+    const cameraModeLabel = gameState.cameraMode === 'thirdPerson' ? 'VIEW 3P' : 'VIEW FP';
+    const showCockpitDecor = !isTouchDevice && gameState.cameraMode === 'cockpit';
     const hostBadgeClass = 'pointer-events-auto absolute right-4 top-4 z-30 flex items-center gap-3 rounded-2xl border border-[#8f6a38]/45 bg-[rgba(10,10,10,0.78)] px-4 py-3 text-[#e1cea7] shadow-[0_0_22px_rgba(0,0,0,0.32)] backdrop-blur-sm';
     const pilotPanelAnchorClass = 'left-4 top-4';
     const pilotPanelHideLabel = 'СКРЫТЬ [H]';
@@ -558,7 +562,7 @@ export default function App() {
 
             {!loading && !inLobby ? (
                 <>
-                    {!isTouchDevice ? <CockpitFrame warning={warningText} throttleLabel={throttleText} /> : null}
+                    {showCockpitDecor ? <CockpitFrame warning={warningText} throttleLabel={throttleText} /> : null}
                     {isTouchDevice ? (
                         <MobileCombatLayout
                             warning={warningText}
@@ -604,7 +608,7 @@ export default function App() {
                                     <div className="min-w-0">
                                         <h1 className="text-lg font-bold tracking-[0.32em] text-[#efb768]">ПАНЕЛЬ ПИЛОТА</h1>
                                         <p className="mt-2 text-xs tracking-[0.22em] text-[#8fb8c2]">
-                                            {sessionMode === 'solo' ? sessionLabel : `${sessionLabel} | ID ${myId || 'СИНХРОНИЗАЦИЯ'}`}
+                                            {sessionMode === 'solo' ? `${sessionLabel} | ${cameraModeLabel}` : `${sessionLabel} | ${cameraModeLabel} | ID ${myId || 'СИНХРОНИЗАЦИЯ'}`}
                                         </p>
                                         {sessionMode === 'host' && myId ? (
                                             <button
@@ -632,6 +636,7 @@ export default function App() {
                                     <li><span className="text-[#efb768]">A / D</span> повернуть шасси</li>
                                     <li><span className="text-[#efb768]">C</span> центрировать торс</li>
                                     <li><span className="text-[#efb768]">X</span> отсечь тягу</li>
+                                    <li><span className="text-[#efb768]">V</span> сменить вид</li>
                                     <li><span className="text-[#efb768]">ЛКМ</span> рунный болт</li>
                                     <li><span className="text-[#efb768]">SHIFT</span> рывок</li>
                                     <li><span className="text-[#efb768]">SPACE</span> сброс пара</li>
@@ -763,12 +768,14 @@ export default function App() {
                             isPortrait={isPortrait}
                             sessionMode={sessionMode}
                             sessionLabel={sessionLabel}
+                            cameraMode={gameState.cameraMode}
                             myId={myId}
                             copyLabel={copyLabel}
                             leftHanded={mobileLeftHanded}
                             aimPreset={mobileAimPreset}
                             onClose={() => setShowMobileSettings(false)}
                             onCopyHostId={copyHostId}
+                            onToggleCameraMode={() => gameInstance?.toggleCameraMode?.()}
                             onToggleHanded={() => setMobileLeftHanded((current) => !current)}
                             onCycleAimPreset={() => setMobileAimPreset((current) => current === 'LOW' ? 'MID' : current === 'MID' ? 'HIGH' : 'LOW')}
                         />

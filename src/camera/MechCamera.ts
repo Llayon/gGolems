@@ -6,6 +6,8 @@ const _zero = new THREE.Vector3();
 const _targetPos = new THREE.Vector3();
 const _targetLookAt = new THREE.Vector3();
 const _aimForward = new THREE.Vector3();
+const _bodyForward = new THREE.Vector3();
+const _up = new THREE.Vector3(0, 1, 0);
 
 function setLookVector(out: THREE.Vector3, yaw: number, pitch: number) {
     const flatLength = Math.cos(pitch);
@@ -21,10 +23,13 @@ function frameAlpha(alphaAt60Fps: number, dt: number) {
     return 1 - Math.pow(1 - alphaAt60Fps, dt * 60);
 }
 
+export type CameraMode = 'cockpit' | 'thirdPerson';
+
 export class MechCamera {
     camera: THREE.PerspectiveCamera;
     aimYaw = 0;
     pitch = 0;
+    mode: CameraMode = 'cockpit';
 
     currentPos = new THREE.Vector3();
     currentLookAt = new THREE.Vector3();
@@ -54,6 +59,21 @@ export class MechCamera {
         this.camera.updateProjectionMatrix();
     }
 
+    setMode(mode: CameraMode) {
+        if (this.mode === mode) return;
+        this.mode = mode;
+        this.initialized = false;
+    }
+
+    toggleMode() {
+        this.setMode(this.mode === 'cockpit' ? 'thirdPerson' : 'cockpit');
+        return this.mode;
+    }
+
+    getAimDirection(out: THREE.Vector3) {
+        return setLookVector(out, this.aimYaw, this.pitch);
+    }
+
     onMouseMove(movementX: number, movementY: number) {
         this.aimYaw += movementX * CAMERA.yawSpeed;
         this.pitch -= movementY * CAMERA.pitchSpeed;
@@ -62,14 +82,27 @@ export class MechCamera {
 
     update(
         anchorPos: THREE.Vector3,
-        torsoYaw: number,
+        bodyYaw: number,
+        aimYaw: number,
         speed: number,
         mass: number,
         dt: number
     ) {
-        _targetPos.copy(anchorPos);
-        setLookVector(_aimForward, torsoYaw, this.pitch);
-        _targetLookAt.copy(_targetPos).addScaledVector(_aimForward, CAMERA.lookForward);
+        this.aimYaw = aimYaw;
+        this.getAimDirection(_aimForward);
+
+        if (this.mode === 'thirdPerson') {
+            setLookVector(_bodyForward, bodyYaw, 0);
+
+            _targetPos
+                .copy(anchorPos)
+                .addScaledVector(_bodyForward, -CAMERA.thirdPersonDistance)
+                .addScaledVector(_up, CAMERA.thirdPersonHeight);
+            _targetLookAt.copy(anchorPos).addScaledVector(_aimForward, CAMERA.thirdPersonLookForward);
+        } else {
+            _targetPos.copy(anchorPos);
+            _targetLookAt.copy(_targetPos).addScaledVector(_aimForward, CAMERA.lookForward);
+        }
 
         if (!this.initialized) {
             this.currentPos.copy(_targetPos);

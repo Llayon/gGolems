@@ -105,6 +105,7 @@ export class Game {
         }
 
         this.placeGolemAtSpawn(this.golem, this.getInitialLocalSpawn());
+        this.syncLocalCameraMode();
         this.dummy.respawnRadius = this.world.spawnRadius;
 
         canvas.addEventListener('click', () => {
@@ -322,6 +323,22 @@ export class Game {
         }
     }
 
+    syncLocalCameraMode() {
+        this.golem.model.visible = this.mechCamera.mode === 'thirdPerson';
+    }
+
+    setCameraMode(mode: 'cockpit' | 'thirdPerson') {
+        this.mechCamera.setMode(mode);
+        this.syncLocalCameraMode();
+        return this.mechCamera.mode;
+    }
+
+    toggleCameraMode() {
+        const mode = this.mechCamera.toggleMode();
+        this.syncLocalCameraMode();
+        return mode;
+    }
+
     allocateRemoteSpawnSlot() {
         for (let slot = 1; slot < this.world.playerSpawns.length; slot++) {
             if (![...this.remoteSpawnSlots.values()].includes(slot)) {
@@ -423,6 +440,10 @@ export class Game {
         const { mx, my } = this.input.consumeMovement();
         this.mechCamera.onMouseMove(mx, my);
 
+        if (this.input.consumeKey('KeyV')) {
+            this.toggleCameraMode();
+        }
+
         let throttleInput = this.input.virtualThrottle;
         let turnInput = this.input.virtualTurn;
         if (this.input.keys['KeyW']) throttleInput += 1;
@@ -468,8 +489,9 @@ export class Game {
         this.projectiles.update(dt);
         this.decals.update(dt);
         
-        this.renderer.camera.getWorldDirection(_weaponDir);
-        _weaponOrigin.copy(this.renderer.camera.position).addScaledVector(_weaponDir, 0.25);
+        this.mechCamera.getAimDirection(_weaponDir);
+        this.golem.getViewAnchor(_weaponOrigin, this.mechCamera.aimYaw);
+        _weaponOrigin.addScaledVector(_weaponDir, 0.9);
 
         if (this.input.consumeClick()) {
             if (this.golem.canFire() && this.golem.tryAction(5)) {
@@ -622,6 +644,7 @@ export class Game {
             speed: golemState.currentSpeed,
             maxSpeed: GOLEM.classes.medium.speed,
             maxTwist: ROTATION.maxTorsoTwist,
+            cameraMode: this.mechCamera.mode,
             aimOffsetX: aimScreenX,
             aimOffsetY: aimScreenY,
             hitConfirm: this.hitConfirmTimer,

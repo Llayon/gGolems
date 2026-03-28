@@ -24,6 +24,7 @@ export type GameHudState = {
     speed: number;
     maxSpeed: number;
     maxTwist: number;
+    cameraMode: 'cockpit' | 'thirdPerson';
     aimOffsetX: number;
     aimOffsetY: number;
     hitConfirm: number;

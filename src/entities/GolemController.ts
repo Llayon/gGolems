@@ -12,8 +12,8 @@ const _moveDir = new THREE.Vector3();
 const _currentVel = new THREE.Vector3();
 const _netPos = new THREE.Vector3();
 const _cameraAnchor = new THREE.Vector3();
+const _viewForward = new THREE.Vector3();
 const _footOffset = new THREE.Vector3();
-const _cockpitForward = new THREE.Vector3();
 const _bodyForward = new THREE.Vector3();
 const _desiredVel = new THREE.Vector3();
 const _sideVel = new THREE.Vector3();
@@ -228,6 +228,14 @@ export class GolemController {
         }
     }
 
+    getViewAnchor(out: THREE.Vector3, facingYaw = this.torsoYaw) {
+        this.torso.getWorldPosition(out);
+        _viewForward.set(Math.sin(facingYaw), 0, -Math.cos(facingYaw));
+        out.addScaledVector(_viewForward, 0.35);
+        out.y += 1.45;
+        return out;
+    }
+
     vent(particles: ParticleManager) {
         this.steam = 0;
         const pos = this.body.translation();
@@ -407,13 +415,11 @@ export class GolemController {
             }
         } else {
             this.walkCycle = this.gameCamera.walkCycle * Math.PI * 2;
-            this.torso.getWorldPosition(_cameraAnchor);
-            _cockpitForward.set(Math.sin(this.torsoYaw), 0, -Math.cos(this.torsoYaw));
-            _cameraAnchor.addScaledVector(_cockpitForward, 0.35);
-            _cameraAnchor.y += 1.45;
+            this.getViewAnchor(_cameraAnchor, this.gameCamera.aimYaw);
 
             this.gameCamera.update(
                 _cameraAnchor,
+                this.legYaw,
                 this.gameCamera.aimYaw,
                 this.currentSpeed,
                 this.mass,
