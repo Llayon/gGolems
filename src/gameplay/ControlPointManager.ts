@@ -223,6 +223,20 @@ export class ControlPointManager {
         });
     }
 
+    setVisible(visible: boolean) {
+        for (const point of this.points) {
+            point.outerRing.visible = visible;
+            point.fill.visible = visible;
+            point.progressRing.visible = visible;
+            point.beacon.visible = visible;
+            point.beaconCap.visible = visible;
+            point.beam.visible = visible;
+            point.bannerLeft.visible = visible;
+            point.bannerRight.visible = visible;
+            point.label.visible = visible;
+        }
+    }
+
     setState(nextPoints: ControlPointView[]) {
         for (const point of this.points) {
             const next = nextPoints.find((entry) => entry.id === point.id);

@@ -1,6 +1,7 @@
 export type TeamId = 'blue' | 'red';
 export type ControlOwner = TeamId | 'neutral';
 export type ControlPointId = 'A' | 'B' | 'C';
+export type GameMode = 'control' | 'tdm';
 
 export type ControlPointView = {
     id: ControlPointId;

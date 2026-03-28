@@ -17,7 +17,7 @@ import { ControlPointManager } from '../gameplay/ControlPointManager';
 import { GOLEM, ROTATION } from '../utils/constants';
 import { QualityProfile, detectQualityProfile } from '../utils/quality';
 import type { ProjectileProfileId, WeaponFireRequest, WeaponId } from '../combat/weaponTypes';
-import type { BotStateView, TeamId, TeamOverview, TeamScoreState } from '../gameplay/types';
+import type { BotStateView, GameMode, TeamId, TeamOverview, TeamScoreState } from '../gameplay/types';
 
 const _weaponOrigin = new THREE.Vector3();
 const _weaponDir = new THREE.Vector3();
@@ -72,7 +72,10 @@ type RemotePlayerState = PlayerRespawnState & {
 };
 
 const TEAM_SIZE = 5;
-const SCORE_TO_WIN = 200;
+const SCORE_TO_WIN: Record<GameMode, number> = {
+    control: 200,
+    tdm: 30
+};
 const RESPAWN_WAVE_DELAY = 8;
 const LOCAL_PLAYER_ID = 'local-player';
 
@@ -97,8 +100,9 @@ export class Game {
     quality: QualityProfile;
     onStateUpdate: (state: any) => void;
     sessionMode: SessionMode;
+    gameMode: GameMode;
     remoteSpawnSlots: Map<string, number> = new Map();
-    teamScores: TeamScoreState = { blue: 0, red: 0, scoreToWin: SCORE_TO_WIN, winner: null };
+    teamScores: TeamScoreState = { blue: 0, red: 0, scoreToWin: SCORE_TO_WIN.control, winner: null };
     localRespawnState: PlayerRespawnState = { alive: true, timer: 0, slot: 0 };
     respawnWaves: Record<TeamId, number> = { blue: 0, red: 0 };
     hitConfirmTimer = 0;
@@ -111,9 +115,11 @@ export class Game {
     networkTickTimer = 0;
     boilerParticleTimer = 0;
 
-    constructor(canvas: HTMLCanvasElement, onStateUpdate: (state: any) => void, sessionMode: SessionMode = 'solo') {
+    constructor(canvas: HTMLCanvasElement, onStateUpdate: (state: any) => void, sessionMode: SessionMode = 'solo', gameMode: GameMode = 'control') {
         this.onStateUpdate = onStateUpdate;
         this.sessionMode = sessionMode;
+        this.gameMode = gameMode;
+        this.teamScores.scoreToWin = SCORE_TO_WIN[gameMode];
         this.quality = detectQualityProfile();
         this.renderer = new Renderer(canvas, this.quality);
         this.input = new InputManager();
@@ -133,6 +139,7 @@ export class Game {
         this.debris = new DebrisManager(this.renderer.scene, this.quality);
         this.projectiles = new ProjectileManager(this.renderer.scene);
         this.controlPoints = new ControlPointManager(this.renderer.scene, this.world.controlPointPositions);
+        this.controlPoints.setVisible(gameMode === 'control');
 
         if (sessionMode === 'client') {
             this.setClientMode();
@@ -150,6 +157,12 @@ export class Game {
         });
 
         this.setupNetwork();
+    }
+
+    setGameMode(mode: GameMode) {
+        this.gameMode = mode;
+        this.teamScores.scoreToWin = SCORE_TO_WIN[mode];
+        this.controlPoints.setVisible(mode === 'control');
     }
 
     getSpreadDirection(baseDir: THREE.Vector3, spread: number) {
@@ -716,12 +729,19 @@ export class Game {
     }
 
     handlePlayerHit(ownerId: string, targetId: string, damage: number, section: GolemSection | '__bot__') {
+        const ownerTeam = this.getUnitTeam(ownerId);
         if (targetId.startsWith('bot-')) {
             const bot = this.bots.get(targetId);
             if (!bot) return;
             const remainingHp = bot.takeDamage(damage);
             if (remainingHp <= 0) {
                 this.scheduleRespawnWave(bot.team);
+                if (this.gameMode === 'tdm' && ownerTeam && ownerTeam !== bot.team) {
+                    this.teamScores[ownerTeam] = Math.min(this.teamScores.scoreToWin, this.teamScores[ownerTeam] + 1);
+                    if (this.teamScores[ownerTeam] >= this.teamScores.scoreToWin) {
+                        this.teamScores.winner = ownerTeam;
+                    }
+                }
             }
             this.confirmHitForOwner(ownerId, remainingHp, bot.maxHp);
             return;
@@ -734,6 +754,12 @@ export class Game {
             this.mechCamera.onHit(damage);
             if (result.lethal) {
                 this.queueLocalRespawn();
+                if (this.gameMode === 'tdm' && ownerTeam && ownerTeam !== 'blue') {
+                    this.teamScores[ownerTeam] = Math.min(this.teamScores.scoreToWin, this.teamScores[ownerTeam] + 1);
+                    if (this.teamScores[ownerTeam] >= this.teamScores.scoreToWin) {
+                        this.teamScores.winner = ownerTeam;
+                    }
+                }
             }
             this.confirmHitForOwner(ownerId, result.totalHp, this.golem.maxHp);
             return;
@@ -744,6 +770,12 @@ export class Game {
         const result = player.applySectionDamage(hitSection, damage);
         if (result.lethal) {
             this.queueRemoteRespawn(targetId);
+            if (this.gameMode === 'tdm' && ownerTeam && ownerTeam !== 'blue') {
+                this.teamScores[ownerTeam] = Math.min(this.teamScores.scoreToWin, this.teamScores[ownerTeam] + 1);
+                if (this.teamScores[ownerTeam] >= this.teamScores.scoreToWin) {
+                    this.teamScores.winner = ownerTeam;
+                }
+            }
         }
         this.confirmHitForOwner(ownerId, result.totalHp, player.maxHp);
     }
@@ -794,6 +826,9 @@ export class Game {
                 }
                 if (data.scores) {
                     this.teamScores = data.scores;
+                }
+                if (data.mode === 'control' || data.mode === 'tdm') {
+                    this.setGameMode(data.mode);
                 }
                 if (data.bots) {
                     this.applyBotSnapshots(data.bots);
@@ -1134,7 +1169,9 @@ export class Game {
         for (const bot of this.bots.values()) {
             const botPos = bot.body.translation();
             const movementTarget = authorityMode && !matchEnded
-                ? this.getBotMovementTarget(bot.team, _botTarget.set(botPos.x, botPos.y, botPos.z))
+                ? this.gameMode === 'control'
+                    ? this.getBotMovementTarget(bot.team, _botTarget.set(botPos.x, botPos.y, botPos.z))
+                    : this.getNearestEnemyTarget(bot.team, _botTarget.set(botPos.x, botPos.y, botPos.z))
                 : undefined;
             const engageTarget = authorityMode && !matchEnded
                 ? this.getNearestEnemyTarget(bot.team, _botTarget.set(botPos.x, botPos.y, botPos.z), 58)
@@ -1204,7 +1241,7 @@ export class Game {
             }
         }
 
-        if (authorityMode && !matchEnded) {
+        if (authorityMode && !matchEnded && this.gameMode === 'control') {
             this.controlPoints.update(dt, this.collectControlUnits());
             if (!this.teamScores.winner) {
                 const scoreDelta = this.controlPoints.tickScore(dt);
@@ -1288,6 +1325,7 @@ export class Game {
                     type: 'state', 
                     players: playersState,
                     bots: this.buildBotSnapshots(),
+                    mode: this.gameMode,
                     points: this.controlPoints.getSnapshot(),
                     scores: { ...this.teamScores },
                     props: this.world.propManager.getSnapshot()
@@ -1333,6 +1371,7 @@ export class Game {
             maxSections: { ...golemState.maxSections },
             weaponStatus: golemState.weaponStatus,
             radarContacts: this.buildRadarContacts(),
+            gameMode: this.gameMode,
             controlPoints: this.controlPoints.getSnapshot(),
             teamScores: { ...this.teamScores },
             teamOverview: this.getTeamOverview(),
@@ -1345,9 +1384,9 @@ export class Game {
     }
 }
 
-export async function initGame(canvas: HTMLCanvasElement, onStateUpdate: (state: any) => void, sessionMode: SessionMode = 'solo') {
+export async function initGame(canvas: HTMLCanvasElement, onStateUpdate: (state: any) => void, sessionMode: SessionMode = 'solo', gameMode: GameMode = 'control') {
     await RAPIER.init();
-    const game = new Game(canvas, onStateUpdate, sessionMode);
+    const game = new Game(canvas, onStateUpdate, sessionMode, gameMode);
     game.start();
     return game;
 }

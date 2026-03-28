@@ -15,7 +15,7 @@ import { createTranslator, getInitialLocale, saveLocale, translateMessage, type 
 import { formatPercent, formatSeconds, formatSpeedUnit } from './i18n/format';
 import type { Locale } from './i18n/types';
 import type { WeaponStatusView } from './combat/weaponTypes';
-import type { ControlPointView, TeamOverview, TeamScoreState } from './gameplay/types';
+import type { ControlPointView, GameMode, TeamOverview, TeamScoreState } from './gameplay/types';
 
 type SessionMode = 'solo' | 'host' | 'client';
 type SectionName = 'head' | 'centerTorso' | 'leftTorso' | 'rightTorso' | 'leftArm' | 'rightArm' | 'leftLeg' | 'rightLeg';
@@ -51,6 +51,7 @@ type GameHudState = {
     maxSections: SectionState;
     weaponStatus: WeaponStatusView[];
     radarContacts: RadarContact[];
+    gameMode: GameMode;
     controlPoints: ControlPointView[];
     teamScores: TeamScoreState;
     teamOverview: TeamOverview;
@@ -122,6 +123,7 @@ const initialGameState: GameHudState = {
     maxSections: { ...defaultSections },
     weaponStatus: [],
     radarContacts: [],
+    gameMode: 'control',
     controlPoints: [],
     teamScores: { blue: 0, red: 0, scoreToWin: 200, winner: null },
     teamOverview: {
@@ -521,7 +523,7 @@ function getHeldPoints(points: ControlPointView[], owner: 'blue' | 'red') {
     return points.filter((point) => point.owner === owner).length;
 }
 
-function MatchStatusOverlay(props: { scores: TeamScoreState; points: ControlPointView[]; teamOverview: TeamOverview; respawnTimer: number; isTouchDevice: boolean; locale: Locale; t: Translator }) {
+function MatchStatusOverlay(props: { scores: TeamScoreState; points: ControlPointView[]; teamOverview: TeamOverview; respawnTimer: number; isTouchDevice: boolean; locale: Locale; gameMode: GameMode; t: Translator }) {
     const pointTone = (point: ControlPointView) => point.contested
         ? 'border-[#b57d3c]/60 bg-[#f0b35c]/16 text-[#ffd489]'
         : point.owner === 'blue'
@@ -529,7 +531,10 @@ function MatchStatusOverlay(props: { scores: TeamScoreState; points: ControlPoin
             : point.owner === 'red'
                 ? 'border-[#a24f39]/60 bg-[#f26b4a]/18 text-[#ffb49b]'
                 : 'border-[#8f6a38]/55 bg-black/25 text-[#e6c78c]';
-    const pointStatus = getPointStatusText(props.points, props.t, props.locale);
+    const pointStatus = props.gameMode === 'control'
+        ? getPointStatusText(props.points, props.t, props.locale)
+        : props.t('hud.mode.tdm');
+    const objectiveLabel = props.gameMode === 'control' ? props.t('hud.results.points') : props.t('hud.results.objective');
     const waveLabels = (['blue', 'red'] as const)
         .map((team) => {
             const waveTimer = props.teamOverview[team].waveTimer;
@@ -557,13 +562,19 @@ function MatchStatusOverlay(props: { scores: TeamScoreState; points: ControlPoin
                             <div className="text-[9px] tracking-[0.28em] text-[#7ee6f0]">{props.t('hud.team.blue')}</div>
                             <div className="mt-0.5 text-2xl font-bold tracking-[0.14em] text-[#8ee6ff]">{props.scores.blue}</div>
                         </div>
-                        <div className="flex items-center gap-1.5">
-                            {props.points.map((point) => (
-                                <div key={point.id} className={`min-w-[42px] rounded-full border px-3 py-1 text-center text-xs font-bold tracking-[0.18em] ${pointTone(point)}`}>
-                                    {point.id}
-                                </div>
-                            ))}
-                        </div>
+                        {props.gameMode === 'control' ? (
+                            <div className="flex items-center gap-1.5">
+                                {props.points.map((point) => (
+                                    <div key={point.id} className={`min-w-[42px] rounded-full border px-3 py-1 text-center text-xs font-bold tracking-[0.18em] ${pointTone(point)}`}>
+                                        {point.id}
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="rounded-full border border-[#8f6a38]/55 bg-black/25 px-4 py-1 text-center text-[10px] tracking-[0.24em] text-[#e6c78c]">
+                                {props.t('hud.mode.tdm')}
+                            </div>
+                        )}
                         <div className="text-center">
                             <div className="text-[9px] tracking-[0.28em] text-[#f39f7a]">{props.t('hud.team.red')}</div>
                             <div className="mt-0.5 text-2xl font-bold tracking-[0.14em] text-[#ffb49b]">{props.scores.red}</div>
@@ -598,7 +609,7 @@ function MatchStatusOverlay(props: { scores: TeamScoreState; points: ControlPoin
                         <div className="mt-4 grid grid-cols-[1.2fr_0.8fr_0.8fr_0.9fr_0.9fr] gap-2 text-center text-[9px] tracking-[0.22em] text-[#bfa987]">
                             <div>{props.t('hud.results.team')}</div>
                             <div>{props.t('hud.results.score')}</div>
-                            <div>{props.t('hud.results.points')}</div>
+                            <div>{objectiveLabel}</div>
                             <div>{props.t('hud.results.active')}</div>
                             <div>{props.t('hud.results.wave')}</div>
                         </div>
@@ -606,14 +617,14 @@ function MatchStatusOverlay(props: { scores: TeamScoreState; points: ControlPoin
                             <div className="grid grid-cols-[1.2fr_0.8fr_0.8fr_0.9fr_0.9fr] gap-2 rounded-2xl border border-[#3d8fb4]/40 bg-[rgba(20,44,52,0.34)] px-3 py-3 text-center text-[11px] tracking-[0.18em] text-[#d8f7ff]">
                                 <div>{props.t('hud.team.blue')}</div>
                                 <div>{props.scores.blue}</div>
-                                <div>{blueHeld}</div>
+                                <div>{props.gameMode === 'control' ? blueHeld : props.t('hud.results.none')}</div>
                                 <div>{props.teamOverview.blue.alive}/{props.teamOverview.blue.total}</div>
                                 <div>{props.teamOverview.blue.waveTimer > 0.05 ? formatSeconds(props.locale, props.teamOverview.blue.waveTimer) : props.t('hud.results.none')}</div>
                             </div>
                             <div className="grid grid-cols-[1.2fr_0.8fr_0.8fr_0.9fr_0.9fr] gap-2 rounded-2xl border border-[#a24f39]/40 bg-[rgba(48,22,18,0.34)] px-3 py-3 text-center text-[11px] tracking-[0.18em] text-[#ffe1d7]">
                                 <div>{props.t('hud.team.red')}</div>
                                 <div>{props.scores.red}</div>
-                                <div>{redHeld}</div>
+                                <div>{props.gameMode === 'control' ? redHeld : props.t('hud.results.none')}</div>
                                 <div>{props.teamOverview.red.alive}/{props.teamOverview.red.total}</div>
                                 <div>{props.teamOverview.red.waveTimer > 0.05 ? formatSeconds(props.locale, props.teamOverview.red.waveTimer) : props.t('hud.results.none')}</div>
                             </div>
@@ -649,6 +660,7 @@ export default function App() {
     const [myId, setMyId] = useState('');
     const [isHost, setIsHost] = useState(false);
     const [sessionMode, setSessionMode] = useState<SessionMode>('solo');
+    const [selectedGameMode, setSelectedGameMode] = useState<GameMode>('control');
     const [showPilotPanel, setShowPilotPanel] = useState(true);
     const [showMobileSettings, setShowMobileSettings] = useState(false);
     const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
@@ -675,7 +687,7 @@ export default function App() {
         showCopyState(success ? 'copied' : 'error');
     };
 
-    const startGame = async (mode: SessionMode, targetHostId?: string) => {
+    const startGame = async (mode: SessionMode, targetHostId?: string, requestedMode: GameMode = selectedGameMode) => {
         if (!canvasRef.current) return;
         setInLobby(false);
         setLoading(true);
@@ -707,7 +719,7 @@ export default function App() {
                     try {
                         return await initGame(canvasRef.current!, (state: GameHudState) => {
                             setGameState({ ...state });
-                        }, mode);
+                        }, mode, requestedMode);
                     } catch (error) {
                         throw toStartupFailure(error, 'startWorld');
                     }
@@ -922,6 +934,7 @@ export default function App() {
                     respawnTimer={gameState.respawnTimer}
                     isTouchDevice={isTouchDevice}
                     locale={locale}
+                    gameMode={gameState.gameMode}
                     t={t}
                 />
             ) : null}
@@ -941,6 +954,29 @@ export default function App() {
                     </h1>
 
                     <div className="flex w-[min(92vw,24rem)] flex-col gap-5 rounded-2xl border border-[#8f6a38]/40 bg-black/45 p-5 backdrop-blur-sm sm:gap-6 sm:p-8">
+                        <div className="flex flex-col gap-2">
+                            <div className="text-center text-xs tracking-[0.28em] text-[#8fb8c2]">{t('lobby.modeTitle')}</div>
+                            <div className="grid grid-cols-2 gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedGameMode('control')}
+                                    className={`rounded-xl border px-4 py-3 text-[11px] font-bold tracking-[0.18em] transition-colors ${selectedGameMode === 'control' ? 'border-[#efb768]/80 bg-[#7d4f22]/55 text-[#fff1d4]' : 'border-[#8f6a38]/30 bg-black/25 text-[#d3bc94] hover:border-[#efb768]/50'}`}
+                                >
+                                    {t('lobby.mode.control')}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedGameMode('tdm')}
+                                    className={`rounded-xl border px-4 py-3 text-[11px] font-bold tracking-[0.18em] transition-colors ${selectedGameMode === 'tdm' ? 'border-[#efb768]/80 bg-[#7d4f22]/55 text-[#fff1d4]' : 'border-[#8f6a38]/30 bg-black/25 text-[#d3bc94] hover:border-[#efb768]/50'}`}
+                                >
+                                    {t('lobby.mode.tdm')}
+                                </button>
+                            </div>
+                            <div className="text-center text-[11px] tracking-[0.12em] text-[#b9c7c8]">
+                                {t(selectedGameMode === 'control' ? 'lobby.modeHint.control' : 'lobby.modeHint.tdm')}
+                            </div>
+                        </div>
+
                         <button
                             onClick={() => startGame('solo')}
                             className="rounded bg-[#7d4f22] py-3 font-bold tracking-[0.22em] text-white shadow-[0_0_15px_rgba(125,79,34,0.35)] transition-colors hover:bg-[#99622d]"
