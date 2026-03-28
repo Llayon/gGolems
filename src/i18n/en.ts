@@ -38,6 +38,11 @@ const en = {
     'lobby.mode.tdm': 'TEAM DEATHMATCH',
     'lobby.modeHint.control': 'Three capture points, score over time, objective-focused bots.',
     'lobby.modeHint.tdm': 'No control points, score by kills and wave pressure.',
+    'lobby.roomNameTitle': 'ROOM NAME',
+    'lobby.roomNamePlaceholder': 'IRON MARCH',
+    'lobby.roomNameHint': 'Optional public name for the room browser.',
+    'lobby.filter.all': 'ALL',
+    'lobby.noRoomsFiltered': 'NO ROOMS FOR THIS FILTER',
 
     'session.solo': 'LOCAL MATCH',
     'session.host': 'HOST CHANNEL',

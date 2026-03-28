@@ -38,6 +38,11 @@ const ru: typeof en = {
     'lobby.mode.tdm': 'КОМАНДНЫЙ БОЙ',
     'lobby.modeHint.control': 'Три точки захвата, очки за удержание и боты на цели.',
     'lobby.modeHint.tdm': 'Без точек, только убийства, волны респавна и давление по составу.',
+    'lobby.roomNameTitle': 'ИМЯ КОМНАТЫ',
+    'lobby.roomNamePlaceholder': 'ЖЕЛЕЗНЫЙ МАРШ',
+    'lobby.roomNameHint': 'Необязательное публичное имя для списка комнат.',
+    'lobby.filter.all': 'ВСЕ',
+    'lobby.noRoomsFiltered': 'ПО ЭТОМУ ФИЛЬТРУ КОМНАТ НЕТ',
 
     'session.solo': 'ЛОКАЛЬНЫЙ БОЙ',
     'session.host': 'КАНАЛ ХОСТА',

@@ -19,6 +19,7 @@ const ROOM_LIST_REFRESH_MS = 5000;
 export type FirebaseLobbyRoom = {
     id: string;
     shortCode: string;
+    roomName: string;
     hostPeerId: string;
     gameMode: GameMode;
     status: 'open';
@@ -38,6 +39,7 @@ export type FirebaseLobbyRegistration = {
 
 type LobbySnapshotValue = {
     shortCode?: string;
+    roomName?: string;
     hostPeerId?: string;
     gameMode?: GameMode;
     status?: 'open';
@@ -57,7 +59,7 @@ export function isFirebaseLobbyEnabled() {
     return Boolean(getLobbyDatabase());
 }
 
-export async function registerFirebaseLobby(hostPeerId: string, gameMode: GameMode): Promise<FirebaseLobbyRegistration | null> {
+export async function registerFirebaseLobby(hostPeerId: string, gameMode: GameMode, roomName: string): Promise<FirebaseLobbyRegistration | null> {
     const database = getLobbyDatabase();
     if (!database || !hostPeerId) return null;
 
@@ -70,6 +72,7 @@ export async function registerFirebaseLobby(hostPeerId: string, gameMode: GameMo
     const now = Date.now();
     const payload = {
         shortCode: roomId.slice(-6).toUpperCase(),
+        roomName: roomName.trim().slice(0, 32),
         hostPeerId,
         gameMode,
         status: 'open' as const,
@@ -147,6 +150,7 @@ export function subscribeFirebaseLobbies(onRooms: (rooms: FirebaseLobbyRoom[]) =
             nextRooms.push({
                 id: child.key ?? '',
                 shortCode: value.shortCode ?? (child.key ?? '').slice(-6).toUpperCase(),
+                roomName: value.roomName?.trim() || value.shortCode || (child.key ?? '').slice(-6).toUpperCase(),
                 hostPeerId: value.hostPeerId,
                 gameMode: value.gameMode === 'tdm' ? 'tdm' : 'control',
                 status: 'open',

@@ -657,10 +657,12 @@ export default function App() {
     const [mobileLeftHanded, setMobileLeftHanded] = useState(false);
     const [mobileAimPreset, setMobileAimPreset] = useState<'LOW' | 'MID' | 'HIGH'>('MID');
     const [hostId, setHostId] = useState('');
+    const [roomName, setRoomName] = useState('');
     const [myId, setMyId] = useState('');
     const [isHost, setIsHost] = useState(false);
     const [sessionMode, setSessionMode] = useState<SessionMode>('solo');
     const [selectedGameMode, setSelectedGameMode] = useState<GameMode>('control');
+    const [roomFilter, setRoomFilter] = useState<'all' | GameMode>('all');
     const [showPilotPanel, setShowPilotPanel] = useState(true);
     const [showMobileSettings, setShowMobileSettings] = useState(false);
     const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
@@ -748,7 +750,7 @@ export default function App() {
                 setMyId(createdHostId);
                 setIsHost(true);
                 if (firebaseLobbyStatus.enabled) {
-                    firebaseLobbyRef.current = await registerFirebaseLobby(createdHostId, requestedMode);
+                    firebaseLobbyRef.current = await registerFirebaseLobby(createdHostId, requestedMode, roomName);
                 }
                 setLoading(false);
                 return;
@@ -923,6 +925,9 @@ export default function App() {
     const terrainDebugTone = gameState.terrainColliderMode === 'heightfield'
         ? 'text-[#8fb8c2]'
         : 'text-[#f3b56c]';
+    const filteredFirebaseRooms = roomFilter === 'all'
+        ? firebaseRooms
+        : firebaseRooms.filter((room) => room.gameMode === roomFilter);
     const sessionLabel = translateMessage(t, sessionMessage);
     const copyTextLabel = translateMessage(t, copyMessage);
     const cameraModeLabel = translateMessage(t, cameraModeMessage);
@@ -1002,6 +1007,21 @@ export default function App() {
                             </div>
                         </div>
 
+                        <div className="flex flex-col gap-2">
+                            <div className="text-center text-xs tracking-[0.28em] text-[#8fb8c2]">{t('lobby.roomNameTitle')}</div>
+                            <input
+                                type="text"
+                                placeholder={t('lobby.roomNamePlaceholder')}
+                                value={roomName}
+                                maxLength={32}
+                                onChange={(e) => setRoomName(e.target.value)}
+                                className="rounded border border-[#8f6a38]/40 bg-black/65 px-4 py-2 text-[#f5dba8] outline-none focus:border-[#efb768]"
+                            />
+                            <div className="text-center text-[11px] tracking-[0.12em] text-[#b9c7c8]">
+                                {t('lobby.roomNameHint')}
+                            </div>
+                        </div>
+
                         <button
                             onClick={() => startGame('solo')}
                             className="rounded bg-[#7d4f22] py-3 font-bold tracking-[0.22em] text-white shadow-[0_0_15px_rgba(125,79,34,0.35)] transition-colors hover:bg-[#99622d]"
@@ -1066,9 +1086,32 @@ export default function App() {
                         {firebaseLobbyStatus.enabled ? (
                             <div className="flex flex-col gap-2 border-t border-[#8f6a38]/30 pt-4">
                                 <div className="text-center text-xs tracking-[0.28em] text-[#8fb8c2]">{t('lobby.availableRooms')}</div>
-                                {firebaseRooms.length > 0 ? (
+                                <div className="grid grid-cols-3 gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setRoomFilter('all')}
+                                        className={`rounded-xl border px-2 py-2 text-[10px] font-bold tracking-[0.16em] transition-colors ${roomFilter === 'all' ? 'border-[#efb768]/80 bg-[#7d4f22]/55 text-[#fff1d4]' : 'border-[#8f6a38]/30 bg-black/25 text-[#d3bc94] hover:border-[#efb768]/50'}`}
+                                    >
+                                        {t('lobby.filter.all')}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setRoomFilter('control')}
+                                        className={`rounded-xl border px-2 py-2 text-[10px] font-bold tracking-[0.16em] transition-colors ${roomFilter === 'control' ? 'border-[#efb768]/80 bg-[#7d4f22]/55 text-[#fff1d4]' : 'border-[#8f6a38]/30 bg-black/25 text-[#d3bc94] hover:border-[#efb768]/50'}`}
+                                    >
+                                        {t('lobby.mode.control')}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setRoomFilter('tdm')}
+                                        className={`rounded-xl border px-2 py-2 text-[10px] font-bold tracking-[0.16em] transition-colors ${roomFilter === 'tdm' ? 'border-[#efb768]/80 bg-[#7d4f22]/55 text-[#fff1d4]' : 'border-[#8f6a38]/30 bg-black/25 text-[#d3bc94] hover:border-[#efb768]/50'}`}
+                                    >
+                                        {t('lobby.mode.tdm')}
+                                    </button>
+                                </div>
+                                {filteredFirebaseRooms.length > 0 ? (
                                     <div className="flex max-h-56 flex-col gap-2 overflow-y-auto pr-1">
-                                        {firebaseRooms.slice(0, 8).map((room) => (
+                                        {filteredFirebaseRooms.slice(0, 8).map((room) => (
                                             <button
                                                 key={room.id}
                                                 type="button"
@@ -1080,6 +1123,7 @@ export default function App() {
                                                 className="rounded-xl border border-[#8f6a38]/35 bg-black/35 px-4 py-3 text-left transition-colors hover:border-[#efb768]/60"
                                             >
                                                 <div className="text-[10px] tracking-[0.26em] text-[#8fb8c2]">{t('lobby.roomCode')}</div>
+                                                <div className="mt-1 truncate text-[12px] font-bold tracking-[0.16em] text-[#f3deb5]">{room.roomName}</div>
                                                 <div className="mt-1 flex items-center justify-between gap-3">
                                                     <div className="font-bold tracking-[0.22em] text-[#efb768]">{room.shortCode}</div>
                                                     <div className="rounded-full border border-[#8f6a38]/45 bg-black/30 px-2 py-1 text-[9px] tracking-[0.18em] text-[#d7c5a1]">
@@ -1096,7 +1140,7 @@ export default function App() {
                                     </div>
                                 ) : (
                                     <div className="rounded-xl border border-[#8f6a38]/20 bg-black/25 px-4 py-3 text-center text-[11px] tracking-[0.18em] text-[#b9c7c8]">
-                                        {t('lobby.noRooms')}
+                                        {roomFilter === 'all' ? t('lobby.noRooms') : t('lobby.noRoomsFiltered')}
                                     </div>
                                 )}
                                 <div className="text-center text-[11px] tracking-[0.12em] text-[#b9c7c8]">
