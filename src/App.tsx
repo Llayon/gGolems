@@ -143,6 +143,37 @@ async function copyText(text: string) {
     }
 }
 
+function describeError(error: unknown) {
+    if (error instanceof Error && error.message) {
+        return error.message;
+    }
+    return typeof error === 'string' ? error : 'Неизвестная ошибка';
+}
+
+function withTimeout<T>(promiseFactory: () => Promise<T>, timeoutMs: number, label: string) {
+    return new Promise<T>((resolve, reject) => {
+        const timeoutId = window.setTimeout(() => {
+            reject(new Error(`${label}: превышен таймаут ${Math.round(timeoutMs / 1000)}с`));
+        }, timeoutMs);
+
+        try {
+            promiseFactory().then(
+                (value) => {
+                    window.clearTimeout(timeoutId);
+                    resolve(value);
+                },
+                (error) => {
+                    window.clearTimeout(timeoutId);
+                    reject(error);
+                }
+            );
+        } catch (error) {
+            window.clearTimeout(timeoutId);
+            reject(error);
+        }
+    });
+}
+
 function HeadingTape(props: { legYaw: number; torsoYaw: number; maxTwist: number }) {
     const { legYaw, torsoYaw, maxTwist } = props;
     const bodyOffsetPx = clamp(angleDiff(torsoYaw, legYaw) / (maxTwist * 1.1), -1, 1) * 184;
@@ -345,43 +376,72 @@ export default function App() {
         setShowMobileSettings(false);
         setSessionMode(mode);
         setCopyState('idle');
+        let game: any = null;
 
-        const game = await initGame(canvasRef.current, (state: GameHudState) => {
-            setGameState({ ...state });
-        }, mode);
-
-        setGameInstance(game);
-
-        if (mode === 'solo') {
-            setMyId('');
+        const failStart = (error: unknown) => {
+            console.error(error);
+            if (game) {
+                game.stop();
+            }
+            setGameInstance(null);
+            setSessionMode('solo');
             setIsHost(false);
+            setMyId('');
+            setInLobby(true);
             setLoading(false);
-            return;
-        }
+            alert(`Ошибка запуска: ${describeError(error)}`);
+        };
 
-        if (mode === 'host') {
-            game.network.initAsHost((id: string) => {
-                setMyId(id);
+        try {
+            game = await withTimeout(
+                () => initGame(canvasRef.current!, (state: GameHudState) => {
+                    setGameState({ ...state });
+                }, mode),
+                15000,
+                'Запуск мира'
+            );
+
+            setGameInstance(game);
+
+            if (mode === 'solo') {
+                setMyId('');
+                setIsHost(false);
+                setLoading(false);
+                return;
+            }
+
+            if (mode === 'host') {
+                const createdHostId = await withTimeout(
+                    () => new Promise<string>((resolve, reject) => {
+                        game.network.initAsHost(resolve, reject);
+                    }),
+                    15000,
+                    'Создание сессии'
+                );
+                setMyId(createdHostId);
                 setIsHost(true);
                 setLoading(false);
-            });
-        } else if (targetHostId) {
-            game.setClientMode();
-            game.network.initAsClient(targetHostId, (id: string) => {
-                setMyId(id);
+                return;
+            }
+
+            if (targetHostId) {
+                game.setClientMode();
+                const clientId = await withTimeout(
+                    () => new Promise<string>((resolve, reject) => {
+                        game.network.initAsClient(targetHostId, resolve, reject);
+                    }),
+                    15000,
+                    'Подключение к хосту'
+                );
+                setMyId(clientId);
                 setIsHost(false);
                 setLoading(false);
-            }, (err: any) => {
-                console.error(err);
-                alert(`Ошибка подключения: ${err}`);
-                game.stop();
-                setGameInstance(null);
-                setSessionMode('solo');
-                setIsHost(false);
-                setMyId('');
-                setInLobby(true);
-                setLoading(false);
-            });
+                return;
+            }
+
+            throw new Error('Не указан ID хоста');
+        } catch (error) {
+            failStart(error);
         }
     };
 

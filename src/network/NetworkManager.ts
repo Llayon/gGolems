@@ -12,7 +12,7 @@ export class NetworkManager {
 
     constructor() {}
 
-    initAsHost(onReady: (id: string) => void) {
+    initAsHost(onReady: (id: string) => void, onError?: (err: any) => void) {
         this.isHost = true;
         this.peer = new Peer();
         
@@ -24,6 +24,10 @@ export class NetworkManager {
         this.peer.on('connection', (conn) => {
             this.setupConnection(conn);
         });
+
+        if (onError) {
+            this.peer.on('error', onError);
+        }
     }
 
     initAsClient(hostId: string, onReady: (id: string) => void, onError: (err: any) => void) {
