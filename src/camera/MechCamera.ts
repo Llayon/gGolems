@@ -232,11 +232,11 @@ export class MechCamera {
 
     fireRecoilPulse(pulse: PendingRecoilPulse) {
         const side = pulse.mountId === 'leftArmMount' ? -1 : pulse.mountId === 'rightArmMount' ? 1 : 0;
-        this.cockpitKickY -= pulse.profile.cameraKickBack * 12 + pulse.profile.cameraPitchKick * 22;
-        this.cockpitKickX += side * pulse.profile.cameraYawKick * 14;
-        this.cockpitKickRoll += side * pulse.profile.cameraYawKick * 0.55;
-        this.cockpitFrameKick = Math.min(1.5, this.cockpitFrameKick + pulse.profile.frameKick);
-        this.cockpitFlash = Math.min(1, this.cockpitFlash + pulse.profile.frameKick * 0.42);
+        this.cockpitKickY -= pulse.profile.cameraKickBack * 17 + pulse.profile.cameraPitchKick * 30;
+        this.cockpitKickX += side * pulse.profile.cameraYawKick * 18;
+        this.cockpitKickRoll += side * pulse.profile.cameraYawKick * 0.9;
+        this.cockpitFrameKick = Math.min(2.4, this.cockpitFrameKick + pulse.profile.frameKick);
+        this.cockpitFlash = Math.min(1, this.cockpitFlash + pulse.profile.frameKick * 0.55);
         this.recoilRecoveryRate = Math.max(this.recoilRecoveryRate, 2.8 / Math.max(0.08, pulse.profile.recoveryTime));
         this.targetFOV = Math.max(this.targetFOV, this.baseFOV + pulse.profile.fovKick);
         this.addTrauma(pulse.trauma);
@@ -266,7 +266,7 @@ export class MechCamera {
 
     onWeaponFire(mountId: WeaponMountId, profile: CockpitRecoilProfile, fireTrauma: number) {
         const pulses = Math.max(1, profile.pulseCount);
-        const pulseTrauma = (fireTrauma * SHAKE.fireTraumaScale) / pulses;
+        const pulseTrauma = (fireTrauma * SHAKE.fireTraumaScale * 1.35) / pulses;
         for (let index = 0; index < pulses; index++) {
             this.recoilQueue.push({
                 delay: profile.pulseInterval * index,

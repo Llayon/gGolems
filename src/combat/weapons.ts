@@ -49,14 +49,14 @@ export const WEAPON_DEFINITIONS: Record<WeaponId, WeaponDefinition> = {
         projectileCount: 1,
         fireTrauma: 0.18,
         cockpitRecoil: {
-            cameraKickBack: 0.36,
-            cameraPitchKick: 0.22,
-            cameraYawKick: 0.12,
-            frameKick: 0.38,
-            recoveryTime: 0.18,
+            cameraKickBack: 0.52,
+            cameraPitchKick: 0.3,
+            cameraYawKick: 0.15,
+            frameKick: 0.52,
+            recoveryTime: 0.2,
             pulseCount: 1,
             pulseInterval: 0,
-            fovKick: 0.25
+            fovKick: 0.34
         },
         muzzleOffset: { x: 0, y: -1.18, z: -1.28 }
     },
@@ -77,14 +77,14 @@ export const WEAPON_DEFINITIONS: Record<WeaponId, WeaponDefinition> = {
         projectileCount: 3,
         fireTrauma: 0.24,
         cockpitRecoil: {
-            cameraKickBack: 0.24,
-            cameraPitchKick: 0.14,
-            cameraYawKick: 0.1,
-            frameKick: 0.22,
-            recoveryTime: 0.14,
+            cameraKickBack: 0.34,
+            cameraPitchKick: 0.2,
+            cameraYawKick: 0.12,
+            frameKick: 0.32,
+            recoveryTime: 0.16,
             pulseCount: 3,
-            pulseInterval: 0.045,
-            fovKick: 0.18
+            pulseInterval: 0.05,
+            fovKick: 0.24
         },
         muzzleOffset: { x: 0, y: -1.15, z: -1.2 }
     },
@@ -105,14 +105,14 @@ export const WEAPON_DEFINITIONS: Record<WeaponId, WeaponDefinition> = {
         projectileCount: 1,
         fireTrauma: 0.42,
         cockpitRecoil: {
-            cameraKickBack: 0.95,
-            cameraPitchKick: 0.54,
-            cameraYawKick: 0.2,
-            frameKick: 0.82,
-            recoveryTime: 0.28,
+            cameraKickBack: 1.35,
+            cameraPitchKick: 0.78,
+            cameraYawKick: 0.24,
+            frameKick: 1.15,
+            recoveryTime: 0.32,
             pulseCount: 1,
             pulseInterval: 0,
-            fovKick: 0.6
+            fovKick: 0.85
         },
         muzzleOffset: { x: 0, y: -0.38, z: -1.55 }
     }

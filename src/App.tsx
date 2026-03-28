@@ -388,7 +388,7 @@ function CockpitFrame(props: {
     t: Translator;
 }) {
     const { warning, throttleLabel, t } = props;
-    const frameTransform = `translate3d(${props.kickX * 0.38}px, ${props.kickY * 0.34 - props.frameKick * 2.4}px, 0) rotate(${props.kickRoll * 0.45}deg)`;
+    const frameTransform = `translate3d(${props.kickX * 0.55}px, ${props.kickY * 0.48 - props.frameKick * 3.6}px, 0) rotate(${props.kickRoll * 0.65}deg)`;
 
     return (
         <div className="pointer-events-none absolute inset-0 z-10 overflow-hidden" style={{ transform: frameTransform }}>
@@ -1039,7 +1039,7 @@ export default function App() {
     );
     const showCockpitDecor = !isTouchDevice && gameState.cameraMode === 'cockpit';
     const cockpitCanvasTransform = showCockpitDecor
-        ? `translate3d(${gameState.cockpitKickX}px, ${gameState.cockpitKickY}px, 0) rotate(${gameState.cockpitKickRoll}deg) scale(${1 + gameState.cockpitFrameKick * 0.008})`
+        ? `translate3d(${gameState.cockpitKickX * 1.18}px, ${gameState.cockpitKickY * 1.18}px, 0) rotate(${gameState.cockpitKickRoll * 1.12}deg) scale(${1 + gameState.cockpitFrameKick * 0.014})`
         : undefined;
     const hostBadgeClass = 'pointer-events-auto absolute right-4 top-4 z-30 flex items-center gap-3 rounded-2xl border border-[#8f6a38]/45 bg-[rgba(10,10,10,0.78)] px-4 py-3 text-[#e1cea7] shadow-[0_0_22px_rgba(0,0,0,0.32)] backdrop-blur-sm';
     const pilotPanelAnchorClass = 'left-4 top-4';
