@@ -20,14 +20,9 @@ export class Arena {
     terrain: TerrainBuilder;
     readonly halfSize = 132;
     readonly spawnRadius = 104;
-    readonly soloSpawn = new THREE.Vector3(-12, 5, 88);
-    readonly botSpawn = new THREE.Vector3(18, 5, -88);
-    readonly playerSpawns = [
-        new THREE.Vector3(-76, 5, 68),
-        new THREE.Vector3(68, 5, -76),
-        new THREE.Vector3(-84, 5, -60),
-        new THREE.Vector3(60, 5, 76)
-    ];
+    readonly soloSpawn: THREE.Vector3;
+    readonly botSpawn: THREE.Vector3;
+    readonly playerSpawns: THREE.Vector3[];
 
     constructor(scene: THREE.Scene, physics: RAPIER.World) {
         const arenaHalfSize = this.halfSize;
@@ -36,6 +31,14 @@ export class Arena {
         const wallSpan = arenaHalfSize * 2 - wallThickness * 2;
 
         this.terrain = new TerrainBuilder(scene, physics, arenaHalfSize);
+        this.soloSpawn = this.createSpawnPoint(-46, 92);
+        this.botSpawn = this.createSpawnPoint(46, -92);
+        this.playerSpawns = [
+            this.createSpawnPoint(-92, 30),
+            this.createSpawnPoint(92, -30),
+            this.createSpawnPoint(-30, -92),
+            this.createSpawnPoint(30, 92)
+        ];
 
         this.createBox(scene, physics, { x: 0, z: -arenaHalfSize, w: wallSpan, h: wallHeight, d: wallThickness, color: 0x2e2f39, yOffset: wallHeight / 2 });
         this.createBox(scene, physics, { x: 0, z: arenaHalfSize, w: wallSpan, h: wallHeight, d: wallThickness, color: 0x2e2f39, yOffset: wallHeight / 2 });
@@ -60,13 +63,13 @@ export class Arena {
         return this.terrain.sampleHeight(x, z);
     }
 
+    createSpawnPoint(x: number, z: number) {
+        return new THREE.Vector3(x, this.surfaceY(x, z) + 3.6, z);
+    }
+
     createCombatCover(scene: THREE.Scene, physics: RAPIER.World) {
         const coverColor = 0x4d4a50;
         const configs: BoxConfig[] = [
-            { x: -18, z: 0, w: 12, h: 4.8, d: 12, color: coverColor, yOffset: 2.4 },
-            { x: 18, z: 0, w: 12, h: 4.8, d: 12, color: coverColor, yOffset: 2.4 },
-            { x: 0, z: -28, w: 16, h: 5.6, d: 10, color: coverColor, yOffset: 2.8 },
-            { x: 0, z: 28, w: 16, h: 5.6, d: 10, color: coverColor, yOffset: 2.8 },
             { x: -58, z: -26, w: 12, h: 4.4, d: 18, color: 0x51505b, yOffset: 2.2, rotationY: -0.18 },
             { x: -62, z: 24, w: 14, h: 4.6, d: 16, color: 0x51505b, yOffset: 2.3, rotationY: 0.16 },
             { x: -20, z: 58, w: 10, h: 4.2, d: 18, color: 0x565662, yOffset: 2.1 },

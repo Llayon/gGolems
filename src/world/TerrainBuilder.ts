@@ -43,6 +43,14 @@ type RockMoundConfig = {
 const _quat = new THREE.Quaternion();
 const _euler = new THREE.Euler();
 const _color = new THREE.Color();
+const TERRAIN_SPAWN_PADS = [
+    { x: -46, z: 92, radius: 16, targetY: 2.4 },
+    { x: 46, z: -92, radius: 16, targetY: 2.4 },
+    { x: -92, z: 30, radius: 16, targetY: 2.5 },
+    { x: 92, z: -30, radius: 16, targetY: 2.5 },
+    { x: -30, z: -92, radius: 16, targetY: 2.4 },
+    { x: 30, z: 92, radius: 16, targetY: 2.4 }
+] as const;
 
 function clamp(value: number, min: number, max: number) {
     return Math.max(min, Math.min(max, value));
@@ -98,9 +106,13 @@ export class TerrainBuilder {
         const centerKnoll = Math.exp(-Math.pow((x - 16) / 18, 2) - Math.pow((z + 4) / 16, 2)) * 1.1;
         const eastKnoll = Math.exp(-Math.pow((x - 54) / 22, 2) - Math.pow((z + 42) / 18, 2)) * 1.3;
         const westKnoll = Math.exp(-Math.pow((x + 42) / 26, 2) - Math.pow((z - 26) / 22, 2)) * 1.15;
+        const westBerm = Math.exp(-Math.pow((x + 36) / 18, 2) - Math.pow((z + 10) / 38, 2)) * 3.4;
+        const eastBerm = Math.exp(-Math.pow((x - 38) / 18, 2) - Math.pow((z - 12) / 36, 2)) * 3.2;
+        const northBerm = Math.exp(-Math.pow((x + 6) / 28, 2) - Math.pow((z - 38) / 16, 2)) * 2.9;
+        const southBerm = Math.exp(-Math.pow((x - 6) / 26, 2) - Math.pow((z + 42) / 16, 2)) * 3.0;
         const perimeterLift = smoothstep(0.72, 0.98, radial) * 8.4;
 
-        return Math.max(
+        let height = Math.max(
             0.35,
             1.1
             + centerBowl
@@ -113,8 +125,22 @@ export class TerrainBuilder {
             + centerKnoll
             + eastKnoll
             + westKnoll
+            + westBerm
+            + eastBerm
+            + northBerm
+            + southBerm
             + perimeterLift
         );
+
+        for (const pad of TERRAIN_SPAWN_PADS) {
+            const distance = Math.hypot(x - pad.x, z - pad.z);
+            const influence = 1 - smoothstep(pad.radius * 0.45, pad.radius, distance);
+            if (influence > 0) {
+                height = THREE.MathUtils.lerp(height, pad.targetY, influence);
+            }
+        }
+
+        return height;
     }
 
     buildGround() {

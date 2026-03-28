@@ -19,9 +19,11 @@ export class DummyBot {
     strafeTimer = 0.8;
     fireCooldown = 1.2;
     respawnRadius = 62;
+    surfaceY?: (x: number, z: number) => number;
 
-    constructor(scene: THREE.Scene, physics: RAPIER.World, x: number, y: number, z: number, isHost: boolean = true) {
+    constructor(scene: THREE.Scene, physics: RAPIER.World, x: number, y: number, z: number, isHost: boolean = true, surfaceY?: (x: number, z: number) => number) {
         this.isHost = isHost;
+        this.surfaceY = surfaceY;
         const geo = new THREE.BoxGeometry(2, 3, 2);
         this.mat = new THREE.MeshStandardMaterial({ color: 0x882222 });
         this.mesh = new THREE.Mesh(geo, this.mat);
@@ -44,10 +46,13 @@ export class DummyBot {
         const remainingHp = Math.max(0, this.hp);
         if (this.hp <= 0) {
             this.hp = 100;
+            const nextX = (Math.random() - 0.5) * this.respawnRadius * 2;
+            const nextZ = (Math.random() - 0.5) * this.respawnRadius * 2;
+            const nextY = (this.surfaceY ? this.surfaceY(nextX, nextZ) : 1.4) + 3;
             this.body.setTranslation({
-                x: (Math.random() - 0.5) * this.respawnRadius * 2,
-                y: 5,
-                z: (Math.random() - 0.5) * this.respawnRadius * 2
+                x: nextX,
+                y: nextY,
+                z: nextZ
             }, true);
             this.fireCooldown = 1.5;
         }

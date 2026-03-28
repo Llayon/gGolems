@@ -97,7 +97,8 @@ export class Game {
             this.world.botSpawn.x,
             this.world.botSpawn.y,
             this.world.botSpawn.z,
-            sessionMode !== 'client'
+            sessionMode !== 'client',
+            this.world.surfaceY.bind(this.world)
         );
 
         if (sessionMode === 'client') {
