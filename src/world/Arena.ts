@@ -37,18 +37,18 @@ export class Arena {
         this.soloSpawn = this.createSpawnPoint(-46, 92);
         this.botSpawn = this.createSpawnPoint(46, -92);
         this.blueSpawns = [
-            this.createSpawnPoint(-110, 8),
-            this.createSpawnPoint(-102, 34),
-            this.createSpawnPoint(-94, -18),
-            this.createSpawnPoint(-86, 58),
-            this.createSpawnPoint(-80, -46)
+            this.createSpawnPoint(-118, -82),
+            this.createSpawnPoint(-118, -42),
+            this.createSpawnPoint(-118, 0),
+            this.createSpawnPoint(-118, 42),
+            this.createSpawnPoint(-118, 82)
         ];
         this.redSpawns = [
-            this.createSpawnPoint(110, -8),
-            this.createSpawnPoint(102, -34),
-            this.createSpawnPoint(94, 18),
-            this.createSpawnPoint(86, -58),
-            this.createSpawnPoint(80, 46)
+            this.createSpawnPoint(118, -82),
+            this.createSpawnPoint(118, -42),
+            this.createSpawnPoint(118, 0),
+            this.createSpawnPoint(118, 42),
+            this.createSpawnPoint(118, 82)
         ];
         this.playerSpawns = [
             this.createSpawnPoint(-92, 30),

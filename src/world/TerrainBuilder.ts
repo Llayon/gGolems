@@ -50,7 +50,17 @@ const TERRAIN_SPAWN_PADS = [
     { x: -92, z: 30, radius: 16, targetY: 2.5 },
     { x: 92, z: -30, radius: 16, targetY: 2.5 },
     { x: -30, z: -92, radius: 16, targetY: 2.4 },
-    { x: 30, z: 92, radius: 16, targetY: 2.4 }
+    { x: 30, z: 92, radius: 16, targetY: 2.4 },
+    { x: -118, z: -82, radius: 18, targetY: 2.8 },
+    { x: -118, z: -42, radius: 18, targetY: 2.8 },
+    { x: -118, z: 0, radius: 18, targetY: 2.8 },
+    { x: -118, z: 42, radius: 18, targetY: 2.8 },
+    { x: -118, z: 82, radius: 18, targetY: 2.8 },
+    { x: 118, z: -82, radius: 18, targetY: 2.8 },
+    { x: 118, z: -42, radius: 18, targetY: 2.8 },
+    { x: 118, z: 0, radius: 18, targetY: 2.8 },
+    { x: 118, z: 42, radius: 18, targetY: 2.8 },
+    { x: 118, z: 82, radius: 18, targetY: 2.8 }
 ] as const;
 
 function clamp(value: number, min: number, max: number) {
@@ -70,6 +80,10 @@ function hash2(x: number, y: number) {
 function markShadows(mesh: THREE.Mesh) {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
+}
+
+function isProtectedSpawnArea(x: number, z: number, extraRadius = 0) {
+    return TERRAIN_SPAWN_PADS.some((pad) => Math.hypot(x - pad.x, z - pad.z) < pad.radius + extraRadius);
 }
 
 export class TerrainBuilder {
@@ -343,12 +357,18 @@ export class TerrainBuilder {
             { x: 10, y: 3.2, z: -86, sx: 13, sy: 4.2, sz: 7, color: 0x5c4f43, rotationY: -0.08 }
         ];
 
-        ridgeMounds.forEach((config) => this.addRockMound(config));
+        ridgeMounds
+            .filter((config) => !isProtectedSpawnArea(config.x, config.z, Math.max(config.sx, config.sz) * 0.8))
+            .forEach((config) => this.addRockMound(config));
 
-        this.addCylinderMass({ x: -16, y: 2.8, z: 82, radius: 8, height: 5.6, color: 0x5e5146 });
-        this.addCylinderMass({ x: 52, y: 2.3, z: -78, radius: 6, height: 4.6, color: 0x5b4d42 });
-        this.addCylinderMass({ x: -78, y: 2.6, z: 92, radius: 7.4, height: 5.2, color: 0x5d5147 });
-        this.addCylinderMass({ x: 98, y: 2.8, z: 74, radius: 7.6, height: 5.4, color: 0x61544a });
+        [
+            { x: -16, y: 2.8, z: 82, radius: 8, height: 5.6, color: 0x5e5146 },
+            { x: 52, y: 2.3, z: -78, radius: 6, height: 4.6, color: 0x5b4d42 },
+            { x: -78, y: 2.6, z: 92, radius: 7.4, height: 5.2, color: 0x5d5147 },
+            { x: 98, y: 2.8, z: 74, radius: 7.6, height: 5.4, color: 0x61544a }
+        ]
+            .filter((config) => !isProtectedSpawnArea(config.x, config.z, config.radius * 1.25))
+            .forEach((config) => this.addCylinderMass(config));
     }
 
     addBoxMass(config: BoxMassConfig) {
