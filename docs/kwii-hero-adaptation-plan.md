@@ -294,6 +294,17 @@ Completed:
   - stronger side tanks
   - clearer forward gun read
 - the latest low shell is still intentionally simple, but it is now a coherent hero-mech blockout again rather than a broken scaffold
+- a follow-up `profile rhythm` pass then pushed the low shell closer to the original KW-II massing:
+  - guns moved further forward
+  - side tanks pushed lower and further back
+  - backpack and top shell enlarged to restore the heavier rear profile
+  - leg stance widened
+  - feet lengthened and widened so the mech reads as supported rather than perched on posts
+- a further `heavy-rhythm` pass then reinforced the source look:
+  - shoulder towers were made taller and heavier
+  - side tanks were enlarged into more obvious suspended masses
+  - legs were reshaped to read more like thigh-to-shin segments instead of uniform columns
+  - the front silhouette is now much closer to the original `KW-II` rhythm even though it is still intentionally low-detail
 - current low preview state is being judged from:
   - `docs/blender_exports/kwii_previews/kwii_low_front.png`
   - `docs/blender_exports/kwii_previews/kwii_low_side.png`
@@ -301,9 +312,9 @@ Completed:
 
 Next:
 - continue source-faithful hero refinement on the current clean shell:
-  - torso / shoulder rhythm
-  - side tank massing
-  - lower-body stance and feet
+  - torso / shoulder contour
+  - side tank and backpack contour
+  - thigh / shin breakup and feet silhouette
 - only after silhouette approval, resume:
   - ambiguous high review
   - regional low/high overlap prep
