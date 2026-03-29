@@ -434,6 +434,10 @@ Completed:
   - the gun housings, drums, braces, and barrels were tightened into a calmer side cluster
   - the side tanks were reduced a little again so they remain supportive under-masses rather than competing with the shoulder modules
 - this pass was also propagated into `KWII_STRIDE_TEST`, keeping the current stride shell aligned with the final contour-cleaned neutral shell
+- review then caught a real orientation bug in the weapon blockout:
+  - the guns had been stretched along the lateral axis, so in front view they looked like barrels pointing outward instead of forward
+  - the full gun chain was corrected so `gun -> barrel cluster -> muzzle` now extends along the mech's forward axis
+- that forward-axis weapon fix was also propagated into `KWII_STRIDE_TEST`
 
 Next:
 - continue source-faithful hero refinement on the current clean shell:
