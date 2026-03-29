@@ -310,6 +310,13 @@ Completed:
   - the side silhouette was deepened with a larger backpack, a heavier upper rear mass, and more pronounced suspended tank volume
   - the arms and guns were moved into a stronger forward/rear relationship so the mech no longer reads as a flat front-only block
   - the current shell is still only a blockout, but it now carries a much more credible `KW-II` front-to-back rhythm
+- a contour-focused pass then started replacing pure block scaling with more source-faithful shape logic:
+  - the torso now has clearer chest/waist breakup instead of reading as a single clean wedge
+  - the pelvis was tightened into a stronger lower guard / connector shape
+  - the arm blocks were reshaped to read more like shoulder-root + gun-housing volumes
+  - the side tanks were reshaped from simple capsules into heavier suspended masses with a better rear/underside read
+  - the feet and toes were given clearer heel/toe contour so the mech feels less like it is standing on flat slabs
+- this is still not a final lowpoly, but it is the first pass where the shell starts carrying some of the original mech's contour language rather than only its proportions
 - current low preview state is being judged from:
   - `docs/blender_exports/kwii_previews/kwii_low_front.png`
   - `docs/blender_exports/kwii_previews/kwii_low_side.png`
@@ -317,10 +324,10 @@ Completed:
 
 Next:
 - continue source-faithful hero refinement on the current clean shell:
-  - torso contour and chest/waist breakup
-  - shoulder / gun housing contour
-  - tank silhouette refinement from the side and 3/4 view
-  - knee/foot contour refinement rather than further gross scaling
+  - torso front and upper-back contour
+  - shoulder / gun housing contour and under-hanging detail rhythm
+  - tank contour refinement from the side and 3/4 view
+  - knee/foot contour refinement and stance polish
 - only after silhouette approval, resume:
   - ambiguous high review
   - regional low/high overlap prep
