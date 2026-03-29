@@ -258,19 +258,29 @@ Completed:
   - low and high bake objects now carry `kwii_bake_region` / `kwii_bake_role` props
   - region anchors were added:
     - `KWII_BAKE_TORSOPELVIS_ANCHOR`
-    - `KWII_BAKE_ARMS_ANCHOR`
-    - `KWII_BAKE_LEGS_ANCHOR`
+  - `KWII_BAKE_ARMS_ANCHOR`
+  - `KWII_BAKE_LEGS_ANCHOR`
   - ambiguous high parts are now isolated in `KWII_BAKE_REVIEW_HIGH`
   - current ambiguous high count: `17`
-- current lowpoly scaffold baseline after selective cuts: `984` triangles total
-- current pelvis + torso shell budget: `408` triangles
-- current arm + leg shell budget: `576` triangles
+- the previous intermediate low shell then proved structurally unreliable for silhouette review because of broken object/mesh transform offsets
+- instead of forcing bake prep on a bad shell, `KWII_LOW` was rebuilt cleanly from the larger `KWII_Blockout_*` guide meshes:
+  - `KWII_Low_Pelvis`
+  - `KWII_Low_Torso`
+  - `KWII_Low_Head`
+  - `KWII_Low_Arm_L`
+  - `KWII_Low_Arm_R`
+  - `KWII_Low_Leg_L`
+  - `KWII_Low_Leg_R`
+- this reset the low shell to a much cleaner hero-silhouette stage with:
+  - coherent body mass
+  - readable arm spacing
+  - readable leg stance
+  - stable transforms for preview and future cleanup
 - updated Blender work scene saved with lowpoly scaffolding
 
 Next:
-- manually review the `17` ambiguous high pieces and correct only obvious misclassifications
-- start regional low/high overlap prep for:
-  - torso + pelvis
-  - arms
-  - legs
+- refine the rebuilt clean shell into a less boxy hero silhouette
+- only after silhouette approval, resume:
+  - ambiguous high review
+  - regional low/high overlap prep
 - begin UV/material consolidation once the hero shell stops moving structurally
