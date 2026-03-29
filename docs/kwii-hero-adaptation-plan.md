@@ -356,6 +356,14 @@ Completed:
   - a small rear heel support block was added so the foot no longer reads as only a toe slab
 - `KWII_STRIDE_TEST` was then refreshed again from the new neutral shell so the stride check keeps matching the latest leg geometry
 - this still is not final source fidelity, but the lower body is now much closer to a real mech bird-leg than to a broken post-and-slab chain
+- one more leg-specific contour pass then moved the lower body closer to the source `KW-II` language:
+  - a dedicated `thigh plate` block was added so the upper leg can read as armor-over-structure instead of as a single simple prism
+  - the upper leg mass itself was slimmed and pushed into a steeper angle
+  - the knee was reduced again into a narrower pivot-like link
+  - the shin was lengthened and leaned further into the reverse-joint profile
+  - the foot base was stretched slightly further while keeping the heel support
+- `KWII_STRIDE_TEST` was refreshed from this new neutral state so the stride pose now includes the thigh-plate silhouette as well
+- the result is still intentionally blocky, but the leg now starts to carry one of the key source cues: a front-loaded armored thigh over a leaner reverse-jointed support chain
 
 Next:
 - continue source-faithful hero refinement on the current clean shell:
