@@ -206,8 +206,17 @@ Completed:
   - head
   - left/right arms
   - left/right legs
+- first-pass lowpoly blockout created in `KWII_LOW`:
+  - `KWII_Low_Pelvis`
+  - `KWII_Low_Torso`
+  - `KWII_Low_Arm_L`
+  - `KWII_Low_Arm_R`
+  - `KWII_Low_Leg_L`
+  - `KWII_Low_Leg_R`
+- current blockout baseline: `324` triangles total
+- updated Blender work scene saved with lowpoly scaffolding
 
 Next:
-- clean source collection
-- split or isolate high-detail work by gameplay regions
-- start lowpoly rebuild from the blockout guides
+- refine lowpoly silhouette from the blockout parts
+- add hard-surface cuts where they materially affect outline
+- prepare bake-friendly low/high overlap by region
