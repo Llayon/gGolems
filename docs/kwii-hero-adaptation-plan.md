@@ -386,6 +386,11 @@ Completed:
   - the existing front toe and inner toe were tightened
   - an additional outer toe support was added so the foot now reads as a wider multi-point mech foot rather than a single rectangular base
 - `KWII_STRIDE_TEST` was refreshed from that state too, so both neutral and stride poses now share the updated foot silhouette
+- one final toe-polish pass then tightened the front of the foot without changing the overall leg concept:
+  - the main foot plate was reduced slightly again
+  - the front toe, inner toe, and outer toe were shortened and brought into a more cohesive three-prong arrangement
+  - the heel remained strong enough to keep the foot planted, but the whole support assembly now reads less like a comb of separate bars and more like a compact mech paw
+- `KWII_STRIDE_TEST` was refreshed from this version as well, so the refined toe arrangement is present in both neutral and stride views
 
 Next:
 - continue source-faithful hero refinement on the current clean shell:
