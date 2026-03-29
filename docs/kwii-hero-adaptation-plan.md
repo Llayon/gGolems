@@ -213,10 +213,19 @@ Completed:
   - `KWII_Low_Arm_R`
   - `KWII_Low_Leg_L`
   - `KWII_Low_Leg_R`
-- current blockout baseline: `324` triangles total
+- `KWII_Low_Pelvis` and `KWII_Low_Torso` were then rebuilt into a first hard-surface hero shell with:
+  - central waist mass
+  - hip housings
+  - front glacis / crotch guard
+  - lower hull
+  - upper chest mass
+  - shoulder pods
+  - backpack / rear torso mass
+- current lowpoly scaffold baseline: `384` triangles total
+- current pelvis + torso shell budget: `192` triangles
 - updated Blender work scene saved with lowpoly scaffolding
 
 Next:
-- refine lowpoly silhouette from the blockout parts
-- add hard-surface cuts where they materially affect outline
+- refine arms and legs to match the stronger torso/pelvis silhouette
+- convert the current shell into a cleaner bake-ready lowpoly surface
 - prepare bake-friendly low/high overlap by region
