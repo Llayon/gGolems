@@ -221,11 +221,25 @@ Completed:
   - upper chest mass
   - shoulder pods
   - backpack / rear torso mass
-- current lowpoly scaffold baseline: `384` triangles total
+- `KWII_Low_Arm_L` and `KWII_Low_Arm_R` were then rebuilt into a first arm shell with:
+  - shoulder block
+  - upper arm hinge housing
+  - elbow node
+  - forearm / weapon mass
+  - muzzle block
+- `KWII_Low_Leg_L` and `KWII_Low_Leg_R` were then rebuilt into a first leg shell with:
+  - thigh armor block
+  - knee assembly
+  - shin housing
+  - rear calf mass
+  - ankle block
+  - foot wedge
+- current lowpoly scaffold baseline: `528` triangles total
 - current pelvis + torso shell budget: `192` triangles
+- current arm + leg shell budget: `336` triangles
 - updated Blender work scene saved with lowpoly scaffolding
 
 Next:
-- refine arms and legs to match the stronger torso/pelvis silhouette
 - convert the current shell into a cleaner bake-ready lowpoly surface
+- add selective hard-surface cuts only where they improve the gameplay silhouette
 - prepare bake-friendly low/high overlap by region
