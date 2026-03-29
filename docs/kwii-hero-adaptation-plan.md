@@ -277,9 +277,33 @@ Completed:
   - readable leg stance
   - stable transforms for preview and future cleanup
 - updated Blender work scene saved with lowpoly scaffolding
+- the preview pipeline was then repaired so silhouette checks are reliable again:
+  - the source mech in `KWII_SOURCE` was forced visible again for render checks
+  - preview camera clipping and framing were fixed
+  - fresh `kwii_source_*` and `kwii_low_*` preview renders now come from the actual working scene
+- once the rebuilt clean shell was visible again, it became clear that it had drifted too far from the original KW-II character:
+  - too generic
+  - too blocky
+  - too little of the original shoulder / tank / leg rhythm remained
+- bake work was therefore paused on purpose and replaced with a source-faithful silhouette pass
+- the current `KWII_LOW` has now been pushed back toward the source silhouette with:
+  - a narrowed tapered torso instead of a pure box chest
+  - a smaller pelvis connector so the legs read separately again
+  - visible spaced legs and feet instead of the lower body collapsing into one block
+  - stronger shoulder towers
+  - stronger side tanks
+  - clearer forward gun read
+- the latest low shell is still intentionally simple, but it is now a coherent hero-mech blockout again rather than a broken scaffold
+- current low preview state is being judged from:
+  - `docs/blender_exports/kwii_previews/kwii_low_front.png`
+  - `docs/blender_exports/kwii_previews/kwii_low_side.png`
+  - `docs/blender_exports/kwii_previews/kwii_low_iso.png`
 
 Next:
-- refine the rebuilt clean shell into a less boxy hero silhouette
+- continue source-faithful hero refinement on the current clean shell:
+  - torso / shoulder rhythm
+  - side tank massing
+  - lower-body stance and feet
 - only after silhouette approval, resume:
   - ambiguous high review
   - regional low/high overlap prep
