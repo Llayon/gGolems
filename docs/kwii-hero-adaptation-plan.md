@@ -472,6 +472,15 @@ Completed:
   - the shoulder pods and tails were pulled into a calmer 3/4 arc across the upper body
   - the side tanks, arms, housings, drums, and full gun chain were all tucked slightly inward/backward so the 3/4 view reads as a denser weapon package rather than a set of detached side sticks
   - those transform and mesh refreshes were propagated into `KWII_STRIDE_TEST` too, keeping the stride shell aligned with the updated neutral 3/4 read
+- one follow-up review then caught that the visible barrels still looked detached from the housing in front and 3/4 views:
+  - the actual gun chain had drifted too far forward along the firing axis, leaving visible gaps between `housing -> gun -> barrel -> muzzle`
+  - the full chain was pulled back and re-overlapped into the housing again:
+    - `GunDrum`
+    - `GunBrace`
+    - `Gun`
+    - `BarrelCluster`
+    - `MuzzleBlock`
+  - the corrected chain was then copied back into `KWII_STRIDE_TEST` as well, so neutral and stride again share the same attached gun package
 
 Next:
 - continue source-faithful hero refinement on the current clean shell:
