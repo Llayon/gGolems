@@ -438,6 +438,10 @@ Completed:
   - the guns had been stretched along the lateral axis, so in front view they looked like barrels pointing outward instead of forward
   - the full gun chain was corrected so `gun -> barrel cluster -> muzzle` now extends along the mech's forward axis
 - that forward-axis weapon fix was also propagated into `KWII_STRIDE_TEST`
+- a follow-up symmetry review then caught a real tank mesh drift:
+  - `KWII_Low_SideTank_L/R` no longer matched even though their transforms were mirrored
+  - the same drift existed in `KWII_Stride_SideTank_L/R`
+  - both right-side tanks were rebuilt as exact world-space mirrors of their left-side counterparts, restoring clean visual symmetry in both neutral and stride shells
 
 Next:
 - continue source-faithful hero refinement on the current clean shell:
