@@ -487,6 +487,12 @@ Completed:
   - the `GunBrace` was strengthened and tilted more aggressively so it reads as a real support strut
   - the `Gun` body was thickened, and the `BarrelCluster` was made denser and slightly longer so the front package reads as a compact multi-part weapon assembly
   - the same weapon-shape update was propagated into `KWII_STRIDE_TEST`, keeping the stride shell aligned with the refined neutral gun read
+- a final pre-bake shape pass then focused on the three remaining readability issues at once:
+  - the torso/front plate was trimmed back slightly so the cockpit could dominate the centerline more clearly
+  - the cockpit pod, nose, cheeks, and lower bar were pushed into a stronger forward/downward pilot module instead of reading as a thin insert inside the torso
+  - the backpack, top cap, shoulder pods, and shoulder tails were rebalanced into a denser upper silhouette so the mech keeps more of the source asset's top-heavy rhythm
+  - the side tanks were calmed slightly while the arm/gun package was tightened and thickened again, keeping the side-mounted weapon read heavy without falling apart into detached layers
+  - that last upper-body shape state was propagated into `KWII_STRIDE_TEST` as well, so stride and neutral now share the same strongest pre-bake silhouette reached so far
 
 Next:
 - continue source-faithful hero refinement on the current clean shell:
