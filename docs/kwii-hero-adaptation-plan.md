@@ -408,11 +408,20 @@ Completed:
   - the backpack was enlarged and pushed further rearward/upward so the mech carries more of the source asset's top-heavy back silhouette
   - the top cap was broadened and lowered slightly into a more integrated upper-head/upper-back bridge
 - `KWII_STRIDE_TEST` was refreshed from those torso/back changes as well, so the stride pose keeps the same heavier upper-body rhythm
+- a short whole-silhouette harmonization pass then tightened the overall relationship between the main masses:
+  - torso, backpack, and top cap were brought into a denser single upper-body stack
+  - shoulder pods were pulled slightly inward/downward so they read more like part of the same hull system
+  - the gun housing / barrel / tank cluster was tightened to reduce the feeling of detached side layers
+- this was not a detail pass; the goal was simply to make the mech read as one deliberate silhouette before any future UV/bake step
+- `KWII_STRIDE_TEST` was refreshed from that version too, so the current neutral and stride shells now share the same harmonized body rhythm
 
 Next:
 - continue source-faithful hero refinement on the current clean shell:
-  - torso front and upper-back contour
-  - shoulder / gun housing contour and under-hanging detail rhythm
+  - optional final contour cleanup pass if silhouette approval still demands it
+  - otherwise move to the next stage:
+    - ambiguous high review
+    - regional low/high overlap prep
+    - UV/material consolidation
   - tank contour refinement from the side and 3/4 view
   - bird-leg contour polish in side view
   - knee/foot contour refinement and stance polish
