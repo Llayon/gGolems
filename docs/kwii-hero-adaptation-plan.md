@@ -391,6 +391,12 @@ Completed:
   - the front toe, inner toe, and outer toe were shortened and brought into a more cohesive three-prong arrangement
   - the heel remained strong enough to keep the foot planted, but the whole support assembly now reads less like a comb of separate bars and more like a compact mech paw
 - `KWII_STRIDE_TEST` was refreshed from this version as well, so the refined toe arrangement is present in both neutral and stride views
+- after closing the lower-body pass, refinement moved to the shoulder and weapon cluster:
+  - the shoulder pods were repositioned and tilted toward a more source-like upper-module silhouette instead of reading as upright blocks
+  - the arm roots were brought into a cleaner relationship with the torso and the suspended tank mass
+  - a dedicated `gun housing` block was introduced so the barrels are no longer just floating rods through the arm volume
+  - the side tanks were adjusted upward/backward to read more like part of the same suspended shoulder-weapon assembly
+- `KWII_STRIDE_TEST` was refreshed from that updated upper-body state too, so stride previews keep matching the current hero shell
 
 Next:
 - continue source-faithful hero refinement on the current clean shell:
