@@ -238,13 +238,29 @@ Completed:
   - overlapping block masses replaced with cleaner outer-shell meshes
   - `non-manifold` edges reduced to `0` on all current lowpoly body parts
   - multiple mesh islands still remain by design where separate hard-surface shell panels are acceptable
-- current lowpoly scaffold baseline: `532` triangles total
-- current pelvis + torso shell budget: `192` triangles
-- current arm + leg shell budget: `340` triangles
+- selective hard-surface cuts were then added only where they materially improve gameplay silhouette:
+  - torso chest / shoulder chamfers
+  - pelvis front armor break
+  - arm shoulder and muzzle chamfers
+  - leg knee and toe bevels
+- regional bake-prep collections were created in `KWII_BAKE`:
+  - `KWII_BAKE_TORSOPELVIS_LOW`
+  - `KWII_BAKE_ARMS_LOW`
+  - `KWII_BAKE_LEGS_LOW`
+  - `KWII_BAKE_TORSOPELVIS_HIGH`
+  - `KWII_BAKE_ARMS_HIGH`
+  - `KWII_BAKE_LEGS_HIGH`
+- source high meshes are now roughly split by bbox-center proximity:
+  - torso/pelvis high: `78`
+  - arms high: `29`
+  - legs high: `49`
+- current lowpoly scaffold baseline after selective cuts: `984` triangles total
+- current pelvis + torso shell budget: `408` triangles
+- current arm + leg shell budget: `576` triangles
 - updated Blender work scene saved with lowpoly scaffolding
 
 Next:
-- add selective hard-surface cuts only where they improve the gameplay silhouette
+- validate the high-region split manually and correct obvious misclassifications
 - start regional low/high overlap prep for:
   - torso + pelvis
   - arms
