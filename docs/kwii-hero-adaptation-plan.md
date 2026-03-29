@@ -254,13 +254,21 @@ Completed:
   - torso/pelvis high: `78`
   - arms high: `29`
   - legs high: `49`
+- the bake structure was then tightened further:
+  - low and high bake objects now carry `kwii_bake_region` / `kwii_bake_role` props
+  - region anchors were added:
+    - `KWII_BAKE_TORSOPELVIS_ANCHOR`
+    - `KWII_BAKE_ARMS_ANCHOR`
+    - `KWII_BAKE_LEGS_ANCHOR`
+  - ambiguous high parts are now isolated in `KWII_BAKE_REVIEW_HIGH`
+  - current ambiguous high count: `17`
 - current lowpoly scaffold baseline after selective cuts: `984` triangles total
 - current pelvis + torso shell budget: `408` triangles
 - current arm + leg shell budget: `576` triangles
 - updated Blender work scene saved with lowpoly scaffolding
 
 Next:
-- validate the high-region split manually and correct obvious misclassifications
+- manually review the `17` ambiguous high pieces and correct only obvious misclassifications
 - start regional low/high overlap prep for:
   - torso + pelvis
   - arms
