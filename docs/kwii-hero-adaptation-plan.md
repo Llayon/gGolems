@@ -372,6 +372,13 @@ Completed:
   - the heel support was kept so the foot now reads as toe + inner support + heel rather than as one flat plate
 - `KWII_STRIDE_TEST` was refreshed from that state as well, so stride checks now include the extra mechanical read in the lower leg and foot
 - this is still not final lowpoly polish, but the legs now read much more like a mech structure and much less like placeholder boxes with a bend in them
+- a final leg-polish pass then tightened the proportions without adding any more major complexity:
+  - the thigh armor was narrowed and thinned slightly so it reads as a plate rather than as a second full limb block
+  - the knee and shin chain was slimmed and aligned into a cleaner upper-to-lower rhythm
+  - the calf link was reduced so it supports the silhouette without overpowering the main shin
+  - the foot base, toe, inner toe, and heel were all reduced slightly so the mech keeps a mechanical footing without looking oversized or slab-heavy
+- `KWII_STRIDE_TEST` was refreshed from that polished neutral state as well, so the stride pose now inherits the cleaner final leg proportions
+- at this point the lower body is still intentionally blocky, but it has crossed from rough construction into a usable hero-mech leg blockout
 
 Next:
 - continue source-faithful hero refinement on the current clean shell:
