@@ -379,6 +379,13 @@ Completed:
   - the foot base, toe, inner toe, and heel were all reduced slightly so the mech keeps a mechanical footing without looking oversized or slab-heavy
 - `KWII_STRIDE_TEST` was refreshed from that polished neutral state as well, so the stride pose now inherits the cleaner final leg proportions
 - at this point the lower body is still intentionally blocky, but it has crossed from rough construction into a usable hero-mech leg blockout
+- after comparing the foot directly against the source screenshots, the landing gear still read too much like a flat plate
+- a focused foot pass then adjusted only the support assembly:
+  - the main foot plate was narrowed and shortened
+  - the heel was strengthened as a clearer rear support
+  - the existing front toe and inner toe were tightened
+  - an additional outer toe support was added so the foot now reads as a wider multi-point mech foot rather than a single rectangular base
+- `KWII_STRIDE_TEST` was refreshed from that state too, so both neutral and stride poses now share the updated foot silhouette
 
 Next:
 - continue source-faithful hero refinement on the current clean shell:
