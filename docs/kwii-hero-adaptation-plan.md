@@ -36,6 +36,21 @@ The exported mech must contain stable nodes for the current gameplay code:
 
 The asset must also have a correct forward axis in Blender so runtime does not need another arbitrary `180°` offset fix.
 
+## Candidate Runtime Bone Map
+First-pass runtime candidates identified from the source rig:
+- pelvis/root: `DEF-HIPS`
+- torso base: `DEF-BODY`
+- upper torso: `DEF-UPPER-BODY`
+- head/camera cluster: `DEF-CAMERAS-BASE`
+- left arm: `DEF-ARM.L`
+- right arm: `DEF-ARM.R`
+- left arm weapon: `DEF-CANON.L` or `DEF-MINIGUN.L`
+- right arm weapon: `DEF-CANON.R` or `DEF-MINIGUN.R`
+- left leg: `DEF-LEG.L`
+- right leg: `DEF-LEG.R`
+
+These are only first-pass mapping candidates. Final export bones still need cleanup and reduction.
+
 ## A/B Gate
 KW-II should not replace the current hero mech until it is better than the current Marceline asset in:
 - third-person readability
@@ -179,8 +194,20 @@ Completed:
 - source asset baseline measured
 - Blender work collections created
 - isolated source import prepared in `KWII_SOURCE`
+- working scene saved as `mech-robot-kw-ii/kwii_gameprep.blend`
+- provisional runtime helpers created in Blender:
+  - `viewAnchor`
+  - `leftArmMount`
+  - `rightArmMount`
+  - `torsoMount`
+- blockout guide objects created for:
+  - pelvis
+  - torso
+  - head
+  - left/right arms
+  - left/right legs
 
 Next:
 - clean source collection
-- identify exact torso/arm/leg/runtime-socket nodes
-- start lowpoly region strategy
+- split or isolate high-detail work by gameplay regions
+- start lowpoly rebuild from the blockout guides
