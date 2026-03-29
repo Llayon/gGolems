@@ -9,6 +9,7 @@ import { DecalManager } from '../fx/DecalManager';
 import { MechCamera } from '../camera/MechCamera';
 import { getWeaponDefinition, WEAPON_MOUNT_ORDER } from '../combat/weapons';
 import type { WeaponFireRequest, WeaponGroupId, WeaponId, WeaponMountId, WeaponMountRuntime, WeaponStatusView } from '../combat/weaponTypes';
+import { createMarcelineSentinelVisual, type MarcelineSentinelVisual } from './MarcelineSentinelAsset';
 
 const _moveDir = new THREE.Vector3();
 const _currentVel = new THREE.Vector3();
@@ -20,6 +21,10 @@ const _bodyForward = new THREE.Vector3();
 const _desiredVel = new THREE.Vector3();
 const _sideVel = new THREE.Vector3();
 const _muzzleOffset = new THREE.Vector3();
+const _heroTwistQuat = new THREE.Quaternion();
+const _heroArmQuat = new THREE.Quaternion();
+const _heroUpAxis = new THREE.Vector3(0, 1, 0);
+const _heroPitchAxis = new THREE.Vector3(1, 0, 0);
 
 export type GolemSection =
     | 'head'
@@ -100,6 +105,7 @@ export class GolemController {
     bronzeMaterial: THREE.MeshStandardMaterial;
     runeMaterial: THREE.MeshStandardMaterial;
     boilerMaterial: THREE.MeshStandardMaterial;
+    heroVisual: MarcelineSentinelVisual | null = null;
     sections: GolemSectionState = createSectionState();
     maxSections: GolemSectionState = createSectionState();
     weaponMounts: Record<WeaponMountId, WeaponMountRuntime>;
@@ -162,6 +168,9 @@ export class GolemController {
         this.weaponMounts = this.createWeaponMounts();
         this.syncMountAvailabilityFromSections();
         this.syncAggregateHp();
+        if (isLocal) {
+            void this.initHeroVisual();
+        }
     }
 
     createWeaponMounts(): Record<WeaponMountId, WeaponMountRuntime> {
@@ -191,6 +200,19 @@ export class GolemController {
                 enabled: true
             }
         };
+    }
+
+    async initHeroVisual() {
+        const heroVisual = await createMarcelineSentinelVisual();
+        if (!heroVisual) return;
+
+        this.heroVisual = heroVisual;
+        this.model.add(heroVisual.root);
+        this.pelvis.visible = false;
+        this.legs.visible = false;
+        this.torso.visible = false;
+        this.syncHeroVisual();
+        this.applySectionVisuals();
     }
 
     triggerOverheat(duration = GOLEM.overheatDuration) {
@@ -258,11 +280,12 @@ export class GolemController {
     }
 
     applySectionVisuals() {
-        this.head.visible = this.sections.head > 0;
-        this.leftArm.visible = this.sections.leftArm > 0;
-        this.rightArm.visible = this.sections.rightArm > 0;
-        this.leftLeg.visible = this.sections.leftLeg > 0;
-        this.rightLeg.visible = this.sections.rightLeg > 0;
+        const showProcedural = !this.heroVisual;
+        this.head.visible = showProcedural && this.sections.head > 0;
+        this.leftArm.visible = showProcedural && this.sections.leftArm > 0;
+        this.rightArm.visible = showProcedural && this.sections.rightArm > 0;
+        this.leftLeg.visible = showProcedural && this.sections.leftLeg > 0;
+        this.rightLeg.visible = showProcedural && this.sections.rightLeg > 0;
     }
 
     applySectionDamage(section: GolemSection, damage: number) {
@@ -334,7 +357,16 @@ export class GolemController {
         }
     }
 
+    getHeroMountSocket(mountId: WeaponMountId) {
+        return this.heroVisual?.sockets[mountId] ?? null;
+    }
+
     getWeaponMuzzleOrigin(mountId: WeaponMountId, out: THREE.Vector3) {
+        const heroSocket = this.getHeroMountSocket(mountId);
+        if (heroSocket) {
+            return heroSocket.getWorldPosition(out);
+        }
+
         const mount = this.weaponMounts[mountId];
         const definition = getWeaponDefinition(mount.weaponId);
         _muzzleOffset.set(definition.muzzleOffset.x, definition.muzzleOffset.y, definition.muzzleOffset.z);
@@ -413,11 +445,62 @@ export class GolemController {
     }
 
     getViewAnchor(out: THREE.Vector3, facingYaw = this.torsoYaw) {
+        if (this.heroVisual && this.gameCamera?.mode === 'thirdPerson' && this.heroVisual.viewAnchor) {
+            return this.heroVisual.viewAnchor.getWorldPosition(out);
+        }
+
         this.torso.getWorldPosition(out);
         _viewForward.set(Math.sin(facingYaw), 0, -Math.cos(facingYaw));
         out.addScaledVector(_viewForward, 0.35);
         out.y += 1.45;
         return out;
+    }
+
+    syncHeroVisual() {
+        if (!this.heroVisual) return;
+
+        const torsoTwist = angleDiff(this.legYaw, this.torsoYaw);
+        const bob = Math.abs(Math.sin(this.walkCycle * 2)) * 0.08;
+        this.heroVisual.root.rotation.set(0, this.legYaw, 0);
+        this.heroVisual.root.position.set(0, 0, 0);
+
+        const pelvis = this.heroVisual.bones.pelvis;
+        const pelvisRest = this.heroVisual.restPose.pelvis;
+        if (pelvis && pelvisRest) {
+            pelvis.position.copy(pelvisRest.position);
+            pelvis.position.y += bob;
+            pelvis.quaternion.copy(pelvisRest.quaternion);
+        }
+
+        const torso = this.heroVisual.bones.torso;
+        const torsoRest = this.heroVisual.restPose.torso;
+        if (torso && torsoRest) {
+            torso.position.copy(torsoRest.position);
+            torso.position.y += bob * 0.65;
+            torso.quaternion.copy(torsoRest.quaternion);
+            _heroTwistQuat.setFromAxisAngle(_heroUpAxis, torsoTwist);
+            torso.quaternion.multiply(_heroTwistQuat);
+        }
+
+        const leftArm = this.heroVisual.bones.leftArm;
+        const leftArmRest = this.heroVisual.restPose.leftArm;
+        if (leftArm && leftArmRest) {
+            leftArm.position.copy(leftArmRest.position);
+            leftArm.quaternion.copy(leftArmRest.quaternion);
+            _heroArmQuat.setFromAxisAngle(_heroPitchAxis, -this.weaponRecoil.leftArmMount * 0.55);
+            leftArm.quaternion.multiply(_heroArmQuat);
+        }
+
+        const rightArm = this.heroVisual.bones.rightArm;
+        const rightArmRest = this.heroVisual.restPose.rightArm;
+        if (rightArm && rightArmRest) {
+            rightArm.position.copy(rightArmRest.position);
+            rightArm.quaternion.copy(rightArmRest.quaternion);
+            _heroArmQuat.setFromAxisAngle(_heroPitchAxis, -this.weaponRecoil.rightArmMount * 0.55);
+            rightArm.quaternion.multiply(_heroArmQuat);
+        }
+
+        this.heroVisual.root.updateMatrixWorld(true);
     }
 
     vent(particles: ParticleManager) {
@@ -578,6 +661,7 @@ export class GolemController {
 
         this.legs.rotation.y = this.legYaw;
         this.torso.rotation.y = this.torsoYaw;
+        this.syncHeroVisual();
 
         const vel = this.body.linvel();
         this.currentSpeed = new THREE.Vector3(vel.x, 0, vel.z).length();
@@ -639,6 +723,7 @@ export class GolemController {
         this.torso.position.z = this.weaponRecoil.torsoMount * 0.46;
         this.torso.rotation.x = -this.weaponRecoil.torsoMount * 0.14;
         this.pelvis.position.y = 2.0 + Math.abs(Math.sin(this.walkCycle * 2)) * 0.2;
+        this.syncHeroVisual();
 
         this.boiler.scale.set(1 + Math.sin(Date.now() * 0.002) * 0.02, 1, 1 + Math.sin(Date.now() * 0.002) * 0.02);
 
