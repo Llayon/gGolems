@@ -324,6 +324,12 @@ Completed:
   - the ankle and forefoot were repositioned as a forward support chain
   - this makes the mech read more like a bird-legged walker in `front` and `iso`, even though the side silhouette still needs more polish
 - from this point on, further leg refinement should prefer contour polish over more extreme global scaling
+- after that, a structural `hip connection` fix addressed the main construction error in the lower body:
+  - the pelvis was widened slightly
+  - explicit `hip socket` blocks were added
+  - the upper thighs were pulled back inward under the torso instead of hanging laterally detached
+  - the old visual gap between pelvis and thighs was removed, so the mech now reads as a single body supported by legs rather than a torso floating over separate leg blocks
+- this did not finish the bird-leg problem in profile, but it fixed the more serious issue: the legs now actually attach to the torso mass
 - current low preview state is being judged from:
   - `docs/blender_exports/kwii_previews/kwii_low_front.png`
   - `docs/blender_exports/kwii_previews/kwii_low_side.png`
@@ -336,6 +342,7 @@ Next:
   - tank contour refinement from the side and 3/4 view
   - bird-leg contour polish in side view
   - knee/foot contour refinement and stance polish
+  - hip-to-thigh contour cleanup now that the structural connection exists
 - only after silhouette approval, resume:
   - ambiguous high review
   - regional low/high overlap prep
