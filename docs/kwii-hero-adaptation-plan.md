@@ -499,6 +499,11 @@ Completed:
   - a dedicated `BackpackShelf` helper mass was added under the upper stack so the back reads in more than one layer
   - the shoulder pods, shoulder tails, side tanks, hip skirts, and pelvis were rebalanced slightly around those new rear masses so the mech has a more deliberate and interesting silhouette from behind
   - those rear-shape changes were also propagated into `KWII_STRIDE_TEST`, keeping the stride shell aligned with the strongest current rear read
+- a follow-up rear-interest pass then corrected the fact that the previous rear cleanup had become too regular and boxy:
+  - the backpack was slimmed and tilted so the upper rear silhouette is no longer dominated by a single flat slab
+  - the `BackpackShelf` and `RearSpine` masses were repositioned to create a clearer layered stack from the upper block down into the pelvis
+  - the top cap, shoulder pods, shoulder tails, side tanks, pelvis, hip skirts, and hip sockets were all rebalanced around that new stack to produce a more interesting and less monolithic rear 3P silhouette
+  - those updated rear-shape transforms were propagated into `KWII_STRIDE_TEST` as well, keeping the stride shell aligned with the stronger current back view
 
 Next:
 - continue source-faithful hero refinement on the current clean shell:
