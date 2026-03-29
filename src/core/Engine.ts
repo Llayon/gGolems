@@ -1135,8 +1135,8 @@ export class Game {
         golem.targetLegYaw = yaw;
         golem.targetTorsoYaw = yaw;
         golem.model.position.set(spawn.x, spawn.y - 1.5, spawn.z);
-        golem.legs.rotation.y = yaw;
-        golem.torso.rotation.y = yaw;
+        golem.legs.rotation.y = -yaw;
+        golem.torso.rotation.y = -yaw;
         golem.resetSections();
 
         if (golem.isLocal && golem.gameCamera) {

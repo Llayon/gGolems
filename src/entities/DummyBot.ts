@@ -241,7 +241,7 @@ export class DummyBot {
 
                 _aimPoint.copy(combatTarget ?? maneuverTarget ?? _currentPos);
                 _aimPoint.y = _currentPos.y;
-                this.mesh.rotation.y = Math.atan2(_aimPoint.x - _currentPos.x, -(_aimPoint.z - _currentPos.z));
+                this.mesh.rotation.y = -Math.atan2(_aimPoint.x - _currentPos.x, -(_aimPoint.z - _currentPos.z));
 
                 this.fireCooldown -= dt;
                 const combatDistance = combatTarget ? combatTarget.distanceTo(_currentPos) : Number.POSITIVE_INFINITY;

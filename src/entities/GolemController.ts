@@ -471,7 +471,7 @@ export class GolemController {
 
         const torsoTwist = angleDiff(this.legYaw, this.torsoYaw);
         const bob = Math.abs(Math.sin(this.walkCycle * 2)) * 0.08;
-        this.heroVisual.root.rotation.set(0, this.legYaw, 0);
+        this.heroVisual.root.rotation.set(0, -this.legYaw, 0);
         this.heroVisual.root.position.set(0, 0, 0);
 
         const pelvis = this.heroVisual.bones.pelvis;
@@ -488,7 +488,7 @@ export class GolemController {
             torso.position.copy(torsoRest.position);
             torso.position.y += bob * 0.65;
             torso.quaternion.copy(torsoRest.quaternion);
-            _heroTwistQuat.setFromAxisAngle(_heroUpAxis, torsoTwist);
+            _heroTwistQuat.setFromAxisAngle(_heroUpAxis, -torsoTwist);
             torso.quaternion.multiply(_heroTwistQuat);
         }
 
@@ -669,8 +669,8 @@ export class GolemController {
         const pos = this.body.translation();
         this.model.position.set(pos.x, pos.y - 1.5, pos.z);
 
-        this.legs.rotation.y = this.legYaw;
-        this.torso.rotation.y = this.torsoYaw;
+        this.legs.rotation.y = -this.legYaw;
+        this.torso.rotation.y = -this.torsoYaw;
         this.syncHeroVisual();
 
         const vel = this.body.linvel();
