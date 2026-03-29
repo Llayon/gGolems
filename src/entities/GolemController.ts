@@ -437,7 +437,16 @@ export class GolemController {
     }
 
     dash() {
-        const dir = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), this.legYaw);
+        _bodyForward.set(Math.sin(this.legYaw), 0, -Math.cos(this.legYaw));
+        const vel = this.body.linvel();
+        _currentVel.set(vel.x, 0, vel.z);
+        const forwardSpeed = _currentVel.dot(_bodyForward);
+        const dashSign = Math.abs(this.throttle) > 0.08
+            ? Math.sign(this.throttle)
+            : forwardSpeed < -0.5
+                ? -1
+                : 1;
+        const dir = _bodyForward.clone().multiplyScalar(dashSign || 1);
         if (this.isLocal) {
             this.body.applyImpulse({ x: dir.x * 840, y: 0, z: dir.z * 840 }, true);
             this.dashRecoveryTimer = 0.24;
@@ -445,10 +454,6 @@ export class GolemController {
     }
 
     getViewAnchor(out: THREE.Vector3, facingYaw = this.torsoYaw) {
-        if (this.heroVisual && this.gameCamera?.mode === 'thirdPerson' && this.heroVisual.viewAnchor) {
-            return this.heroVisual.viewAnchor.getWorldPosition(out);
-        }
-
         this.torso.getWorldPosition(out);
         _viewForward.set(Math.sin(facingYaw), 0, -Math.cos(facingYaw));
         out.addScaledVector(_viewForward, 0.35);

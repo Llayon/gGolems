@@ -1119,8 +1119,12 @@ export class Game {
     getSpawnYaw(spawn: THREE.Vector3) {
         _spawnDir.set(-spawn.x, 0, -spawn.z);
         if (_spawnDir.lengthSq() < 0.0001) return 0;
-        _spawnDir.normalize();
-        return Math.atan2(_spawnDir.x, -_spawnDir.z);
+
+        if (Math.abs(_spawnDir.x) >= Math.abs(_spawnDir.z)) {
+            return _spawnDir.x >= 0 ? Math.PI / 2 : -Math.PI / 2;
+        }
+
+        return _spawnDir.z >= 0 ? Math.PI : 0;
     }
 
     placeGolemAtSpawn(golem: GolemController, spawn: THREE.Vector3, yaw = this.getSpawnYaw(spawn)) {
