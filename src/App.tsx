@@ -50,6 +50,8 @@ type GameHudState = {
     cockpitKickRoll: number;
     cockpitFrameKick: number;
     cockpitFlash: number;
+    reticleKickX: number;
+    reticleKickY: number;
     hitConfirm: number;
     hitTargetHp: number;
     hitTargetMaxHp: number;
@@ -134,6 +136,8 @@ const initialGameState: GameHudState = {
     cockpitKickRoll: 0,
     cockpitFrameKick: 0,
     cockpitFlash: 0,
+    reticleKickX: 0,
+    reticleKickY: 0,
     hitConfirm: 0,
     hitTargetHp: 0,
     hitTargetMaxHp: 100,
@@ -981,8 +985,8 @@ export default function App() {
     const zeroLineTop = 69;
     const forwardFillHeight = `${Math.max(0, throttleRatio) * zeroLineTop}%`;
     const reverseFillHeight = `${Math.max(0, -throttleRatio / 0.45) * (100 - zeroLineTop)}%`;
-    const reticleX = Math.max(-320, Math.min(320, gameState.aimOffsetX * 320));
-    const reticleY = Math.max(-220, Math.min(220, -gameState.aimOffsetY * 180));
+    const reticleX = Math.max(-320, Math.min(320, gameState.aimOffsetX * 320 + gameState.reticleKickX));
+    const reticleY = Math.max(-220, Math.min(220, -gameState.aimOffsetY * 180 + gameState.reticleKickY));
     const hitConfirmRatio = clamp(gameState.hitConfirm / 0.22, 0, 1);
     const hitTargetRatio = clamp(gameState.hitTargetHp / Math.max(gameState.hitTargetMaxHp, 1), 0, 1);
     const mobileAimSensitivity = mobileAimPreset === 'LOW' ? 0.62 : mobileAimPreset === 'HIGH' ? 1.2 : 0.9;

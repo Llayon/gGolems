@@ -60,6 +60,8 @@ export class MechCamera {
     cockpitKickRoll = 0;
     cockpitFrameKick = 0;
     cockpitFlash = 0;
+    reticleKickX = 0;
+    reticleKickY = 0;
     recoilRecoveryRate = 10;
 
     baseFOV: number;
@@ -221,6 +223,8 @@ export class MechCamera {
         this.cockpitKickRoll *= Math.exp(-dt * this.recoilRecoveryRate * 1.1);
         this.cockpitFrameKick *= Math.exp(-dt * this.recoilRecoveryRate * 0.95);
         this.cockpitFlash *= Math.exp(-dt * this.recoilRecoveryRate * 1.45);
+        this.reticleKickX *= Math.exp(-dt * this.recoilRecoveryRate * 0.9);
+        this.reticleKickY *= Math.exp(-dt * this.recoilRecoveryRate * 0.82);
         this.recoilRecoveryRate += (10 - this.recoilRecoveryRate) * frameAlpha(0.08, dt);
 
         if (Math.abs(this.cockpitKickX) < 0.01) this.cockpitKickX = 0;
@@ -228,6 +232,8 @@ export class MechCamera {
         if (Math.abs(this.cockpitKickRoll) < 0.001) this.cockpitKickRoll = 0;
         if (this.cockpitFrameKick < 0.002) this.cockpitFrameKick = 0;
         if (this.cockpitFlash < 0.002) this.cockpitFlash = 0;
+        if (Math.abs(this.reticleKickX) < 0.02) this.reticleKickX = 0;
+        if (Math.abs(this.reticleKickY) < 0.02) this.reticleKickY = 0;
     }
 
     fireRecoilPulse(pulse: PendingRecoilPulse) {
@@ -235,6 +241,8 @@ export class MechCamera {
         this.cockpitKickY -= pulse.profile.cameraKickBack * 17 + pulse.profile.cameraPitchKick * 30;
         this.cockpitKickX += side * pulse.profile.cameraYawKick * 18;
         this.cockpitKickRoll += side * pulse.profile.cameraYawKick * 0.9;
+        this.reticleKickX += side * pulse.profile.cameraYawKick * 34;
+        this.reticleKickY -= pulse.profile.cameraKickBack * 9 + pulse.profile.cameraPitchKick * 18;
         this.cockpitFrameKick = Math.min(2.4, this.cockpitFrameKick + pulse.profile.frameKick);
         this.cockpitFlash = Math.min(1, this.cockpitFlash + pulse.profile.frameKick * 0.55);
         this.recoilRecoveryRate = Math.max(this.recoilRecoveryRate, 2.8 / Math.max(0.08, pulse.profile.recoveryTime));
@@ -283,7 +291,9 @@ export class MechCamera {
             y: this.cockpitKickY,
             roll: this.cockpitKickRoll,
             frame: this.cockpitFrameKick,
-            flash: this.cockpitFlash
+            flash: this.cockpitFlash,
+            reticleX: this.reticleKickX,
+            reticleY: this.reticleKickY
         };
     }
 }

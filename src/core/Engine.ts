@@ -1521,6 +1521,8 @@ export class Game {
             cockpitKickRoll: cockpitRecoil.roll,
             cockpitFrameKick: cockpitRecoil.frame,
             cockpitFlash: cockpitRecoil.flash,
+            reticleKickX: cockpitRecoil.reticleX,
+            reticleKickY: cockpitRecoil.reticleY,
             hitConfirm: this.hitConfirmTimer,
             hitTargetHp: this.hitTargetHp,
             hitTargetMaxHp: this.hitTargetMaxHp,
