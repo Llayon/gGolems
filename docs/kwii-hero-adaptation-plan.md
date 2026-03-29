@@ -427,11 +427,17 @@ Completed:
   - the side tank was kept as a supporting under-mass instead of dominating the side view on its own
 - all of those new or rebuilt masses were copied into `KWII_STRIDE_TEST` as well, so neutral and stride now share the same stronger front/weapon read
 - this is the first pass where the front silhouette starts to communicate cockpit, shoulder modules, and weapon systems as separate readable subsystems rather than as one merged block
+- after that larger rebuild, a final contour cleanup pass tightened the upper-body relationships without introducing new major blocks:
+  - the top cap was narrowed and integrated more cleanly into the upper stack
+  - the cockpit nose/bar/cheeks were tightened into a more coherent single front pod
+  - the shoulder pods and tails were pulled inward and simplified slightly so they support the silhouette instead of fragmenting it
+  - the gun housings, drums, braces, and barrels were tightened into a calmer side cluster
+  - the side tanks were reduced a little again so they remain supportive under-masses rather than competing with the shoulder modules
+- this pass was also propagated into `KWII_STRIDE_TEST`, keeping the current stride shell aligned with the final contour-cleaned neutral shell
 
 Next:
 - continue source-faithful hero refinement on the current clean shell:
-  - optional final contour cleanup pass if silhouette approval still demands it
-  - otherwise move to the next stage:
+  - if the silhouette is approved, move to the next stage:
     - ambiguous high review
     - regional low/high overlap prep
     - UV/material consolidation
