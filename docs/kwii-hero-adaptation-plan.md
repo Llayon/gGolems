@@ -397,6 +397,12 @@ Completed:
   - a dedicated `gun housing` block was introduced so the barrels are no longer just floating rods through the arm volume
   - the side tanks were adjusted upward/backward to read more like part of the same suspended shoulder-weapon assembly
 - `KWII_STRIDE_TEST` was refreshed from that updated upper-body state too, so stride previews keep matching the current hero shell
+- a second shoulder/weapon contour pass then pushed the upper cluster closer to the source silhouette:
+  - the shoulder pods were lengthened and lowered so they read more like long upper modules and less like upright blocks
+  - the arm root was tightened again so the weapon cluster sits as a denser side-mounted package
+  - the `gun housing` was enlarged into a more meaningful intermediate mass between the arm root and the barrel
+  - the side tank was reduced slightly and repositioned so it supports the under-hanging silhouette instead of overpowering the whole side view
+- `KWII_STRIDE_TEST` was refreshed from that version too, keeping stride previews aligned with the current shoulder and gun blockout
 
 Next:
 - continue source-faithful hero refinement on the current clean shell:
