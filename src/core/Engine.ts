@@ -1439,6 +1439,7 @@ export class Game {
         }
         this.particles.update(dt);
         this.debris.update(dt);
+        this.world.propManager.update(dt);
 
         // Network synchronization (20 Hz)
         this.networkTickTimer += dt;

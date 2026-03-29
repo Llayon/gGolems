@@ -85,6 +85,15 @@ type HouseSectionHit = {
     section: HouseSectionProp;
 };
 
+type FallingSection = {
+    root: THREE.Object3D;
+    velocity: THREE.Vector3;
+    spin: THREE.Vector3;
+    life: number;
+    settleTimer: number;
+    halfHeight: number;
+};
+
 const HOUSE_LAYOUT: LayoutEntry[] = [
     { x: -78, z: -34, rot: 0.12 },
     { x: -66, z: -18, rot: -0.08 },
@@ -176,6 +185,7 @@ export class PropManager {
     physics: RAPIER.World;
     heightAt: (x: number, z: number) => number;
     pendingHouseSnapshots: HouseSnapshot[] | null = null;
+    fallingSections: FallingSection[] = [];
 
     constructor(scene: THREE.Scene, physics: RAPIER.World, heightAt?: (x: number, z: number) => number) {
         this.scene = scene;
@@ -614,6 +624,39 @@ export class PropManager {
         return events;
     }
 
+    update(dt: number) {
+        for (let i = this.fallingSections.length - 1; i >= 0; i--) {
+            const piece = this.fallingSections[i];
+            piece.life -= dt;
+            piece.velocity.y -= dt * 9.6;
+            piece.velocity.multiplyScalar(0.992);
+            piece.root.position.addScaledVector(piece.velocity, dt);
+            piece.root.rotation.x += piece.spin.x * dt;
+            piece.root.rotation.y += piece.spin.y * dt;
+            piece.root.rotation.z += piece.spin.z * dt;
+
+            const groundY = this.heightAt(piece.root.position.x, piece.root.position.z) + piece.halfHeight;
+            if (piece.root.position.y <= groundY) {
+                piece.root.position.y = groundY;
+                if (Math.abs(piece.velocity.y) > 0.9) {
+                    piece.velocity.y *= -0.18;
+                    piece.velocity.x *= 0.84;
+                    piece.velocity.z *= 0.84;
+                    piece.spin.multiplyScalar(0.72);
+                } else {
+                    piece.velocity.set(0, 0, 0);
+                    piece.spin.multiplyScalar(0.86);
+                    piece.settleTimer += dt;
+                }
+            }
+
+            if (piece.life <= 0 || piece.settleTimer > 2.2) {
+                this.scene.remove(piece.root);
+                this.fallingSections.splice(i, 1);
+            }
+        }
+    }
+
     getSnapshot(): PropSnapshot {
         return {
             trees: this.trees.map((tree) => ({
@@ -779,7 +822,7 @@ export class PropManager {
         }
 
         const previousStage = house.stage;
-        this.destroyHouseSection(section);
+        this.destroyHouseSection(section, true, true, point);
         this.recomputeSectionedHouseState(house);
 
         if (this.shouldCollapseSectionedHouse(house)) {
@@ -825,9 +868,10 @@ export class PropManager {
     applyHouseSectionSnapshot(house: HouseProp, sectionState: Record<string, number>) {
         for (const section of house.sections) {
             const nextHp = sectionState[section.id] ?? section.maxHp;
+            const wasDestroyed = section.destroyed;
             section.hp = THREE.MathUtils.clamp(nextHp, 0, section.maxHp);
             if (section.hp <= 0) {
-                this.destroyHouseSection(section, false);
+                this.destroyHouseSection(section, false, !wasDestroyed);
             } else {
                 this.restoreHouseSection(section);
             }
@@ -893,11 +937,14 @@ export class PropManager {
         }
     }
 
-    destroyHouseSection(section: HouseSectionProp, removeHp = true) {
-        if (section.destroyed) return;
+    destroyHouseSection(section: HouseSectionProp, removeHp = true, spawnDrop = true, impulseOrigin?: THREE.Vector3) {
+        if (section.destroyed) return false;
         section.destroyed = true;
         if (removeHp) {
             section.hp = 0;
+        }
+        if (spawnDrop && this.shouldSpawnSectionDrop(section)) {
+            this.spawnSectionDrop(section, impulseOrigin);
         }
         section.root.visible = false;
         this.removeCollisionEntries(section.collisionEntries);
@@ -908,6 +955,7 @@ export class PropManager {
             this.physics.removeRigidBody(section.body);
             section.body = null;
         }
+        return true;
     }
 
     restoreHouseSection(section: HouseSectionProp, addCollision = true) {
@@ -983,8 +1031,66 @@ export class PropManager {
         this.collisionMeshes = this.collisionMeshes.filter((mesh) => !entryIds.has(mesh.id));
     }
 
+    shouldSpawnSectionDrop(section: HouseSectionProp) {
+        return section.sectionType === 'wall' || section.sectionType === 'roof' || section.sectionType === 'chimney';
+    }
+
+    spawnSectionDrop(section: HouseSectionProp, impulseOrigin?: THREE.Vector3) {
+        const clone = section.root.clone(true);
+        section.root.updateMatrixWorld(true);
+        const worldPosition = section.root.getWorldPosition(new THREE.Vector3());
+        const worldQuaternion = section.root.getWorldQuaternion(new THREE.Quaternion());
+        const worldScale = section.root.getWorldScale(new THREE.Vector3());
+        clone.position.copy(worldPosition);
+        clone.quaternion.copy(worldQuaternion);
+        clone.scale.copy(worldScale);
+        clone.visible = true;
+        clone.traverse((child) => {
+            if (child instanceof THREE.Mesh) {
+                child.castShadow = true;
+                child.receiveShadow = true;
+            }
+        });
+        this.scene.add(clone);
+
+        const bounds = new THREE.Box3().setFromObject(clone);
+        const size = bounds.getSize(new THREE.Vector3());
+        const halfHeight = Math.max(size.y * 0.5, 0.18);
+        const impulse = new THREE.Vector3(
+            (Math.random() - 0.5) * 2.4,
+            2.8 + Math.random() * 1.8,
+            (Math.random() - 0.5) * 2.4
+        );
+        if (impulseOrigin) {
+            const away = worldPosition.clone().sub(impulseOrigin);
+            away.y = 0;
+            if (away.lengthSq() > 0.001) {
+                away.normalize().multiplyScalar(2.2);
+                impulse.x += away.x;
+                impulse.z += away.z;
+            }
+        }
+
+        this.fallingSections.push({
+            root: clone,
+            velocity: impulse,
+            spin: new THREE.Vector3(
+                (Math.random() - 0.5) * 4.5,
+                (Math.random() - 0.5) * 4.5,
+                (Math.random() - 0.5) * 4.5
+            ),
+            life: 5.2,
+            settleTimer: 0,
+            halfHeight
+        });
+    }
+
     reset() {
         this.fxEvents = [];
+        for (const piece of this.fallingSections) {
+            this.scene.remove(piece.root);
+        }
+        this.fallingSections = [];
         for (const tree of this.trees) {
             tree.hp = tree.maxHp;
             tree.destroyed = false;
