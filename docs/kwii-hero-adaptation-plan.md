@@ -403,6 +403,11 @@ Completed:
   - the `gun housing` was enlarged into a more meaningful intermediate mass between the arm root and the barrel
   - the side tank was reduced slightly and repositioned so it supports the under-hanging silhouette instead of overpowering the whole side view
 - `KWII_STRIDE_TEST` was refreshed from that version too, keeping stride previews aligned with the current shoulder and gun blockout
+- refinement then moved into the torso front and upper-back masses:
+  - the torso/front block was shifted and scaled to read as a heavier central chest rather than a thin upright plate
+  - the backpack was enlarged and pushed further rearward/upward so the mech carries more of the source asset's top-heavy back silhouette
+  - the top cap was broadened and lowered slightly into a more integrated upper-head/upper-back bridge
+- `KWII_STRIDE_TEST` was refreshed from those torso/back changes as well, so the stride pose keeps the same heavier upper-body rhythm
 
 Next:
 - continue source-faithful hero refinement on the current clean shell:
