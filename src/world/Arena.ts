@@ -57,9 +57,9 @@ export class Arena {
             this.createSpawnPoint(30, 92)
         ];
         this.controlPointPositions = {
-            A: this.createSpawnPoint(-54, 8),
-            B: this.createSpawnPoint(0, -6),
-            C: this.createSpawnPoint(58, 12)
+            A: this.createGroundPoint(-54, 8),
+            B: this.createGroundPoint(0, -6),
+            C: this.createGroundPoint(58, 12)
         };
 
         this.createTeamBase(scene, 'blue', this.blueSpawns);
@@ -90,6 +90,10 @@ export class Arena {
 
     createSpawnPoint(x: number, z: number) {
         return new THREE.Vector3(x, this.surfaceY(x, z) + 3.6, z);
+    }
+
+    createGroundPoint(x: number, z: number) {
+        return new THREE.Vector3(x, this.surfaceY(x, z), z);
     }
 
     createTeamBase(scene: THREE.Scene, team: 'blue' | 'red', spawns: THREE.Vector3[]) {
