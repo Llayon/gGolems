@@ -1,9 +1,9 @@
 export const CAMERA = {
     lookForward: 11,
-    thirdPersonLookForward: 18,
-    thirdPersonDistance: 8.4,
-    thirdPersonHeight: 2.7,
-    thirdPersonShoulderOffset: 0.22,
+    thirdPersonLookForward: 8.5,
+    thirdPersonDistance: 5.4,
+    thirdPersonHeight: 1.8,
+    thirdPersonShoulderOffset: 0.04,
     aimRayDistance: 160,
 
     // FOV

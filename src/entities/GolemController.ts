@@ -448,7 +448,12 @@ export class GolemController {
                 : 1;
         const dir = _bodyForward.clone().multiplyScalar(dashSign || 1);
         if (this.isLocal) {
-            this.body.applyImpulse({ x: dir.x * 840, y: 0, z: dir.z * 840 }, true);
+            const dashSpeed = 16.5;
+            this.body.setLinvel({
+                x: dir.x * dashSpeed,
+                y: Math.min(vel.y, 0),
+                z: dir.z * dashSpeed
+            }, true);
             this.dashRecoveryTimer = 0.24;
         }
     }
