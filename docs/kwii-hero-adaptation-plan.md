@@ -455,6 +455,12 @@ Completed:
     - guns
     - barrel clusters
     - muzzle blocks
+- with symmetry restored, front readability was refined one more time before any bake prep:
+  - the central torso/front plate was narrowed slightly so the cockpit could dominate the center read more clearly
+  - the cockpit pod, nose, cheeks, and lower bar were all pulled further forward/downward and widened into a more obvious front-facing pilot block
+  - the shoulder pods were lowered and spread just enough to read more like top-mounted weapon shoulders than upright boxes
+  - the full gun package was pulled inward/downward and tightened so the housings, drums, braces, guns, and muzzle blocks read as denser side-mounted weapon clusters
+  - the same upper-body transform refresh was propagated into `KWII_STRIDE_TEST`, keeping stride and neutral aligned after the latest front-shape pass
 
 Next:
 - continue source-faithful hero refinement on the current clean shell:
