@@ -466,6 +466,12 @@ Completed:
   - both right-side arms were rebuilt as exact mirrored copies of the left side
   - after that, the whole arm/gun stack was nudged slightly inward on both sides so the barrels stop reading as overly splayed in front and 3/4 views
   - the stride shell was refreshed from that corrected neutral state too, so both neutral and stride now share the same tighter symmetric arm and gun placement
+- a short dedicated 3/4 silhouette cleanup then tightened the overall side package without introducing new geometry:
+  - the backpack and top cap were brought into a slightly denser upper stack so the mech reads as more top-heavy and less layered
+  - the cockpit pod and nose were pushed into a cleaner front-forward/downward relationship
+  - the shoulder pods and tails were pulled into a calmer 3/4 arc across the upper body
+  - the side tanks, arms, housings, drums, and full gun chain were all tucked slightly inward/backward so the 3/4 view reads as a denser weapon package rather than a set of detached side sticks
+  - those transform and mesh refreshes were propagated into `KWII_STRIDE_TEST` too, keeping the stride shell aligned with the updated neutral 3/4 read
 
 Next:
 - continue source-faithful hero refinement on the current clean shell:
