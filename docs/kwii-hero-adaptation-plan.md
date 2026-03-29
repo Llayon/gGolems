@@ -442,6 +442,19 @@ Completed:
   - `KWII_Low_SideTank_L/R` no longer matched even though their transforms were mirrored
   - the same drift existed in `KWII_Stride_SideTank_L/R`
   - both right-side tanks were rebuilt as exact world-space mirrors of their left-side counterparts, restoring clean visual symmetry in both neutral and stride shells
+- a broader front-pack symmetry review then found the same kind of mesh drift in the weapon package:
+  - `KWII_Low_GunHousing_L/R` and `KWII_Low_Gun_L/R` no longer matched as exact mirrors
+  - the same mismatch existed in `KWII_Stride_GunHousing_L/R` and `KWII_Stride_Gun_L/R`
+  - those right-side meshes were rebuilt from the left side in mirrored world space too
+  - a full follow-up audit confirmed the whole side package now reads as symmetric again:
+    - shoulder pods
+    - shoulder tails
+    - side tanks
+    - gun housings
+    - gun drums
+    - guns
+    - barrel clusters
+    - muzzle blocks
 
 Next:
 - continue source-faithful hero refinement on the current clean shell:
