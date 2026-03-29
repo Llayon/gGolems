@@ -414,6 +414,12 @@ Completed:
   - the gun housing / barrel / tank cluster was tightened to reduce the feeling of detached side layers
 - this was not a detail pass; the goal was simply to make the mech read as one deliberate silhouette before any future UV/bake step
 - `KWII_STRIDE_TEST` was refreshed from that version too, so the current neutral and stride shells now share the same harmonized body rhythm
+- a dedicated cockpit/weapon readability pass then targeted the two remaining weak spots in the front view:
+  - a separate `cockpit pod` was added and pulled lower/forward so the pilot module reads below the chest instead of disappearing inside it
+  - small side `cockpit cheek` blocks and a lower front bar were added to hint at the front-face framing from the source mech
+  - the weapon cluster received visible side `gun drum` masses and clearer muzzle blocks so the guns no longer read as simple rods through a box
+- those new cockpit and gun helper masses were copied into `KWII_STRIDE_TEST` as well, keeping stride previews aligned with the current hero shell
+- this does not finish the mech, but it moves the front read much closer to the source by making the cockpit and guns actually legible as distinct systems
 
 Next:
 - continue source-faithful hero refinement on the current clean shell:
