@@ -317,6 +317,13 @@ Completed:
   - the side tanks were reshaped from simple capsules into heavier suspended masses with a better rear/underside read
   - the feet and toes were given clearer heel/toe contour so the mech feels less like it is standing on flat slabs
 - this is still not a final lowpoly, but it is the first pass where the shell starts carrying some of the original mech's contour language rather than only its proportions
+- the leg work then hit the limit of what a single straight `KWII_Low_Leg_*` block could do
+- instead of continuing to over-deform one column, the lower body was moved toward a more correct structural blockout:
+  - each leg now reads as separate thigh and shin masses rather than one uninterrupted pillar
+  - the reverse knee was pulled out as a clearer rearward joint block
+  - the ankle and forefoot were repositioned as a forward support chain
+  - this makes the mech read more like a bird-legged walker in `front` and `iso`, even though the side silhouette still needs more polish
+- from this point on, further leg refinement should prefer contour polish over more extreme global scaling
 - current low preview state is being judged from:
   - `docs/blender_exports/kwii_previews/kwii_low_front.png`
   - `docs/blender_exports/kwii_previews/kwii_low_side.png`
@@ -327,6 +334,7 @@ Next:
   - torso front and upper-back contour
   - shoulder / gun housing contour and under-hanging detail rhythm
   - tank contour refinement from the side and 3/4 view
+  - bird-leg contour polish in side view
   - knee/foot contour refinement and stance polish
 - only after silhouette approval, resume:
   - ambiguous high review
