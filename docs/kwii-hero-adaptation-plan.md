@@ -493,6 +493,12 @@ Completed:
   - the backpack, top cap, shoulder pods, and shoulder tails were rebalanced into a denser upper silhouette so the mech keeps more of the source asset's top-heavy rhythm
   - the side tanks were calmed slightly while the arm/gun package was tightened and thickened again, keeping the side-mounted weapon read heavy without falling apart into detached layers
   - that last upper-body shape state was propagated into `KWII_STRIDE_TEST` as well, so stride and neutral now share the same strongest pre-bake silhouette reached so far
+- because third-person readability depends heavily on the back view too, the rear silhouette then received its own focused pass:
+  - the backpack was pushed into a denser upper rear mass instead of reading as one flat box
+  - a dedicated `RearSpine` helper mass was added to bridge the rear torso down toward the pelvis
+  - a dedicated `BackpackShelf` helper mass was added under the upper stack so the back reads in more than one layer
+  - the shoulder pods, shoulder tails, side tanks, hip skirts, and pelvis were rebalanced slightly around those new rear masses so the mech has a more deliberate and interesting silhouette from behind
+  - those rear-shape changes were also propagated into `KWII_STRIDE_TEST`, keeping the stride shell aligned with the strongest current rear read
 
 Next:
 - continue source-faithful hero refinement on the current clean shell:
