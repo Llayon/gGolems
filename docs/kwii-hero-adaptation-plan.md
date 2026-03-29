@@ -1,0 +1,186 @@
+# KW-II Hero Mech Adaptation Plan
+
+## Goal
+Turn `mech-robot-kw-ii` into a web-ready hero mech for the local player while preserving silhouette and gameplay readability.
+
+This is a hard-surface game-asset reduction pipeline, not a full character-retopology exercise.
+
+## Source Asset Baseline
+- Source: [mech_model.fbx](../mech-robot-kw-ii/source/model/mech_model.fbx)
+- Current imported source:
+  - ~`86.6k` triangles
+  - `162` bones
+  - `156` mesh objects
+  - `3` materials
+  - has animation data including a walk action
+
+## Runtime Budgets
+- Geometry target: `10k-12k triangles`
+- Acceptable fallback: `15k triangles`
+- Runtime skeleton target: `25-40` bones
+- Vertex influences: `<= 4` per vertex
+- Materials: `1`, acceptable fallback `2`
+- Textures:
+  - BaseColor `1024`
+  - Normal `1024`
+  - ORM packed `512-1024`
+  - Emissive `512`
+- Preferred `GLB`: `3-6 MB`
+
+## Runtime Contract
+The exported mech must contain stable nodes for the current gameplay code:
+- `viewAnchor`
+- `leftArmMount`
+- `rightArmMount`
+- `torsoMount`
+
+The asset must also have a correct forward axis in Blender so runtime does not need another arbitrary `180°` offset fix.
+
+## A/B Gate
+KW-II should not replace the current hero mech until it is better than the current Marceline asset in:
+- third-person readability
+- camera framing
+- weapon mount correctness
+- torso twist readability
+- runtime performance
+- bundle impact
+
+## Execution Phases
+
+### Pass 0. Proxy Validation
+Before reduction work:
+- validate scale in game space
+- validate general silhouette in third-person
+- validate likely mount placement
+- validate whether the mech is worth adapting at all
+
+### Pass 1. Source Freeze and Blender Workspace
+Keep source files untouched:
+- [mech_model.blend](../mech-robot-kw-ii/source/model/mech_model.blend)
+- [mech_model.fbx](../mech-robot-kw-ii/source/model/mech_model.fbx)
+
+Use a separate working scene and collection layout:
+- `KWII_WORK`
+- `KWII_SOURCE`
+- `KWII_HIGH`
+- `KWII_LOW`
+- `KWII_BAKE`
+- `KWII_EXPORT`
+
+### Pass 2. High Cleanup
+Prepare source for baking:
+- remove junk and hidden internals that do not affect exterior bake
+- normalize transforms
+- confirm actual facing
+- isolate regions:
+  - pelvis
+  - torso
+  - head
+  - left arm
+  - right arm
+  - left leg
+  - right leg
+  - weapon housings
+
+### Pass 3. Lowpoly Rebuild
+Do not retopo the whole mech as one organic mesh.
+
+Rebuild the lowpoly by rigid regions:
+- torso + pelvis
+- arms + weapon housings
+- legs + feet
+- head + hero details
+
+Keep silhouette geometry.
+Bake small and medium detail.
+
+Internal target budget:
+- torso + pelvis: `3k-3.5k`
+- arms + housings: `2k-2.5k`
+- legs + feet: `3k-3.5k`
+- head + accents: `1k-1.5k`
+
+### Pass 4. UV and Materials
+- consolidate to `1-2` materials
+- build one clean UV layout
+- keep consistent texel density
+- avoid fragmented texture sets
+
+### Pass 5. Bake Detail
+Bake from high to low:
+- Normal
+- AO
+- optional support masks if useful
+
+Bake by region if whole-mech bake produces artifacts:
+- torso
+- arms
+- legs
+
+### Pass 6. Runtime Skeleton
+Reduce runtime bones to `25-40`.
+
+Keep only bones needed for:
+- pelvis/root
+- torso
+- head
+- arms
+- legs
+- feet
+- weapon pivots if required
+
+Remove runtime export of:
+- IK bones
+- MCH bones
+- rig controls
+- helper wires and non-deforming internals
+
+### Pass 7. Sockets
+Add and verify:
+- `viewAnchor`
+- `leftArmMount`
+- `rightArmMount`
+- `torsoMount`
+
+### Pass 8. Animation Scope
+First pass only needs:
+- `idle`
+- `walk`
+- optional simple damage/death clip if cheap
+
+Do not try to bring the full source action set into the first export.
+
+### Pass 9. Export and Web Compression
+Export a `GLB` candidate and then optimize:
+- reduce texture resolution
+- remove unused actions
+- remove orphan materials/data
+- use geometry compression where practical
+
+### Pass 10. Controlled Integration
+Integrate KW-II only for the local player first.
+
+Keep current Marceline mech as fallback.
+Do not switch bots or remote players to KW-II in the first pass.
+
+## Acceptance Criteria
+- `10k-12k` triangles, or at most `15k` if silhouette requires it
+- `<= 40` runtime bones
+- `<= 4` weights per vertex
+- `1-2` materials
+- proper sockets exported
+- correct forward axis
+- local-player integration works cleanly
+- third-person framing is better than the current hero mech
+- runtime cost remains acceptable for the web build
+
+## Current Status
+Completed:
+- source asset baseline measured
+- Blender work collections created
+- isolated source import prepared in `KWII_SOURCE`
+
+Next:
+- clean source collection
+- identify exact torso/arm/leg/runtime-socket nodes
+- start lowpoly region strategy
