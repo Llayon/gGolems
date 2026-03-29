@@ -8,7 +8,15 @@ type FirebaseLobbyStatus = {
 
 const isDev = Boolean((import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV);
 
-const env = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env ?? {};
+type FirebaseEnv = {
+    VITE_FIREBASE_API_KEY?: string;
+    VITE_FIREBASE_AUTH_DOMAIN?: string;
+    VITE_FIREBASE_DATABASE_URL?: string;
+    VITE_FIREBASE_PROJECT_ID?: string;
+    VITE_FIREBASE_APP_ID?: string;
+};
+
+const env = ((import.meta as ImportMeta & { env?: FirebaseEnv }).env ?? {}) as FirebaseEnv;
 
 const config = {
     apiKey: env.VITE_FIREBASE_API_KEY,

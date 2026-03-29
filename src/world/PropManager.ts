@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import sectionedHouseUrl from '../assets/props/VillagePrefab_House_A_breakable_web.glb?url';
 
 type LayoutEntry = { x: number; z: number; rot?: number; scale?: number };
 
@@ -14,6 +16,7 @@ export type HouseSnapshot = {
     id: string;
     hp: number;
     stage: 0 | 1 | 2;
+    sections?: Record<string, number>;
 };
 
 export type PropSnapshot = {
@@ -42,20 +45,44 @@ type TreeProp = {
     destroyed: boolean;
     fallAngle: number;
     position: THREE.Vector3;
+    scale: number;
 };
 
 type HouseProp = {
     id: string;
     root: THREE.Group;
-    intact: THREE.Group;
-    damaged: THREE.Group;
-    rubble: THREE.Group;
+    intact?: THREE.Group;
+    damaged?: THREE.Group;
+    rubble?: THREE.Group;
     body: RAPIER.RigidBody | null;
     hp: number;
     maxHp: number;
     stage: 0 | 1 | 2;
     collisionEntries: THREE.Mesh[];
     position: THREE.Vector3;
+    prefabKind: 'procedural' | 'sectioned';
+    sections: HouseSectionProp[];
+    sectionById: Map<string, HouseSectionProp>;
+    loaded: boolean;
+};
+
+type HouseSectionProp = {
+    id: string;
+    root: THREE.Object3D;
+    meshes: THREE.Mesh[];
+    body: RAPIER.RigidBody | null;
+    hp: number;
+    maxHp: number;
+    destroyed: boolean;
+    destructible: boolean;
+    sectionType: string;
+    position: THREE.Vector3;
+    collisionEntries: THREE.Mesh[];
+};
+
+type HouseSectionHit = {
+    house: HouseProp;
+    section: HouseSectionProp;
 };
 
 const HOUSE_LAYOUT: LayoutEntry[] = [
@@ -113,16 +140,42 @@ function collectMeshes(root: THREE.Object3D) {
     return meshes;
 }
 
+const houseLoader = new GLTFLoader();
+let housePrefabTemplatePromise: Promise<THREE.Group> | null = null;
+
+const HOUSE_COLLAPSIBLE_SECTION_IDS = [
+    'SEC_FRONT_LEFT',
+    'SEC_FRONT_CENTER',
+    'SEC_FRONT_RIGHT',
+    'SEC_BACK_LEFT',
+    'SEC_BACK_CENTER',
+    'SEC_BACK_RIGHT',
+    'SEC_LEFT_SIDE',
+    'SEC_RIGHT_SIDE'
+];
+
+function loadSectionedHouseTemplate() {
+    if (!housePrefabTemplatePromise) {
+        housePrefabTemplatePromise = houseLoader.loadAsync(sectionedHouseUrl).then((gltf) => {
+            gltf.scene.updateMatrixWorld(true);
+            return gltf.scene as THREE.Group;
+        });
+    }
+    return housePrefabTemplatePromise;
+}
+
 export class PropManager {
     collisionMeshes: THREE.Mesh[] = [];
     trees: TreeProp[] = [];
     houses: HouseProp[] = [];
     treeByObjectId = new Map<number, TreeProp>();
     houseByObjectId = new Map<number, HouseProp>();
+    houseSectionByObjectId = new Map<number, HouseSectionHit>();
     fxEvents: PropFxEvent[] = [];
     scene: THREE.Scene;
     physics: RAPIER.World;
     heightAt: (x: number, z: number) => number;
+    pendingHouseSnapshots: HouseSnapshot[] | null = null;
 
     constructor(scene: THREE.Scene, physics: RAPIER.World, heightAt?: (x: number, z: number) => number) {
         this.scene = scene;
@@ -137,7 +190,25 @@ export class PropManager {
         this.addTrees();
     }
 
-    addHouses() {
+    async addHouses() {
+        try {
+            const template = await loadSectionedHouseTemplate();
+            this.addSectionedHouses(template);
+            if (this.pendingHouseSnapshots) {
+                this.applyHouseSnapshots(this.pendingHouseSnapshots);
+                this.pendingHouseSnapshots = null;
+            }
+        } catch (error) {
+            console.warn('Failed to load sectioned village house prefab. Falling back to procedural houses.', error);
+            this.addProceduralHouses();
+            if (this.pendingHouseSnapshots) {
+                this.applyHouseSnapshots(this.pendingHouseSnapshots);
+                this.pendingHouseSnapshots = null;
+            }
+        }
+    }
+
+    addProceduralHouses() {
         HOUSE_LAYOUT.forEach((layout, index) => {
             const root = new THREE.Group();
             root.position.set(layout.x, this.heightAt(layout.x, layout.z), layout.z);
@@ -245,7 +316,11 @@ export class PropManager {
                 maxHp: 60,
                 stage: 0,
                 collisionEntries: [],
-                position: root.position.clone()
+                position: root.position.clone(),
+                prefabKind: 'procedural',
+                sections: [],
+                sectionById: new Map(),
+                loaded: true
             };
 
             for (const mesh of [...collectMeshes(intact), ...collectMeshes(damaged)]) {
@@ -255,6 +330,168 @@ export class PropManager {
             this.setHouseStage(house, 0);
             this.houses.push(house);
         });
+    }
+
+    addSectionedHouses(template: THREE.Group) {
+        HOUSE_LAYOUT.forEach((layout, index) => {
+            const root = template.clone(true);
+            root.name = `village-house-${index}`;
+            root.position.set(layout.x, this.heightAt(layout.x, layout.z), layout.z);
+            root.rotation.y = layout.rot ?? 0;
+            this.scene.add(root);
+            root.updateMatrixWorld(true);
+            markShadows(root);
+
+            const house: HouseProp = {
+                id: `house-${index}`,
+                root,
+                body: null,
+                hp: 0,
+                maxHp: 0,
+                stage: 0,
+                collisionEntries: [],
+                position: root.position.clone(),
+                prefabKind: 'sectioned',
+                sections: [],
+                sectionById: new Map(),
+                loaded: true
+            };
+
+            root.traverse((node) => {
+                const userData = node.userData ?? {};
+                const sectionId = typeof userData.section_id === 'string'
+                    ? userData.section_id
+                    : (node.name.startsWith('SEC_') ? node.name : null);
+                if (!sectionId || house.sectionById.has(sectionId)) return;
+
+                const meshes = collectMeshes(node);
+                if (meshes.length === 0) return;
+
+                const sectionType = typeof userData.section_type === 'string'
+                    ? userData.section_type
+                    : this.inferSectionType(sectionId);
+                const maxHp = Math.max(1, Number(userData.hp ?? this.defaultSectionHp(sectionId, sectionType)));
+                const destructible = userData.destructible !== false;
+                const position = node.getWorldPosition(new THREE.Vector3());
+                const section: HouseSectionProp = {
+                    id: sectionId,
+                    root: node,
+                    meshes,
+                    body: null,
+                    hp: maxHp,
+                    maxHp,
+                    destroyed: false,
+                    destructible,
+                    sectionType,
+                    position,
+                    collisionEntries: []
+                };
+
+                section.collisionEntries = this.shouldSectionBlockShots(section)
+                    ? [...meshes]
+                    : [];
+                if (section.collisionEntries.length > 0) {
+                    this.collisionMeshes.push(...section.collisionEntries);
+                    house.collisionEntries.push(...section.collisionEntries);
+                }
+                for (const mesh of meshes) {
+                    this.houseByObjectId.set(mesh.id, house);
+                    this.houseSectionByObjectId.set(mesh.id, { house, section });
+                }
+
+                if (this.shouldSectionBlockMovement(section)) {
+                    section.body = this.createSectionBody(node);
+                }
+
+                house.sections.push(section);
+                house.sectionById.set(section.id, section);
+            });
+
+            this.recomputeSectionedHouseState(house);
+            this.houses.push(house);
+        });
+    }
+
+    inferSectionType(sectionId: string) {
+        if (sectionId.includes('FOUNDATION')) return 'foundation';
+        if (sectionId.includes('ROOF')) return 'roof';
+        if (sectionId.includes('CHIMNEY')) return 'chimney';
+        if (sectionId.includes('DECO')) return 'prop';
+        return 'wall';
+    }
+
+    defaultSectionHp(sectionId: string, sectionType: string) {
+        if (sectionType === 'roof') return 180;
+        if (sectionType === 'chimney') return 60;
+        if (sectionType === 'prop') return 40;
+        if (sectionType === 'foundation') return 9999;
+        if (sectionId.includes('CENTER')) return 140;
+        return 120;
+    }
+
+    shouldSectionBlockMovement(section: HouseSectionProp) {
+        return section.sectionType === 'wall' || section.sectionType === 'chimney';
+    }
+
+    shouldSectionBlockShots(section: HouseSectionProp) {
+        return section.sectionType !== 'foundation' && section.destroyed === false;
+    }
+
+    createSectionBody(sectionRoot: THREE.Object3D) {
+        const bounds = this.computeSectionLocalBounds(sectionRoot);
+        if (!bounds) return null;
+
+        const size = bounds.getSize(new THREE.Vector3());
+        if (size.x < 0.08 || size.y < 0.08 || size.z < 0.08) {
+            return null;
+        }
+
+        const centerLocal = bounds.getCenter(new THREE.Vector3());
+        const centerWorld = sectionRoot.localToWorld(centerLocal.clone());
+        const rotation = sectionRoot.getWorldQuaternion(new THREE.Quaternion());
+
+        const bodyDesc = RAPIER.RigidBodyDesc.fixed()
+            .setTranslation(centerWorld.x, centerWorld.y, centerWorld.z)
+            .setRotation({
+                x: rotation.x,
+                y: rotation.y,
+                z: rotation.z,
+                w: rotation.w
+            });
+        const body = this.physics.createRigidBody(bodyDesc);
+        const colliderDesc = RAPIER.ColliderDesc.cuboid(
+            Math.max(size.x * 0.48, 0.05),
+            Math.max(size.y * 0.48, 0.05),
+            Math.max(size.z * 0.48, 0.05)
+        );
+        this.physics.createCollider(colliderDesc, body);
+        return body;
+    }
+
+    computeSectionLocalBounds(sectionRoot: THREE.Object3D) {
+        sectionRoot.updateMatrixWorld(true);
+        const sectionInverse = new THREE.Matrix4().copy(sectionRoot.matrixWorld).invert();
+        const box = new THREE.Box3();
+        let hasGeometry = false;
+
+        sectionRoot.traverse((child) => {
+            if (!(child instanceof THREE.Mesh) || !child.geometry) return;
+            if (!child.geometry.boundingBox) {
+                child.geometry.computeBoundingBox();
+            }
+            if (!child.geometry.boundingBox) return;
+            const localBox = child.geometry.boundingBox.clone();
+            const childToSection = new THREE.Matrix4().multiplyMatrices(sectionInverse, child.matrixWorld);
+            localBox.applyMatrix4(childToSection);
+            if (!hasGeometry) {
+                box.copy(localBox);
+                hasGeometry = true;
+            } else {
+                box.union(localBox);
+            }
+        });
+
+        return hasGeometry ? box : null;
     }
 
     addPeople() {
@@ -341,7 +578,8 @@ export class PropManager {
                 maxHp: 30,
                 destroyed: false,
                 fallAngle: 0,
-                position: root.position.clone()
+                position: root.position.clone(),
+                scale
             };
 
             this.treeByObjectId.set(trunk.id, tree);
@@ -387,7 +625,10 @@ export class PropManager {
             houses: this.houses.map((house) => ({
                 id: house.id,
                 hp: house.hp,
-                stage: house.stage
+                stage: house.stage,
+                sections: house.sections.length > 0
+                    ? Object.fromEntries(house.sections.map((section) => [section.id, section.hp]))
+                    : undefined
             }))
         };
     }
@@ -405,6 +646,10 @@ export class PropManager {
             return;
         }
 
+        if (snapshot.houses.length > 0 && this.houses.length === 0) {
+            this.pendingHouseSnapshots = snapshot.houses;
+        }
+
         for (const state of snapshot.trees) {
             const tree = this.trees.find((entry) => entry.id === state.id);
             if (!tree) continue;
@@ -417,8 +662,30 @@ export class PropManager {
         for (const state of snapshot.houses) {
             const house = this.houses.find((entry) => entry.id === state.id);
             if (!house) continue;
+            if (house.sections.length > 0 && state.sections) {
+                this.applyHouseSectionSnapshot(house, state.sections);
+                continue;
+            }
             house.hp = state.hp;
             this.setHouseStage(house, state.stage);
+        }
+    }
+
+    applyHouseSnapshots(houseStates: HouseSnapshot[]) {
+        if (this.houses.length === 0) {
+            this.pendingHouseSnapshots = houseStates;
+            return;
+        }
+
+        for (const state of houseStates) {
+            const house = this.houses.find((entry) => entry.id === state.id);
+            if (!house) continue;
+            if (house.sections.length > 0 && state.sections) {
+                this.applyHouseSectionSnapshot(house, state.sections);
+            } else {
+                house.hp = state.hp;
+                this.setHouseStage(house, state.stage);
+            }
         }
     }
 
@@ -427,6 +694,14 @@ export class PropManager {
         if (tree) {
             if (authoritative) {
                 this.damageTree(tree, damage, point);
+            }
+            return true;
+        }
+
+        const sectionHit = this.findHouseSection(object);
+        if (sectionHit) {
+            if (authoritative) {
+                this.damageHouseSection(sectionHit.house, sectionHit.section, damage, point);
             }
             return true;
         }
@@ -462,6 +737,16 @@ export class PropManager {
         return null;
     }
 
+    findHouseSection(object: THREE.Object3D | null) {
+        let current: THREE.Object3D | null = object;
+        while (current) {
+            const hit = this.houseSectionByObjectId.get(current.id);
+            if (hit) return hit;
+            current = current.parent;
+        }
+        return null;
+    }
+
     damageTree(tree: TreeProp, damage: number, point: THREE.Vector3) {
         if (tree.destroyed) return;
         tree.hp = Math.max(0, tree.hp - damage);
@@ -474,6 +759,7 @@ export class PropManager {
     }
 
     damageHouse(house: HouseProp, damage: number) {
+        if (house.sections.length > 0) return;
         if (house.stage === 2) return;
         house.hp = Math.max(0, house.hp - damage);
 
@@ -482,6 +768,32 @@ export class PropManager {
         } else if (house.hp <= house.maxHp * 0.55) {
             this.setHouseStage(house, 1);
         }
+    }
+
+    damageHouseSection(house: HouseProp, section: HouseSectionProp, damage: number, point: THREE.Vector3) {
+        if (section.destroyed || !section.destructible) return;
+        section.hp = Math.max(0, section.hp - damage);
+        if (section.hp > 0) {
+            this.recomputeSectionedHouseState(house);
+            return;
+        }
+
+        const previousStage = house.stage;
+        this.destroyHouseSection(section);
+        this.recomputeSectionedHouseState(house);
+
+        if (this.shouldCollapseSectionedHouse(house)) {
+            this.collapseSectionedHouse(house);
+        }
+
+        const eventKind = house.stage === 2 && previousStage < 2 ? 'house_collapse' : 'house_damage';
+        this.fxEvents.push({
+            kind: eventKind,
+            x: point.x,
+            y: point.y,
+            z: point.z,
+            intensity: eventKind === 'house_collapse' ? 1.35 : 0.95
+        });
     }
 
     setTreeDestroyed(tree: TreeProp, fallAngle: number) {
@@ -510,7 +822,115 @@ export class PropManager {
         });
     }
 
+    applyHouseSectionSnapshot(house: HouseProp, sectionState: Record<string, number>) {
+        for (const section of house.sections) {
+            const nextHp = sectionState[section.id] ?? section.maxHp;
+            section.hp = THREE.MathUtils.clamp(nextHp, 0, section.maxHp);
+            if (section.hp <= 0) {
+                this.destroyHouseSection(section, false);
+            } else {
+                this.restoreHouseSection(section);
+            }
+        }
+        if (this.shouldCollapseSectionedHouse(house)) {
+            this.collapseSectionedHouse(house, false);
+        } else {
+            this.restoreCollapsedHouseExtras(house, false);
+        }
+        this.recomputeSectionedHouseState(house);
+    }
+
+    recomputeSectionedHouseState(house: HouseProp) {
+        if (house.sections.length === 0) return;
+        const trackedSections = house.sections.filter((section) => section.destructible && section.sectionType !== 'foundation');
+        house.maxHp = trackedSections.reduce((sum, section) => sum + section.maxHp, 0);
+        house.hp = trackedSections.reduce((sum, section) => sum + section.hp, 0);
+        const destroyedCount = trackedSections.filter((section) => section.destroyed).length;
+        if (destroyedCount === 0) {
+            house.stage = 0;
+        } else if (this.shouldCollapseSectionedHouse(house)) {
+            house.stage = 2;
+        } else {
+            house.stage = 1;
+        }
+    }
+
+    shouldCollapseSectionedHouse(house: HouseProp) {
+        if (house.sections.length === 0) return false;
+        return HOUSE_COLLAPSIBLE_SECTION_IDS.every((sectionId) => {
+            const section = house.sectionById.get(sectionId);
+            return !section || section.destroyed;
+        });
+    }
+
+    collapseSectionedHouse(house: HouseProp, emitFx = true) {
+        for (const section of house.sections) {
+            if (section.sectionType === 'roof' || section.sectionType === 'chimney' || section.sectionType === 'prop') {
+                this.destroyHouseSection(section, false);
+            }
+        }
+        house.stage = 2;
+        this.recomputeSectionedHouseState(house);
+        if (emitFx) {
+            this.fxEvents.push({
+                kind: 'house_collapse',
+                x: house.position.x,
+                y: 1.8,
+                z: house.position.z,
+                intensity: 1.35
+            });
+        }
+    }
+
+    restoreCollapsedHouseExtras(house: HouseProp, recompute = true) {
+        for (const section of house.sections) {
+            if ((section.sectionType === 'roof' || section.sectionType === 'chimney' || section.sectionType === 'prop') && section.hp > 0) {
+                this.restoreHouseSection(section);
+            }
+        }
+        if (recompute) {
+            this.recomputeSectionedHouseState(house);
+        }
+    }
+
+    destroyHouseSection(section: HouseSectionProp, removeHp = true) {
+        if (section.destroyed) return;
+        section.destroyed = true;
+        if (removeHp) {
+            section.hp = 0;
+        }
+        section.root.visible = false;
+        this.removeCollisionEntries(section.collisionEntries);
+        for (const mesh of section.meshes) {
+            this.houseSectionByObjectId.delete(mesh.id);
+        }
+        if (section.body) {
+            this.physics.removeRigidBody(section.body);
+            section.body = null;
+        }
+    }
+
+    restoreHouseSection(section: HouseSectionProp, addCollision = true) {
+        if (!section.destroyed && section.body) return;
+        section.destroyed = false;
+        section.root.visible = true;
+        if (addCollision) {
+            this.removeCollisionEntries(section.collisionEntries);
+            this.collisionMeshes.push(...section.collisionEntries);
+        }
+        for (const mesh of section.meshes) {
+            const hit = this.houseByObjectId.get(mesh.id);
+            if (hit) {
+                this.houseSectionByObjectId.set(mesh.id, { house: hit, section });
+            }
+        }
+        if (!section.body && this.shouldSectionBlockMovement(section)) {
+            section.body = this.createSectionBody(section.root);
+        }
+    }
+
     setHouseStage(house: HouseProp, stage: 0 | 1 | 2) {
+        if (!house.intact || !house.damaged || !house.rubble) return;
         if (house.stage === stage && house.collisionEntries.length > 0) return;
 
         const previousStage = house.stage;
@@ -555,5 +975,51 @@ export class PropManager {
         const previousIds = new Set(previous.map((mesh) => mesh.id));
         this.collisionMeshes = this.collisionMeshes.filter((mesh) => !previousIds.has(mesh.id));
         this.collisionMeshes.push(...next);
+    }
+
+    removeCollisionEntries(entries: THREE.Mesh[]) {
+        if (entries.length === 0) return;
+        const entryIds = new Set(entries.map((mesh) => mesh.id));
+        this.collisionMeshes = this.collisionMeshes.filter((mesh) => !entryIds.has(mesh.id));
+    }
+
+    reset() {
+        this.fxEvents = [];
+        for (const tree of this.trees) {
+            tree.hp = tree.maxHp;
+            tree.destroyed = false;
+            tree.fallAngle = 0;
+            tree.intact.visible = true;
+            tree.stump.visible = false;
+            tree.fallen.visible = false;
+            tree.fallen.rotation.set(0, 0, 0);
+            if (!tree.body) {
+                const bodyDesc = RAPIER.RigidBodyDesc.fixed().setTranslation(tree.position.x, tree.position.y + 1.7 * tree.scale, tree.position.z);
+                tree.body = this.physics.createRigidBody(bodyDesc);
+                const colliderDesc = RAPIER.ColliderDesc.cylinder(1.7 * tree.scale, 0.42 * tree.scale);
+                this.physics.createCollider(colliderDesc, tree.body);
+            }
+            if (!this.collisionMeshes.includes(tree.trunk)) {
+                this.collisionMeshes.push(tree.trunk);
+            }
+            this.treeByObjectId.set(tree.trunk.id, tree);
+        }
+
+        for (const house of this.houses) {
+            if (house.sections.length > 0) {
+                for (const section of house.sections) {
+                    section.hp = section.maxHp;
+                    this.restoreHouseSection(section);
+                }
+                this.restoreCollapsedHouseExtras(house);
+                this.recomputeSectionedHouseState(house);
+            } else {
+                house.hp = house.maxHp;
+                if (!house.body) {
+                    house.body = this.createHouseBody(house.position, house.root.rotation.y);
+                }
+                this.setHouseStage(house, 0);
+            }
+        }
     }
 }

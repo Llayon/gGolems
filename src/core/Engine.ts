@@ -186,6 +186,7 @@ export class Game {
         };
         this.respawnWaves = { blue: 0, red: 0 };
         this.controlPoints.reset();
+        this.world.propManager.reset();
 
         this.localRespawnState.alive = true;
         this.localRespawnState.timer = 0;
