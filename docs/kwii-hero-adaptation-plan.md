@@ -481,6 +481,12 @@ Completed:
     - `BarrelCluster`
     - `MuzzleBlock`
   - the corrected chain was then copied back into `KWII_STRIDE_TEST` as well, so neutral and stride again share the same attached gun package
+- once the chain was reattached, the gun silhouette itself was refined to read closer to the source mech:
+  - the `GunHousing` was made chunkier so the weapon no longer reads as a stick through a box
+  - the `GunDrum` was enlarged and pulled into a more supportive under-slung position
+  - the `GunBrace` was strengthened and tilted more aggressively so it reads as a real support strut
+  - the `Gun` body was thickened, and the `BarrelCluster` was made denser and slightly longer so the front package reads as a compact multi-part weapon assembly
+  - the same weapon-shape update was propagated into `KWII_STRIDE_TEST`, keeping the stride shell aligned with the refined neutral gun read
 
 Next:
 - continue source-faithful hero refinement on the current clean shell:
