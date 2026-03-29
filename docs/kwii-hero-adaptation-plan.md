@@ -420,6 +420,13 @@ Completed:
   - the weapon cluster received visible side `gun drum` masses and clearer muzzle blocks so the guns no longer read as simple rods through a box
 - those new cockpit and gun helper masses were copied into `KWII_STRIDE_TEST` as well, keeping stride previews aligned with the current hero shell
 - this does not finish the mech, but it moves the front read much closer to the source by making the cockpit and guns actually legible as distinct systems
+- the first cockpit/gun readability pass still proved too subtle in front view, so a larger shape-pass followed:
+  - the cockpit cluster was rebuilt into a clearer forward/downward nose using a larger `cockpit pod`, a dedicated lower `cockpit nose`, stronger side cheeks, and a lower front bar
+  - the weapon cluster was rebuilt into a more layered side assembly with a tighter arm root, a clearer `gun housing`, a visible side `gun drum`, a supporting `gun brace`, and a distinct `barrel cluster + muzzle block`
+  - the upper shoulder modules were extended with rear tail masses so they read more like long top-mounted weapon casings and less like simple boxes
+  - the side tank was kept as a supporting under-mass instead of dominating the side view on its own
+- all of those new or rebuilt masses were copied into `KWII_STRIDE_TEST` as well, so neutral and stride now share the same stronger front/weapon read
+- this is the first pass where the front silhouette starts to communicate cockpit, shoulder modules, and weapon systems as separate readable subsystems rather than as one merged block
 
 Next:
 - continue source-faithful hero refinement on the current clean shell:
