@@ -466,12 +466,18 @@ export class GolemController {
         return out;
     }
 
+    getThirdPersonAnchor(out: THREE.Vector3) {
+        this.pelvis.getWorldPosition(out);
+        out.y += 1.05;
+        return out;
+    }
+
     syncHeroVisual() {
         if (!this.heroVisual) return;
 
         const torsoTwist = angleDiff(this.legYaw, this.torsoYaw);
         const bob = Math.abs(Math.sin(this.walkCycle * 2)) * 0.08;
-        this.heroVisual.root.rotation.set(0, -this.legYaw, 0);
+        this.heroVisual.root.rotation.set(0, Math.PI - this.legYaw, 0);
         this.heroVisual.root.position.set(0, 0, 0);
 
         const pelvis = this.heroVisual.bones.pelvis;
@@ -697,7 +703,11 @@ export class GolemController {
             }
         } else {
             this.walkCycle = this.gameCamera.walkCycle * Math.PI * 2;
-            this.getViewAnchor(_cameraAnchor, this.legYaw);
+            if (this.gameCamera.mode === 'thirdPerson') {
+                this.getThirdPersonAnchor(_cameraAnchor);
+            } else {
+                this.getViewAnchor(_cameraAnchor, this.legYaw);
+            }
 
             this.gameCamera.update(
                 _cameraAnchor,
