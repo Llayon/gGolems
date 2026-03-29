@@ -461,6 +461,11 @@ Completed:
   - the shoulder pods were lowered and spread just enough to read more like top-mounted weapon shoulders than upright boxes
   - the full gun package was pulled inward/downward and tightened so the housings, drums, braces, guns, and muzzle blocks read as denser side-mounted weapon clusters
   - the same upper-body transform refresh was propagated into `KWII_STRIDE_TEST`, keeping stride and neutral aligned after the latest front-shape pass
+- a final front audit then caught one more real asymmetry in the side-mounted weapon package:
+  - `KWII_Low_Arm_L/R` still did not match as exact mirrors, and the same mismatch existed in `KWII_Stride_Arm_L/R`
+  - both right-side arms were rebuilt as exact mirrored copies of the left side
+  - after that, the whole arm/gun stack was nudged slightly inward on both sides so the barrels stop reading as overly splayed in front and 3/4 views
+  - the stride shell was refreshed from that corrected neutral state too, so both neutral and stride now share the same tighter symmetric arm and gun placement
 
 Next:
 - continue source-faithful hero refinement on the current clean shell:
