@@ -234,12 +234,19 @@ Completed:
   - rear calf mass
   - ankle block
   - foot wedge
-- current lowpoly scaffold baseline: `528` triangles total
+- the shell was then cleaned into a more bake-ready outer hull pass:
+  - overlapping block masses replaced with cleaner outer-shell meshes
+  - `non-manifold` edges reduced to `0` on all current lowpoly body parts
+  - multiple mesh islands still remain by design where separate hard-surface shell panels are acceptable
+- current lowpoly scaffold baseline: `532` triangles total
 - current pelvis + torso shell budget: `192` triangles
-- current arm + leg shell budget: `336` triangles
+- current arm + leg shell budget: `340` triangles
 - updated Blender work scene saved with lowpoly scaffolding
 
 Next:
-- convert the current shell into a cleaner bake-ready lowpoly surface
 - add selective hard-surface cuts only where they improve the gameplay silhouette
-- prepare bake-friendly low/high overlap by region
+- start regional low/high overlap prep for:
+  - torso + pelvis
+  - arms
+  - legs
+- begin UV/material consolidation once the hero shell stops moving structurally
