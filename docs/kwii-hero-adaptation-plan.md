@@ -334,6 +334,28 @@ Completed:
   - `docs/blender_exports/kwii_previews/kwii_low_front.png`
   - `docs/blender_exports/kwii_previews/kwii_low_side.png`
   - `docs/blender_exports/kwii_previews/kwii_low_iso.png`
+- after comparing the low shell directly against source side-view screenshots, it became clear that neutral silhouette alone was not enough:
+  - the source side reference was showing a walk phase, not a neutral stance
+  - the perceived mismatch was therefore partly leg shape and partly gait projection
+- a separate `KWII_STRIDE_TEST` collection was created to evaluate stride silhouette without destabilizing `KWII_LOW`
+- the lower body then received a stronger bird-leg pass:
+  - hip sockets were enlarged slightly so the leg chain starts from a more credible support point
+  - the thigh mass was shortened and tilted so it reads as an upper leg instead of a vertical post
+  - the knee was tightened into a clearer pivot block
+  - the shin was pushed into a longer diagonal support shape
+  - the ankle and footplate were stretched into a more load-bearing digitigrade base
+  - the toe was extended forward so the foot reads less like a flat slab
+- after the neutral leg chain was updated, `KWII_STRIDE_TEST` was rebuilt from the refreshed base shell and re-posed with the visible left leg forward
+- this does not finish the leg work, but it moves the lower body from "attached but column-like" to a more credible bird-leg structure in both neutral and stride checks
+- the next leg pass focused specifically on side contour rather than whole-chain repositioning:
+  - the hip socket was deepened so the thigh reads as rooted in a real side plate
+  - the thigh was reshaped into a broader slanted armor plate instead of a short vertical block
+  - the knee was tightened into a narrower pivot-like link
+  - the shin was lengthened and angled more aggressively to reinforce the reverse-joint read
+  - the footplate was lengthened and flattened into a more load-bearing base
+  - a small rear heel support block was added so the foot no longer reads as only a toe slab
+- `KWII_STRIDE_TEST` was then refreshed again from the new neutral shell so the stride check keeps matching the latest leg geometry
+- this still is not final source fidelity, but the lower body is now much closer to a real mech bird-leg than to a broken post-and-slab chain
 
 Next:
 - continue source-faithful hero refinement on the current clean shell:
