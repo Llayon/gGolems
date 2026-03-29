@@ -364,6 +364,14 @@ Completed:
   - the foot base was stretched slightly further while keeping the heel support
 - `KWII_STRIDE_TEST` was refreshed from this new neutral state so the stride pose now includes the thigh-plate silhouette as well
 - the result is still intentionally blocky, but the leg now starts to carry one of the key source cues: a front-loaded armored thigh over a leaner reverse-jointed support chain
+- a deeper mechanical leg pass then pushed the lower body further away from simple blockout language:
+  - a rear `calf link` element was added to suggest a second structural/support member behind the main shin
+  - an additional inner toe support was added so the foot reads less like a single slab and more like a mech footing assembly
+  - the thigh block was slimmed again while the added thigh plate remained the dominant armored silhouette
+  - the knee and shin were narrowed and lengthened so the visible support chain feels lighter under the armor mass
+  - the heel support was kept so the foot now reads as toe + inner support + heel rather than as one flat plate
+- `KWII_STRIDE_TEST` was refreshed from that state as well, so stride checks now include the extra mechanical read in the lower leg and foot
+- this is still not final lowpoly polish, but the legs now read much more like a mech structure and much less like placeholder boxes with a bend in them
 
 Next:
 - continue source-faithful hero refinement on the current clean shell:
