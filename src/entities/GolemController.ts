@@ -26,6 +26,7 @@ const _heroArmQuat = new THREE.Quaternion();
 const _heroLegQuat = new THREE.Quaternion();
 const _heroUpAxis = new THREE.Vector3(0, 1, 0);
 const _heroPitchAxis = new THREE.Vector3(1, 0, 0);
+const _heroRigOffset = new THREE.Vector3();
 
 export type GolemSection =
     | 'head'
@@ -493,6 +494,26 @@ export class GolemController {
             node.position.copy(rest.position);
             node.quaternion.copy(rest.quaternion);
         };
+        const offsetRigNodes = (nodes: THREE.Object3D[], offset: THREE.Vector3) => {
+            if (nodes.length === 0) return;
+            for (const node of nodes) {
+                node.position.add(offset);
+            }
+        };
+        const rotateRigNodesAroundPivot = (
+            nodes: THREE.Object3D[],
+            pivot: THREE.Vector3 | null,
+            axis: THREE.Vector3,
+            angle: number
+        ) => {
+            if (!pivot || nodes.length === 0 || Math.abs(angle) <= 0.0001) return;
+            _heroTwistQuat.setFromAxisAngle(axis, angle);
+            for (const node of nodes) {
+                _heroRigOffset.copy(node.position).sub(pivot).applyQuaternion(_heroTwistQuat);
+                node.position.copy(pivot).add(_heroRigOffset);
+                node.quaternion.premultiply(_heroTwistQuat);
+            }
+        };
 
         resetNode(this.heroVisual.bones.pelvis, this.heroVisual.restPose.pelvis);
         resetNode(this.heroVisual.bones.waist, this.heroVisual.restPose.waist);
@@ -554,6 +575,7 @@ export class GolemController {
         const bob = Math.abs(Math.sin(gaitPhase * 2)) * 0.08 * (0.35 + locomotionAmount * 0.65);
         this.heroVisual.root.rotation.set(0, Math.PI - this.legYaw, 0);
         this.heroVisual.root.position.set(0, 0, 0);
+        const torsoRigNodes = this.heroVisual.torsoRigNodes;
 
         const pelvis = this.heroVisual.bones.pelvis;
         const pelvisRest = this.heroVisual.restPose.pelvis;
@@ -561,29 +583,21 @@ export class GolemController {
             pelvis.position.y += bob;
         }
 
-        const waist = this.heroVisual.bones.waist;
-        const waistRest = this.heroVisual.restPose.waist;
-        if (waist && waistRest) {
-            _heroTwistQuat.setFromAxisAngle(_heroUpAxis, -torsoTwist * 0.45);
-            waist.quaternion.multiply(_heroTwistQuat);
-        }
-
         const torso = this.heroVisual.bones.torso;
         const torsoRest = this.heroVisual.restPose.torso;
-        if (torso && torsoRest) {
+        if (torsoRigNodes.length > 0) {
+            offsetRigNodes(torsoRigNodes, _heroRigOffset.set(0, bob * 0.65, 0));
+            rotateRigNodesAroundPivot(torsoRigNodes, this.heroVisual.torsoPivot, _heroUpAxis, -torsoTwist);
+        } else if (torso && torsoRest) {
             torso.position.y += bob * 0.65;
             _heroTwistQuat.setFromAxisAngle(_heroUpAxis, -torsoTwist);
             torso.quaternion.multiply(_heroTwistQuat);
+        }
+
+        if (torso && torsoRest) {
             torso.position.z += this.weaponRecoil.torsoMount * 0.18;
             _heroArmQuat.setFromAxisAngle(_heroPitchAxis, -this.weaponRecoil.torsoMount * 0.08);
             torso.quaternion.multiply(_heroArmQuat);
-        }
-
-        const head = this.heroVisual.bones.head;
-        const headRest = this.heroVisual.restPose.head;
-        if (head && headRest) {
-            _heroTwistQuat.setFromAxisAngle(_heroUpAxis, -torsoTwist * 0.18);
-            head.quaternion.multiply(_heroTwistQuat);
         }
 
         const leftArm = this.heroVisual.bones.leftArm;

@@ -21,6 +21,8 @@ type HeroAnimationKey = 'idle' | 'walk' | 'fire' | 'torsoTurn';
 export type KWIIRuntimeVisual = {
     root: THREE.Group;
     viewAnchor: THREE.Object3D | null;
+    torsoPivot: THREE.Vector3 | null;
+    torsoRigNodes: THREE.Bone[];
     sockets: Partial<Record<WeaponMountId, THREE.Object3D>>;
     bones: {
         pelvis: THREE.Bone | null;
@@ -80,6 +82,7 @@ let heroTexturesPromise: Promise<{
     };
 }> | null = null;
 const materialAssignments = materialAssignmentsRaw as Record<string, HeroMaterialKey>;
+const HERO_TORSO_RIG_PATTERN = /^(?:DEF-(?:UPPER-BODY|BODY(?:-|$)|ARM(?:-|L|R|$)|CANON|CAMERAS|MCH-BODY)|MCH-BODY)/;
 
 function markShadow(root: THREE.Object3D) {
     root.traverse((child) => {
@@ -153,6 +156,17 @@ function getBone(root: THREE.Object3D, ...names: string[]) {
         }
     }
     return null;
+}
+
+function collectHeroTorsoRig(root: THREE.Object3D) {
+    const rigNodes: THREE.Bone[] = [];
+    root.traverse((node) => {
+        if (!(node instanceof THREE.Bone)) return;
+        if (node.parent?.name !== 'Armature') return;
+        if (!HERO_TORSO_RIG_PATTERN.test(node.name)) return;
+        rigNodes.push(node);
+    });
+    return rigNodes;
 }
 
 function findClip(animations: THREE.AnimationClip[], ...names: string[]) {
@@ -325,14 +339,20 @@ export async function createKWIIRuntimeVisual(): Promise<KWIIRuntimeVisual | nul
         torsoTurn: setupLoopAction(mixer, findClip(template.animations, 'KWII_TorsoTurn'), false) ?? undefined
     };
 
+    const waistBone = getBone(root, 'DEF-BODY');
+    const torsoBone = getBone(root, 'DEF-UPPER-BODY');
     const viewAnchor = root.getObjectByName('viewAnchor') ?? getBone(root, 'DEF-CAMERAS-BASE');
     const leftArmMount = root.getObjectByName('leftArmMount') ?? getBone(root, 'DEF-CANONL', 'DEF-MINIGUNL');
     const rightArmMount = root.getObjectByName('rightArmMount') ?? getBone(root, 'DEF-CANONR', 'DEF-MINIGUNR');
-    const torsoMount = root.getObjectByName('torsoMount') ?? getBone(root, 'DEF-BODY', 'DEF-UPPER-BODY');
+    const torsoMount = root.getObjectByName('torsoMount') ?? getBone(root, 'DEF-UPPER-BODY', 'DEF-BODY');
+    const torsoRigNodes = collectHeroTorsoRig(root);
+    const torsoPivot = waistBone?.position.clone() ?? torsoBone?.position.clone() ?? null;
 
     return {
         root,
         viewAnchor,
+        torsoPivot,
+        torsoRigNodes,
         sockets: {
             leftArmMount: leftArmMount ?? undefined,
             rightArmMount: rightArmMount ?? undefined,
@@ -340,8 +360,8 @@ export async function createKWIIRuntimeVisual(): Promise<KWIIRuntimeVisual | nul
         },
         bones: {
             pelvis: getBone(root, 'DEF-HIPS'),
-            waist: getBone(root, 'DEF-BODY'),
-            torso: getBone(root, 'DEF-UPPER-BODY'),
+            waist: waistBone,
+            torso: torsoBone,
             head: getBone(root, 'DEF-CAMERAS-BASE'),
             leftArm: getBone(root, 'DEF-ARML', 'DEF-ARM.L'),
             rightArm: getBone(root, 'DEF-ARMR', 'DEF-ARM.R'),
@@ -354,8 +374,8 @@ export async function createKWIIRuntimeVisual(): Promise<KWIIRuntimeVisual | nul
         },
         restPose: {
             pelvis: captureTransform(getBone(root, 'DEF-HIPS')),
-            waist: captureTransform(getBone(root, 'DEF-BODY')),
-            torso: captureTransform(getBone(root, 'DEF-UPPER-BODY')),
+            waist: captureTransform(waistBone),
+            torso: captureTransform(torsoBone),
             head: captureTransform(getBone(root, 'DEF-CAMERAS-BASE')),
             leftArm: captureTransform(getBone(root, 'DEF-ARML', 'DEF-ARM.L')),
             rightArm: captureTransform(getBone(root, 'DEF-ARMR', 'DEF-ARM.R')),
