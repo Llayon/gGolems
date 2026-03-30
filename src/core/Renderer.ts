@@ -21,11 +21,14 @@ export class Renderer {
         this.renderer.shadowMap.enabled = quality.shadows;
         this.renderer.shadowMap.type = quality.softShadows ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
 
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
         this.scene.add(ambientLight);
 
-        const dirLight = new THREE.DirectionalLight(0xffaa55, 1.5);
-        dirLight.position.set(10, 20, 10);
+        const hemiLight = new THREE.HemisphereLight(0x8fb7ff, 0x5a3e28, 0.7);
+        this.scene.add(hemiLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffb46b, 1.7);
+        dirLight.position.set(12, 22, 8);
         dirLight.castShadow = quality.shadows;
         dirLight.shadow.camera.top = 156;
         dirLight.shadow.camera.bottom = -156;

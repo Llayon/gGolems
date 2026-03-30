@@ -170,24 +170,29 @@ function buildBakedMaterial(
     material.map = textures.baseColor;
     material.normalMap = textures.normal;
     material.aoMap = textures.ao;
-    material.aoMapIntensity = 1;
+    material.normalScale.setScalar(0.6);
+    material.aoMapIntensity = 0.22;
     material.emissiveMap = null;
+    material.emissive.setHex(0x000000);
+    material.emissiveIntensity = 0;
 
     if (material.name === 'KWII_Runtime_Dark') {
-        material.color.setHex(0x9fa8b3);
-        material.metalness = 0.75;
-        material.roughness = 0.62;
+        material.color.setHex(0xd7dde4);
+        material.metalness = 0.08;
+        material.roughness = 0.9;
+        material.aoMapIntensity = 0.16;
     } else if (material.name === 'KWII_Runtime_Glow') {
         material.color.setHex(0xffffff);
-        material.metalness = 0.35;
-        material.roughness = 0.55;
+        material.metalness = 0.04;
+        material.roughness = 0.72;
+        material.aoMapIntensity = 0.08;
         material.emissive.setHex(0x83d8ff);
         material.emissiveMap = textures.emission;
-        material.emissiveIntensity = 1.85;
+        material.emissiveIntensity = 1.55;
     } else {
         material.color.setHex(0xffffff);
-        material.metalness = 0.48;
-        material.roughness = 0.68;
+        material.metalness = 0.12;
+        material.roughness = 0.84;
     }
 
     material.needsUpdate = true;
