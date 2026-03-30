@@ -85,9 +85,20 @@ function captureTransform(node: THREE.Object3D | null): StoredTransform | null {
     };
 }
 
-function configureTexture(texture: THREE.Texture, colorSpace: THREE.ColorSpace = THREE.NoColorSpace) {
+function configureTexture(
+    texture: THREE.Texture,
+    colorSpace: THREE.ColorSpace = THREE.NoColorSpace,
+    disableMipmaps = false
+) {
     texture.colorSpace = colorSpace;
     texture.flipY = false;
+    texture.wrapS = THREE.ClampToEdgeWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    if (disableMipmaps) {
+        texture.generateMipmaps = false;
+        texture.minFilter = THREE.LinearFilter;
+        texture.magFilter = THREE.LinearFilter;
+    }
     texture.needsUpdate = true;
     return texture;
 }
@@ -100,10 +111,10 @@ async function getHeroTextures() {
             heroTextureLoader.loadAsync(kwiiEmissionUrl),
             heroTextureLoader.loadAsync(kwiiNormalUrl)
         ]).then(([ao, baseColor, emission, normal]) => ({
-            ao: configureTexture(ao),
-            baseColor: configureTexture(baseColor, THREE.SRGBColorSpace),
-            emission: configureTexture(emission, THREE.SRGBColorSpace),
-            normal: configureTexture(normal)
+            ao: configureTexture(ao, THREE.NoColorSpace, true),
+            baseColor: configureTexture(baseColor, THREE.SRGBColorSpace, true),
+            emission: configureTexture(emission, THREE.SRGBColorSpace, true),
+            normal: configureTexture(normal, THREE.NoColorSpace, true)
         }));
     }
 
