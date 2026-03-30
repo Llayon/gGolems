@@ -3,6 +3,10 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { WeaponMountId } from '../combat/weaponTypes';
 import heroMechUrl from '../assets/mechs/KWII_runtime_low.glb?url';
+import kwiiAoUrl from '../assets/mechs/kwii_bakes/KWII_AO.png?url';
+import kwiiBaseColorUrl from '../assets/mechs/kwii_bakes/KWII_BaseColor.png?url';
+import kwiiEmissionUrl from '../assets/mechs/kwii_bakes/KWII_Emission.png?url';
+import kwiiNormalUrl from '../assets/mechs/kwii_bakes/KWII_Normal.png?url';
 
 type StoredTransform = {
     position: THREE.Vector3;
@@ -42,7 +46,14 @@ type HeroTemplate = {
 };
 
 const heroLoader = new GLTFLoader();
+const heroTextureLoader = new THREE.TextureLoader();
 let heroTemplatePromise: Promise<HeroTemplate | null> | null = null;
+let heroTexturesPromise: Promise<{
+    ao: THREE.Texture;
+    baseColor: THREE.Texture;
+    emission: THREE.Texture;
+    normal: THREE.Texture;
+}> | null = null;
 
 function markShadow(root: THREE.Object3D) {
     root.traverse((child) => {
@@ -62,13 +73,144 @@ function captureTransform(node: THREE.Object3D | null): StoredTransform | null {
     };
 }
 
-function getBone(root: THREE.Object3D, name: string) {
-    const node = root.getObjectByName(name);
-    return node instanceof THREE.Bone ? node : null;
+function configureTexture(texture: THREE.Texture, colorSpace: THREE.ColorSpace = THREE.NoColorSpace) {
+    texture.colorSpace = colorSpace;
+    texture.flipY = false;
+    texture.needsUpdate = true;
+    return texture;
+}
+
+async function getHeroTextures() {
+    if (!heroTexturesPromise) {
+        heroTexturesPromise = Promise.all([
+            heroTextureLoader.loadAsync(kwiiAoUrl),
+            heroTextureLoader.loadAsync(kwiiBaseColorUrl),
+            heroTextureLoader.loadAsync(kwiiEmissionUrl),
+            heroTextureLoader.loadAsync(kwiiNormalUrl)
+        ]).then(([ao, baseColor, emission, normal]) => ({
+            ao: configureTexture(ao),
+            baseColor: configureTexture(baseColor, THREE.SRGBColorSpace),
+            emission: configureTexture(emission, THREE.SRGBColorSpace),
+            normal: configureTexture(normal)
+        }));
+    }
+
+    return heroTexturesPromise;
+}
+
+function getBone(root: THREE.Object3D, ...names: string[]) {
+    for (const name of names) {
+        const node = root.getObjectByName(name);
+        if (node instanceof THREE.Bone) {
+            return node;
+        }
+    }
+    return null;
 }
 
 function findClip(animations: THREE.AnimationClip[], name: string) {
     return animations.find((clip) => clip.name === name) ?? null;
+}
+
+function normalizeClip(clip: THREE.AnimationClip) {
+    if (clip.tracks.length === 0) return clip;
+
+    let minTime = Number.POSITIVE_INFINITY;
+    let maxTime = 0;
+
+    for (const track of clip.tracks) {
+        if (track.times.length === 0) continue;
+        minTime = Math.min(minTime, track.times[0]);
+        maxTime = Math.max(maxTime, track.times[track.times.length - 1]);
+    }
+
+    if (!Number.isFinite(minTime)) {
+        return clip;
+    }
+
+    const normalizedTracks = clip.tracks.map((track) => {
+        const normalizedTrack = track.clone();
+        normalizedTrack.times = Float32Array.from(track.times, (time) => time - minTime);
+        return normalizedTrack;
+    });
+
+    return new THREE.AnimationClip(clip.name, Math.max(0.001, maxTime - minTime), normalizedTracks);
+}
+
+function ensureSecondaryUv(root: THREE.Object3D) {
+    root.traverse((child) => {
+        if (!(child instanceof THREE.Mesh || child instanceof THREE.SkinnedMesh)) return;
+        const geometry = child.geometry;
+        if (!geometry || geometry.getAttribute('uv2') || !geometry.getAttribute('uv')) return;
+        geometry.setAttribute('uv2', geometry.getAttribute('uv').clone());
+    });
+}
+
+function buildBakedMaterial(
+    source: THREE.Material,
+    textures: Awaited<ReturnType<typeof getHeroTextures>>
+) {
+    if (!(source instanceof THREE.MeshStandardMaterial)) {
+        return source;
+    }
+
+    const material = source.clone();
+    material.map = textures.baseColor;
+    material.normalMap = textures.normal;
+    material.aoMap = textures.ao;
+    material.aoMapIntensity = 1;
+    material.emissiveMap = null;
+
+    if (material.name === 'KWII_Runtime_Dark') {
+        material.color.setHex(0x9fa8b3);
+        material.metalness = 0.75;
+        material.roughness = 0.62;
+    } else if (material.name === 'KWII_Runtime_Glow') {
+        material.color.setHex(0xffffff);
+        material.metalness = 0.35;
+        material.roughness = 0.55;
+        material.emissive.setHex(0x83d8ff);
+        material.emissiveMap = textures.emission;
+        material.emissiveIntensity = 1.85;
+    } else {
+        material.color.setHex(0xffffff);
+        material.metalness = 0.48;
+        material.roughness = 0.68;
+    }
+
+    material.needsUpdate = true;
+    return material;
+}
+
+function applyBakedMaterials(root: THREE.Object3D, textures: Awaited<ReturnType<typeof getHeroTextures>>) {
+    const materialCache = new Map<string, THREE.Material>();
+    ensureSecondaryUv(root);
+
+    root.traverse((child) => {
+        if (!(child instanceof THREE.Mesh || child instanceof THREE.SkinnedMesh)) return;
+
+        if (Array.isArray(child.material)) {
+            child.material = child.material.map((material) => {
+                const cached = materialCache.get(material.uuid);
+                if (cached) return cached;
+
+                const bakedMaterial = buildBakedMaterial(material, textures);
+                materialCache.set(material.uuid, bakedMaterial);
+                return bakedMaterial;
+            });
+            return;
+        }
+
+        const cached = materialCache.get(child.material.uuid);
+        if (cached) {
+            child.material = cached;
+            return;
+        }
+
+        const bakedMaterial = buildBakedMaterial(child.material, textures);
+        materialCache.set(child.material.uuid, bakedMaterial);
+        child.material = bakedMaterial;
+    });
 }
 
 async function getHeroTemplate() {
@@ -76,13 +218,18 @@ async function getHeroTemplate() {
         heroTemplatePromise = new Promise((resolve) => {
             heroLoader.load(
                 heroMechUrl,
-                (gltf) => {
+                async (gltf) => {
                     const root = gltf.scene;
                     root.name = 'KWIIRuntimeRoot';
+                    try {
+                        applyBakedMaterials(root, await getHeroTextures());
+                    } catch (error) {
+                        console.warn('Failed to load KWII mech textures', error);
+                    }
                     markShadow(root);
                     resolve({
                         root,
-                        animations: gltf.animations
+                        animations: gltf.animations.map((clip) => normalizeClip(clip))
                     });
                 },
                 undefined,
@@ -148,16 +295,16 @@ export async function createKWIIRuntimeVisual(): Promise<KWIIRuntimeVisual | nul
             waist: getBone(root, 'Waist'),
             torso: getBone(root, 'Torso'),
             head: getBone(root, 'Head'),
-            leftArm: getBone(root, 'Arm.L'),
-            rightArm: getBone(root, 'Arm.R')
+            leftArm: getBone(root, 'ArmL', 'Arm.L'),
+            rightArm: getBone(root, 'ArmR', 'Arm.R')
         },
         restPose: {
             pelvis: captureTransform(getBone(root, 'Pelvis')),
             waist: captureTransform(getBone(root, 'Waist')),
             torso: captureTransform(getBone(root, 'Torso')),
             head: captureTransform(getBone(root, 'Head')),
-            leftArm: captureTransform(getBone(root, 'Arm.L')),
-            rightArm: captureTransform(getBone(root, 'Arm.R'))
+            leftArm: captureTransform(getBone(root, 'ArmL', 'Arm.L')),
+            rightArm: captureTransform(getBone(root, 'ArmR', 'Arm.R'))
         },
         mixer,
         actions,
