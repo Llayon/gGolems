@@ -57,6 +57,8 @@ type HeroTemplate = {
     animations: THREE.AnimationClip[];
 };
 
+type HeroSurfaceMode = 'baked' | 'flat';
+
 const heroLoader = new GLTFLoader();
 const heroTextureLoader = new THREE.TextureLoader();
 let heroTemplatePromise: Promise<HeroTemplate | null> | null = null;
@@ -169,41 +171,70 @@ function ensureSecondaryUv(root: THREE.Object3D) {
     });
 }
 
+function detectSurfaceMode(root: THREE.Object3D): HeroSurfaceMode {
+    let meshCount = 0;
+    let uvMeshCount = 0;
+
+    root.traverse((child) => {
+        if (!(child instanceof THREE.Mesh || child instanceof THREE.SkinnedMesh)) return;
+        meshCount += 1;
+        if (child.geometry?.getAttribute('uv')) {
+            uvMeshCount += 1;
+        }
+    });
+
+    if (meshCount === 0) return 'flat';
+    return uvMeshCount / meshCount >= 0.9 ? 'baked' : 'flat';
+}
+
 function buildBakedMaterial(
     source: THREE.Material,
-    textures: Awaited<ReturnType<typeof getHeroTextures>>
+    textures: Awaited<ReturnType<typeof getHeroTextures>>,
+    surfaceMode: HeroSurfaceMode
 ) {
     if (!(source instanceof THREE.MeshStandardMaterial)) {
         return source;
     }
 
     const material = source.clone();
-    material.map = textures.baseColor;
-    material.normalMap = textures.normal;
-    material.aoMap = textures.ao;
-    material.normalScale.setScalar(0.6);
-    material.aoMapIntensity = 0.22;
+    material.map = null;
+    material.normalMap = null;
+    material.aoMap = null;
+    material.normalScale.set(1, 1);
+    material.aoMapIntensity = 0;
     material.emissiveMap = null;
     material.emissive.setHex(0x000000);
     material.emissiveIntensity = 0;
 
+    if (surfaceMode === 'baked') {
+        material.map = textures.baseColor;
+        material.normalMap = textures.normal;
+        material.aoMap = textures.ao;
+        material.normalScale.set(0.6, 0.6);
+        material.aoMapIntensity = 0.22;
+    }
+
     if (material.name === 'KWII_Runtime_Dark') {
-        material.color.setHex(0xd7dde4);
+        material.color.setHex(surfaceMode === 'baked' ? 0xd7dde4 : 0x57606c);
         material.metalness = 0.08;
-        material.roughness = 0.9;
-        material.aoMapIntensity = 0.16;
+        material.roughness = surfaceMode === 'baked' ? 0.9 : 0.86;
+        if (surfaceMode === 'baked') {
+            material.aoMapIntensity = 0.16;
+        }
     } else if (material.name === 'KWII_Runtime_Glow') {
-        material.color.setHex(0xffffff);
+        material.color.setHex(surfaceMode === 'baked' ? 0xffffff : 0xbfd0dc);
         material.metalness = 0.04;
-        material.roughness = 0.72;
-        material.aoMapIntensity = 0.08;
+        material.roughness = surfaceMode === 'baked' ? 0.72 : 0.64;
         material.emissive.setHex(0x83d8ff);
-        material.emissiveMap = textures.emission;
-        material.emissiveIntensity = 1.55;
+        material.emissiveIntensity = surfaceMode === 'baked' ? 1.55 : 1.25;
+        if (surfaceMode === 'baked') {
+            material.aoMapIntensity = 0.08;
+            material.emissiveMap = textures.emission;
+        }
     } else {
-        material.color.setHex(0xffffff);
+        material.color.setHex(surfaceMode === 'baked' ? 0xffffff : 0xb6bec9);
         material.metalness = 0.12;
-        material.roughness = 0.84;
+        material.roughness = surfaceMode === 'baked' ? 0.84 : 0.8;
     }
 
     material.needsUpdate = true;
@@ -212,31 +243,38 @@ function buildBakedMaterial(
 
 function applyBakedMaterials(root: THREE.Object3D, textures: Awaited<ReturnType<typeof getHeroTextures>>) {
     const materialCache = new Map<string, THREE.Material>();
-    ensureSecondaryUv(root);
+    const surfaceMode = detectSurfaceMode(root);
+    if (surfaceMode === 'baked') {
+        ensureSecondaryUv(root);
+    } else {
+        console.warn('KWII runtime asset has incomplete UVs; using flat material fallback.');
+    }
 
     root.traverse((child) => {
         if (!(child instanceof THREE.Mesh || child instanceof THREE.SkinnedMesh)) return;
 
         if (Array.isArray(child.material)) {
             child.material = child.material.map((material) => {
-                const cached = materialCache.get(material.uuid);
+                const cacheKey = `${material.uuid}:${surfaceMode}`;
+                const cached = materialCache.get(cacheKey);
                 if (cached) return cached;
 
-                const bakedMaterial = buildBakedMaterial(material, textures);
-                materialCache.set(material.uuid, bakedMaterial);
+                const bakedMaterial = buildBakedMaterial(material, textures, surfaceMode);
+                materialCache.set(cacheKey, bakedMaterial);
                 return bakedMaterial;
             });
             return;
         }
 
-        const cached = materialCache.get(child.material.uuid);
+        const cacheKey = `${child.material.uuid}:${surfaceMode}`;
+        const cached = materialCache.get(cacheKey);
         if (cached) {
             child.material = cached;
             return;
         }
 
-        const bakedMaterial = buildBakedMaterial(child.material, textures);
-        materialCache.set(child.material.uuid, bakedMaterial);
+        const bakedMaterial = buildBakedMaterial(child.material, textures, surfaceMode);
+        materialCache.set(cacheKey, bakedMaterial);
         child.material = bakedMaterial;
     });
 }
