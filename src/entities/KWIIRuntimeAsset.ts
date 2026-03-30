@@ -4,12 +4,12 @@ import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { WeaponMountId } from '../combat/weaponTypes';
 import heroMechUrl from '../assets/mechs/KWII_source_low.glb?url';
 import materialAssignmentsRaw from '../assets/mechs/KWII_source_low.materials.json';
-import handsBaseColorUrl from '../../mech-robot-kw-ii/textures/mech_hands_BaseColor.jpeg?url';
-import handsEmissiveUrl from '../../mech-robot-kw-ii/textures/mech_hands_Emissive.jpeg?url';
-import legsBaseColorUrl from '../../mech-robot-kw-ii/textures/mech_legs_BaseColor.jpeg?url';
-import legsEmissiveUrl from '../../mech-robot-kw-ii/textures/mech_legs_Emissive.jpeg?url';
-import torsoBaseColorUrl from '../../mech-robot-kw-ii/textures/mech_torso_BaseColor.jpeg?url';
-import torsoEmissiveUrl from '../../mech-robot-kw-ii/textures/mech_torso_Emissive.jpeg?url';
+import handsBaseColorUrl from '../assets/mechs/kwii_source_textures/mech_hands_BaseColor.jpeg?url';
+import handsEmissiveUrl from '../assets/mechs/kwii_source_textures/mech_hands_Emissive.jpeg?url';
+import legsBaseColorUrl from '../assets/mechs/kwii_source_textures/mech_legs_BaseColor.jpeg?url';
+import legsEmissiveUrl from '../assets/mechs/kwii_source_textures/mech_legs_Emissive.jpeg?url';
+import torsoBaseColorUrl from '../assets/mechs/kwii_source_textures/mech_torso_BaseColor.jpeg?url';
+import torsoEmissiveUrl from '../assets/mechs/kwii_source_textures/mech_torso_Emissive.jpeg?url';
 
 type StoredTransform = {
     position: THREE.Vector3;
