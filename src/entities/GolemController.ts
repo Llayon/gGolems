@@ -476,8 +476,15 @@ export class GolemController {
     }
 
     getThirdPersonAnchor(out: THREE.Vector3) {
-        this.pelvis.getWorldPosition(out);
-        out.y += 1.05;
+        const heroViewAnchor = this.heroVisual?.viewAnchor;
+        if (heroViewAnchor) {
+            heroViewAnchor.getWorldPosition(out);
+            out.y += 0.18;
+            return out;
+        }
+
+        this.torso.getWorldPosition(out);
+        out.y += 1.35;
         return out;
     }
 
