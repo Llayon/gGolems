@@ -487,7 +487,6 @@ export class GolemController {
         const walkAction = this.heroVisual.actions.walk;
         const locomotionAmount = clamp(Math.max(Math.abs(this.throttle), this.currentSpeed / GOLEM.classes.medium.speed), 0, 1);
         const desiredLocomotion = locomotionAmount > 0.06 ? 'walk' : 'idle';
-        const fadeDuration = 0.16;
 
         const resetNode = (node: THREE.Object3D | null, rest: { position: THREE.Vector3; quaternion: THREE.Quaternion } | null) => {
             if (!node || !rest) return;
@@ -508,25 +507,40 @@ export class GolemController {
         resetNode(this.heroVisual.bones.leftFoot, this.heroVisual.restPose.leftFoot);
         resetNode(this.heroVisual.bones.rightFoot, this.heroVisual.restPose.rightFoot);
 
-        if (idleAction && walkAction && desiredLocomotion !== this.heroVisual.locomotionState) {
-            if (desiredLocomotion === 'walk') {
+        if (idleAction) {
+            if (desiredLocomotion === 'idle') {
+                if (!idleAction.isRunning()) {
+                    idleAction.reset();
+                    idleAction.play();
+                }
                 idleAction.enabled = true;
-                idleAction.fadeOut(fadeDuration);
-                walkAction.enabled = true;
-                walkAction.reset();
-                walkAction.setEffectiveWeight(1);
-                walkAction.fadeIn(fadeDuration);
-                walkAction.play();
-            } else {
-                idleAction.enabled = true;
-                idleAction.reset();
                 idleAction.setEffectiveWeight(1);
-                idleAction.fadeIn(fadeDuration);
-                idleAction.play();
-                walkAction.fadeOut(fadeDuration);
+                idleAction.timeScale = 1;
+            } else {
+                idleAction.setEffectiveWeight(0);
+                idleAction.stop();
+                idleAction.enabled = false;
             }
-            this.heroVisual.locomotionState = desiredLocomotion;
         }
+
+        if (walkAction) {
+            if (desiredLocomotion === 'walk') {
+                if (!walkAction.isRunning()) {
+                    walkAction.reset();
+                    walkAction.play();
+                }
+                walkAction.enabled = true;
+                walkAction.setEffectiveWeight(Math.max(0.72, locomotionAmount));
+                walkAction.timeScale = THREE.MathUtils.lerp(0.82, 1.25, locomotionAmount);
+            } else {
+                walkAction.setEffectiveWeight(0);
+                walkAction.stop();
+                walkAction.enabled = false;
+                walkAction.timeScale = 1;
+            }
+        }
+
+        this.heroVisual.locomotionState = desiredLocomotion;
 
         this.heroVisual.mixer.update(dt);
 
