@@ -9,7 +9,7 @@ import { DecalManager } from '../fx/DecalManager';
 import { MechCamera } from '../camera/MechCamera';
 import { getWeaponDefinition, WEAPON_MOUNT_ORDER } from '../combat/weapons';
 import type { WeaponFireRequest, WeaponGroupId, WeaponId, WeaponMountId, WeaponMountRuntime, WeaponStatusView } from '../combat/weaponTypes';
-import { createMarcelineSentinelVisual, type MarcelineSentinelVisual } from './MarcelineSentinelAsset';
+import { createKWIIRuntimeVisual, type KWIIRuntimeVisual } from './KWIIRuntimeAsset';
 
 const _moveDir = new THREE.Vector3();
 const _currentVel = new THREE.Vector3();
@@ -105,7 +105,7 @@ export class GolemController {
     bronzeMaterial: THREE.MeshStandardMaterial;
     runeMaterial: THREE.MeshStandardMaterial;
     boilerMaterial: THREE.MeshStandardMaterial;
-    heroVisual: MarcelineSentinelVisual | null = null;
+    heroVisual: KWIIRuntimeVisual | null = null;
     sections: GolemSectionState = createSectionState();
     maxSections: GolemSectionState = createSectionState();
     weaponMounts: Record<WeaponMountId, WeaponMountRuntime>;
@@ -203,7 +203,7 @@ export class GolemController {
     }
 
     async initHeroVisual() {
-        const heroVisual = await createMarcelineSentinelVisual();
+        const heroVisual = await createKWIIRuntimeVisual();
         if (!heroVisual) return;
 
         this.heroVisual = heroVisual;
@@ -211,7 +211,7 @@ export class GolemController {
         this.pelvis.visible = false;
         this.legs.visible = false;
         this.torso.visible = false;
-        this.syncHeroVisual();
+        this.syncHeroVisual(0);
         this.applySectionVisuals();
     }
 
@@ -377,6 +377,12 @@ export class GolemController {
     triggerWeaponRecoil(weaponId: WeaponId) {
         const mountId = getWeaponDefinition(weaponId).mountId;
         this.weaponRecoil[mountId] = 1;
+        const fireAction = this.heroVisual?.actions.fire;
+        if (fireAction) {
+            fireAction.stop();
+            fireAction.reset();
+            fireAction.play();
+        }
     }
 
     buildWeaponFireRequest(mount: WeaponMountRuntime): WeaponFireRequest {
@@ -472,8 +478,42 @@ export class GolemController {
         return out;
     }
 
-    syncHeroVisual() {
+    syncHeroVisual(dt: number) {
         if (!this.heroVisual) return;
+
+        const idleAction = this.heroVisual.actions.idle;
+        const walkAction = this.heroVisual.actions.walk;
+        const desiredLocomotion = this.currentSpeed > 0.55 ? 'walk' : 'idle';
+
+        const resetNode = (node: THREE.Object3D | null, rest: { position: THREE.Vector3; quaternion: THREE.Quaternion } | null) => {
+            if (!node || !rest) return;
+            node.position.copy(rest.position);
+            node.quaternion.copy(rest.quaternion);
+        };
+
+        resetNode(this.heroVisual.bones.pelvis, this.heroVisual.restPose.pelvis);
+        resetNode(this.heroVisual.bones.waist, this.heroVisual.restPose.waist);
+        resetNode(this.heroVisual.bones.torso, this.heroVisual.restPose.torso);
+        resetNode(this.heroVisual.bones.head, this.heroVisual.restPose.head);
+        resetNode(this.heroVisual.bones.leftArm, this.heroVisual.restPose.leftArm);
+        resetNode(this.heroVisual.bones.rightArm, this.heroVisual.restPose.rightArm);
+
+        if (idleAction && walkAction && desiredLocomotion !== this.heroVisual.locomotionState) {
+            if (desiredLocomotion === 'walk') {
+                walkAction.enabled = true;
+                walkAction.reset();
+                walkAction.play();
+                walkAction.crossFadeFrom(idleAction, 0.18, true);
+            } else {
+                idleAction.enabled = true;
+                idleAction.reset();
+                idleAction.play();
+                idleAction.crossFadeFrom(walkAction, 0.18, true);
+            }
+            this.heroVisual.locomotionState = desiredLocomotion;
+        }
+
+        this.heroVisual.mixer.update(dt);
 
         const torsoTwist = angleDiff(this.legYaw, this.torsoYaw);
         const bob = Math.abs(Math.sin(this.walkCycle * 2)) * 0.08;
@@ -483,26 +523,37 @@ export class GolemController {
         const pelvis = this.heroVisual.bones.pelvis;
         const pelvisRest = this.heroVisual.restPose.pelvis;
         if (pelvis && pelvisRest) {
-            pelvis.position.copy(pelvisRest.position);
             pelvis.position.y += bob;
-            pelvis.quaternion.copy(pelvisRest.quaternion);
+        }
+
+        const waist = this.heroVisual.bones.waist;
+        const waistRest = this.heroVisual.restPose.waist;
+        if (waist && waistRest) {
+            _heroTwistQuat.setFromAxisAngle(_heroUpAxis, -torsoTwist * 0.45);
+            waist.quaternion.multiply(_heroTwistQuat);
         }
 
         const torso = this.heroVisual.bones.torso;
         const torsoRest = this.heroVisual.restPose.torso;
         if (torso && torsoRest) {
-            torso.position.copy(torsoRest.position);
             torso.position.y += bob * 0.65;
-            torso.quaternion.copy(torsoRest.quaternion);
             _heroTwistQuat.setFromAxisAngle(_heroUpAxis, -torsoTwist);
             torso.quaternion.multiply(_heroTwistQuat);
+            torso.position.z += this.weaponRecoil.torsoMount * 0.18;
+            _heroArmQuat.setFromAxisAngle(_heroPitchAxis, -this.weaponRecoil.torsoMount * 0.08);
+            torso.quaternion.multiply(_heroArmQuat);
+        }
+
+        const head = this.heroVisual.bones.head;
+        const headRest = this.heroVisual.restPose.head;
+        if (head && headRest) {
+            _heroTwistQuat.setFromAxisAngle(_heroUpAxis, -torsoTwist * 0.18);
+            head.quaternion.multiply(_heroTwistQuat);
         }
 
         const leftArm = this.heroVisual.bones.leftArm;
         const leftArmRest = this.heroVisual.restPose.leftArm;
         if (leftArm && leftArmRest) {
-            leftArm.position.copy(leftArmRest.position);
-            leftArm.quaternion.copy(leftArmRest.quaternion);
             _heroArmQuat.setFromAxisAngle(_heroPitchAxis, -this.weaponRecoil.leftArmMount * 0.55);
             leftArm.quaternion.multiply(_heroArmQuat);
         }
@@ -510,8 +561,6 @@ export class GolemController {
         const rightArm = this.heroVisual.bones.rightArm;
         const rightArmRest = this.heroVisual.restPose.rightArm;
         if (rightArm && rightArmRest) {
-            rightArm.position.copy(rightArmRest.position);
-            rightArm.quaternion.copy(rightArmRest.quaternion);
             _heroArmQuat.setFromAxisAngle(_heroPitchAxis, -this.weaponRecoil.rightArmMount * 0.55);
             rightArm.quaternion.multiply(_heroArmQuat);
         }
@@ -677,7 +726,6 @@ export class GolemController {
 
         this.legs.rotation.y = -this.legYaw;
         this.torso.rotation.y = -this.torsoYaw;
-        this.syncHeroVisual();
 
         const vel = this.body.linvel();
         this.currentSpeed = new THREE.Vector3(vel.x, 0, vel.z).length();
@@ -743,7 +791,7 @@ export class GolemController {
         this.torso.position.z = this.weaponRecoil.torsoMount * 0.46;
         this.torso.rotation.x = -this.weaponRecoil.torsoMount * 0.14;
         this.pelvis.position.y = 2.0 + Math.abs(Math.sin(this.walkCycle * 2)) * 0.2;
-        this.syncHeroVisual();
+        this.syncHeroVisual(dt);
 
         this.boiler.scale.set(1 + Math.sin(Date.now() * 0.002) * 0.02, 1, 1 + Math.sin(Date.now() * 0.002) * 0.02);
 
