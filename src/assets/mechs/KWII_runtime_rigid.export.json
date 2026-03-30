@@ -1,0 +1,53 @@
+{
+  "armature": "KWII_RuntimeRig_Export",
+  "boneProfile": "runtime_export",
+  "boneNames": [
+    "Root",
+    "Pelvis",
+    "Waist",
+    "Torso",
+    "Head",
+    "Shoulder.L",
+    "Arm.L",
+    "Gun.L",
+    "Shoulder.R",
+    "Arm.R",
+    "Gun.R",
+    "Thigh.L",
+    "Shin.L",
+    "Foot.L",
+    "Thigh.R",
+    "Shin.R",
+    "Foot.R"
+  ],
+  "meshObjects": [
+    "KWII_EXP_Arm_L",
+    "KWII_EXP_Arm_R",
+    "KWII_EXP_Foot_L",
+    "KWII_EXP_Foot_R",
+    "KWII_EXP_Gun_L",
+    "KWII_EXP_Gun_R",
+    "KWII_EXP_Head",
+    "KWII_EXP_Pelvis",
+    "KWII_EXP_Shin_L",
+    "KWII_EXP_Shin_R",
+    "KWII_EXP_Shoulder_L",
+    "KWII_EXP_Shoulder_R",
+    "KWII_EXP_Thigh_L",
+    "KWII_EXP_Thigh_R",
+    "KWII_EXP_Torso",
+    "KWII_EXP_Waist"
+  ],
+  "socketObjects": [
+    "viewAnchor",
+    "leftArmMount",
+    "rightArmMount",
+    "torsoMount"
+  ],
+  "actions": [
+    "KWII_Fire",
+    "KWII_Idle",
+    "KWII_TorsoTurn",
+    "KWII_Walk"
+  ]
+}

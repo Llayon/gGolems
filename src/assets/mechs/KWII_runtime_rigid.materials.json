@@ -1,0 +1,18 @@
+{
+  "KWII_EXP_Arm_L": "KWII_Runtime_Body",
+  "KWII_EXP_Arm_R": "KWII_Runtime_Body",
+  "KWII_EXP_Foot_L": "KWII_Runtime_Dark",
+  "KWII_EXP_Foot_R": "KWII_Runtime_Dark",
+  "KWII_EXP_Gun_L": "KWII_Runtime_Dark",
+  "KWII_EXP_Gun_R": "KWII_Runtime_Dark",
+  "KWII_EXP_Head": "KWII_Runtime_Glow",
+  "KWII_EXP_Pelvis": "KWII_Runtime_Body",
+  "KWII_EXP_Shin_L": "KWII_Runtime_Dark",
+  "KWII_EXP_Shin_R": "KWII_Runtime_Dark",
+  "KWII_EXP_Shoulder_L": "KWII_Runtime_Body",
+  "KWII_EXP_Shoulder_R": "KWII_Runtime_Body",
+  "KWII_EXP_Thigh_L": "KWII_Runtime_Body",
+  "KWII_EXP_Thigh_R": "KWII_Runtime_Body",
+  "KWII_EXP_Torso": "KWII_Runtime_Body",
+  "KWII_EXP_Waist": "KWII_Runtime_Body"
+}

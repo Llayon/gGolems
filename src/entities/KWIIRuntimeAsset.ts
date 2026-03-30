@@ -2,14 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { WeaponMountId } from '../combat/weaponTypes';
-import heroMechUrl from '../assets/mechs/KWII_source_low.glb?url';
-import materialAssignmentsRaw from '../assets/mechs/KWII_source_low.materials.json';
-import handsBaseColorUrl from '../assets/mechs/kwii_source_textures/mech_hands_BaseColor.jpeg?url';
-import handsEmissiveUrl from '../assets/mechs/kwii_source_textures/mech_hands_Emissive.jpeg?url';
-import legsBaseColorUrl from '../assets/mechs/kwii_source_textures/mech_legs_BaseColor.jpeg?url';
-import legsEmissiveUrl from '../assets/mechs/kwii_source_textures/mech_legs_Emissive.jpeg?url';
-import torsoBaseColorUrl from '../assets/mechs/kwii_source_textures/mech_torso_BaseColor.jpeg?url';
-import torsoEmissiveUrl from '../assets/mechs/kwii_source_textures/mech_torso_Emissive.jpeg?url';
+import heroMechUrl from '../assets/mechs/KWII_runtime_rigid.glb?url';
 
 type StoredTransform = {
     position: THREE.Vector3;
@@ -63,34 +56,23 @@ type HeroTemplate = {
     animations: THREE.AnimationClip[];
 };
 
-type HeroMaterialKey = 'hands' | 'legs' | 'torso';
-
 const heroLoader = new GLTFLoader();
-const heroTextureLoader = new THREE.TextureLoader();
 let heroTemplatePromise: Promise<HeroTemplate | null> | null = null;
-let heroTexturesPromise: Promise<{
-    hands: {
-        baseColor: THREE.Texture;
-        emissive: THREE.Texture;
-    };
-    legs: {
-        baseColor: THREE.Texture;
-        emissive: THREE.Texture;
-    };
-    torso: {
-        baseColor: THREE.Texture;
-        emissive: THREE.Texture;
-    };
-}> | null = null;
-const materialAssignments = materialAssignmentsRaw as Record<string, HeroMaterialKey>;
-const HERO_LOWER_RIG_PATTERN = /^(?:DEF-(?:HIPS|LEG|KNEE|SHIN|ANKLE|FOOT|TOE)|IK-|MCH-(?:INT-FOOT-ROLL|SWITCH-LEG))/;
 
 function markShadow(root: THREE.Object3D) {
     root.traverse((child) => {
-        if (child instanceof THREE.Mesh || child instanceof THREE.SkinnedMesh) {
-            child.castShadow = true;
-            child.receiveShadow = true;
-            child.frustumCulled = false;
+        if (!(child instanceof THREE.Mesh || child instanceof THREE.SkinnedMesh)) return;
+        child.castShadow = true;
+        child.receiveShadow = true;
+        child.frustumCulled = false;
+
+        const materials = Array.isArray(child.material) ? child.material : [child.material];
+        for (const material of materials) {
+            if (!(material instanceof THREE.MeshStandardMaterial)) continue;
+            material.needsUpdate = true;
+            if (material.name.includes('Glow')) {
+                material.emissiveIntensity = Math.max(material.emissiveIntensity, 1.2);
+            }
         }
     });
 }
@@ -103,52 +85,6 @@ function captureTransform(node: THREE.Object3D | null): StoredTransform | null {
     };
 }
 
-function configureTexture(
-    texture: THREE.Texture,
-    colorSpace: THREE.ColorSpace = THREE.NoColorSpace,
-    disableMipmaps = false
-) {
-    texture.colorSpace = colorSpace;
-    texture.flipY = false;
-    texture.wrapS = THREE.ClampToEdgeWrapping;
-    texture.wrapT = THREE.ClampToEdgeWrapping;
-    if (disableMipmaps) {
-        texture.generateMipmaps = false;
-        texture.minFilter = THREE.LinearFilter;
-        texture.magFilter = THREE.LinearFilter;
-    }
-    texture.needsUpdate = true;
-    return texture;
-}
-
-async function getHeroTextures() {
-    if (!heroTexturesPromise) {
-        heroTexturesPromise = Promise.all([
-            heroTextureLoader.loadAsync(handsBaseColorUrl),
-            heroTextureLoader.loadAsync(handsEmissiveUrl),
-            heroTextureLoader.loadAsync(legsBaseColorUrl),
-            heroTextureLoader.loadAsync(legsEmissiveUrl),
-            heroTextureLoader.loadAsync(torsoBaseColorUrl),
-            heroTextureLoader.loadAsync(torsoEmissiveUrl)
-        ]).then(([handsBaseColor, handsEmissive, legsBaseColor, legsEmissive, torsoBaseColor, torsoEmissive]) => ({
-            hands: {
-                baseColor: configureTexture(handsBaseColor, THREE.SRGBColorSpace),
-                emissive: configureTexture(handsEmissive, THREE.SRGBColorSpace)
-            },
-            legs: {
-                baseColor: configureTexture(legsBaseColor, THREE.SRGBColorSpace),
-                emissive: configureTexture(legsEmissive, THREE.SRGBColorSpace)
-            },
-            torso: {
-                baseColor: configureTexture(torsoBaseColor, THREE.SRGBColorSpace),
-                emissive: configureTexture(torsoEmissive, THREE.SRGBColorSpace)
-            }
-        }));
-    }
-
-    return heroTexturesPromise;
-}
-
 function getBone(root: THREE.Object3D, ...names: string[]) {
     for (const name of names) {
         const node = root.getObjectByName(name);
@@ -157,17 +93,6 @@ function getBone(root: THREE.Object3D, ...names: string[]) {
         }
     }
     return null;
-}
-
-function collectHeroTorsoRig(root: THREE.Object3D) {
-    const rigNodes: THREE.Bone[] = [];
-    root.traverse((node) => {
-        if (!(node instanceof THREE.Bone)) return;
-        if (node.parent?.name !== 'Armature') return;
-        if (HERO_LOWER_RIG_PATTERN.test(node.name)) return;
-        rigNodes.push(node);
-    });
-    return rigNodes;
 }
 
 function findClip(animations: THREE.AnimationClip[], ...names: string[]) {
@@ -205,85 +130,14 @@ function normalizeClip(clip: THREE.AnimationClip) {
     return new THREE.AnimationClip(clip.name, Math.max(0.001, maxTime - minTime), normalizedTracks);
 }
 
-function resolveSourceObjectName(node: THREE.Object3D | null) {
-    let current: THREE.Object3D | null = node;
-    while (current) {
-        const sourceName = current.userData?.name;
-        if (typeof sourceName === 'string' && sourceName.length > 0) {
-            return sourceName;
-        }
-        current = current.parent;
-    }
-    return null;
-}
-
-function resolveHeroMaterialKey(node: THREE.Object3D): HeroMaterialKey {
-    const sourceObjectName = resolveSourceObjectName(node);
-    if (sourceObjectName) {
-        const materialKey = materialAssignments[sourceObjectName];
-        if (materialKey) {
-            return materialKey;
-        }
-    }
-    return 'torso';
-}
-
-function buildHeroMaterial(
-    source: THREE.Material,
-    materialKey: HeroMaterialKey,
-    textures: Awaited<ReturnType<typeof getHeroTextures>>
-) {
-    const material = source instanceof THREE.MeshStandardMaterial
-        ? source.clone()
-        : new THREE.MeshStandardMaterial();
-    const textureSet = textures[materialKey];
-
-    material.name = `KWII_Source_${materialKey}`;
-    material.color.setHex(0xffffff);
-    material.map = textureSet.baseColor;
-    material.emissiveMap = textureSet.emissive;
-    material.emissive.setHex(0xa9e7ff);
-    material.aoMap = null;
-    material.normalMap = null;
-    material.metalness = materialKey === 'hands' ? 0.16 : materialKey === 'legs' ? 0.1 : 0.08;
-    material.roughness = materialKey === 'hands' ? 0.72 : materialKey === 'legs' ? 0.84 : 0.8;
-    material.emissiveIntensity = materialKey === 'torso' ? 0.9 : 0.58;
-
-    material.needsUpdate = true;
-    return material;
-}
-
-function applyHeroMaterials(root: THREE.Object3D, textures: Awaited<ReturnType<typeof getHeroTextures>>) {
-    const materialCache = new Map<HeroMaterialKey, THREE.Material>();
-
-    root.traverse((child) => {
-        if (!(child instanceof THREE.Mesh || child instanceof THREE.SkinnedMesh)) return;
-        const materialKey = resolveHeroMaterialKey(child);
-        const cached = materialCache.get(materialKey);
-        if (cached) {
-            child.material = cached;
-            return;
-        }
-        const sourceMaterial = Array.isArray(child.material) ? child.material[0] : child.material;
-        const material = buildHeroMaterial(sourceMaterial, materialKey, textures);
-        materialCache.set(materialKey, material);
-        child.material = material;
-    });
-}
-
 async function getHeroTemplate() {
     if (!heroTemplatePromise) {
         heroTemplatePromise = new Promise((resolve) => {
             heroLoader.load(
                 heroMechUrl,
-                async (gltf) => {
-                    const root = gltf.scene;
+                (gltf) => {
+                    const root = gltf.scene as THREE.Group;
                     root.name = 'KWIIRuntimeRoot';
-                    try {
-                        applyHeroMaterials(root, await getHeroTextures());
-                    } catch (error) {
-                        console.warn('Failed to load KWII mech textures', error);
-                    }
                     markShadow(root);
                     resolve({
                         root,
@@ -333,44 +187,38 @@ export async function createKWIIRuntimeVisual(): Promise<KWIIRuntimeVisual | nul
     markShadow(root);
 
     const mixer = new THREE.AnimationMixer(root);
+    const pelvis = getBone(root, 'Pelvis');
+    const waist = getBone(root, 'Waist');
+    const torso = getBone(root, 'Torso');
+    const head = getBone(root, 'Head');
+    const leftArm = getBone(root, 'ArmL', 'Arm.L');
+    const rightArm = getBone(root, 'ArmR', 'Arm.R');
+
     const actions: Partial<Record<HeroAnimationKey, THREE.AnimationAction>> = {
-        idle: setupLoopAction(mixer, findClip(template.animations, 'KWII_Idle', '00-keying', '00-keying_1'), true) ?? undefined,
-        walk: setupLoopAction(mixer, findClip(template.animations, 'KWII_Walk', '01-walk'), false) ?? undefined,
+        idle: setupLoopAction(mixer, findClip(template.animations, 'KWII_Idle'), true) ?? undefined,
+        walk: setupLoopAction(mixer, findClip(template.animations, 'KWII_Walk'), false) ?? undefined,
         fire: setupOneShotAction(mixer, findClip(template.animations, 'KWII_Fire')) ?? undefined,
         torsoTurn: setupLoopAction(mixer, findClip(template.animations, 'KWII_TorsoTurn'), false) ?? undefined
     };
 
-    const waistBone = getBone(root, 'DEF-BODY');
-    const torsoBone = getBone(root, 'DEF-UPPER-BODY');
-    const viewAnchor = root.getObjectByName('viewAnchor') ?? getBone(root, 'DEF-CAMERAS-BASE');
-    const leftArmMount = root.getObjectByName('leftArmMount') ?? getBone(root, 'DEF-CANONL', 'DEF-MINIGUNL');
-    const rightArmMount = root.getObjectByName('rightArmMount') ?? getBone(root, 'DEF-CANONR', 'DEF-MINIGUNR');
-    const torsoMount = root.getObjectByName('torsoMount') ?? getBone(root, 'DEF-UPPER-BODY', 'DEF-BODY');
-    const torsoRigNodes = collectHeroTorsoRig(root);
-    const torsoRigRestPose = torsoRigNodes.map((node) => captureTransform(node) ?? {
-        position: node.position.clone(),
-        quaternion: node.quaternion.clone()
-    });
-    const torsoPivot = waistBone?.position.clone() ?? torsoBone?.position.clone() ?? null;
-
     return {
         root,
-        viewAnchor,
-        torsoPivot,
-        torsoRigNodes,
-        torsoRigRestPose,
+        viewAnchor: root.getObjectByName('viewAnchor') ?? head,
+        torsoPivot: null,
+        torsoRigNodes: [],
+        torsoRigRestPose: [],
         sockets: {
-            leftArmMount: leftArmMount ?? undefined,
-            rightArmMount: rightArmMount ?? undefined,
-            torsoMount: torsoMount ?? undefined
+            leftArmMount: root.getObjectByName('leftArmMount') ?? getBone(root, 'GunL', 'Gun.L') ?? undefined,
+            rightArmMount: root.getObjectByName('rightArmMount') ?? getBone(root, 'GunR', 'Gun.R') ?? undefined,
+            torsoMount: root.getObjectByName('torsoMount') ?? torso ?? undefined
         },
         bones: {
-            pelvis: getBone(root, 'DEF-HIPS'),
-            waist: waistBone,
-            torso: torsoBone,
-            head: getBone(root, 'DEF-CAMERAS-BASE'),
-            leftArm: getBone(root, 'DEF-ARML', 'DEF-ARM.L'),
-            rightArm: getBone(root, 'DEF-ARMR', 'DEF-ARM.R'),
+            pelvis,
+            waist,
+            torso,
+            head,
+            leftArm,
+            rightArm,
             leftThigh: null,
             rightThigh: null,
             leftShin: null,
@@ -379,12 +227,12 @@ export async function createKWIIRuntimeVisual(): Promise<KWIIRuntimeVisual | nul
             rightFoot: null
         },
         restPose: {
-            pelvis: captureTransform(getBone(root, 'DEF-HIPS')),
-            waist: captureTransform(waistBone),
-            torso: captureTransform(torsoBone),
-            head: captureTransform(getBone(root, 'DEF-CAMERAS-BASE')),
-            leftArm: captureTransform(getBone(root, 'DEF-ARML', 'DEF-ARM.L')),
-            rightArm: captureTransform(getBone(root, 'DEF-ARMR', 'DEF-ARM.R')),
+            pelvis: captureTransform(pelvis),
+            waist: captureTransform(waist),
+            torso: captureTransform(torso),
+            head: captureTransform(head),
+            leftArm: captureTransform(leftArm),
+            rightArm: captureTransform(rightArm),
             leftThigh: null,
             rightThigh: null,
             leftShin: null,
