@@ -504,6 +504,13 @@ Completed:
   - the `BackpackShelf` and `RearSpine` masses were repositioned to create a clearer layered stack from the upper block down into the pelvis
   - the top cap, shoulder pods, shoulder tails, side tanks, pelvis, hip skirts, and hip sockets were all rebalanced around that new stack to produce a more interesting and less monolithic rear 3P silhouette
   - those updated rear-shape transforms were propagated into `KWII_STRIDE_TEST` as well, keeping the stride shell aligned with the stronger current back view
+- after reviewing the reference more carefully, the rear direction was corrected again toward a narrower and more layered center rather than a fuller boxy back:
+  - the rear silhouette returned to the stronger pre-rear-review state as a base
+  - then a narrower `RearCore` and two small `RearFin` masses were introduced to create a more visible central rear mechanism between the shoulder modules
+  - the pelvis was narrowed again and the hip skirts / hip sockets were spread outward slightly to recover more negative space under the torso
+  - the shoulder pods and shoulder tails were opened outward so the top silhouette reads less like one rectangle and more like separated upper modules
+  - the side tanks were seated a little tighter and calmer around that opened shoulder structure
+  - the same rear-core state was propagated into `KWII_STRIDE_TEST`, so neutral and stride now share the same more reference-faithful rear read
 
 Next:
 - continue source-faithful hero refinement on the current clean shell:
