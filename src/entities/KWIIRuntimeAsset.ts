@@ -2,11 +2,14 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { WeaponMountId } from '../combat/weaponTypes';
-import heroMechUrl from '../assets/mechs/KWII_runtime_low.glb?url';
-import kwiiAoUrl from '../assets/mechs/kwii_bakes/KWII_AO.png?url';
-import kwiiBaseColorUrl from '../assets/mechs/kwii_bakes/KWII_BaseColor.png?url';
-import kwiiEmissionUrl from '../assets/mechs/kwii_bakes/KWII_Emission.png?url';
-import kwiiNormalUrl from '../assets/mechs/kwii_bakes/KWII_Normal.png?url';
+import heroMechUrl from '../assets/mechs/KWII_source_low.glb?url';
+import materialAssignmentsRaw from '../assets/mechs/KWII_source_low.materials.json';
+import handsBaseColorUrl from '../../mech-robot-kw-ii/textures/mech_hands_BaseColor.jpeg?url';
+import handsEmissiveUrl from '../../mech-robot-kw-ii/textures/mech_hands_Emissive.jpeg?url';
+import legsBaseColorUrl from '../../mech-robot-kw-ii/textures/mech_legs_BaseColor.jpeg?url';
+import legsEmissiveUrl from '../../mech-robot-kw-ii/textures/mech_legs_Emissive.jpeg?url';
+import torsoBaseColorUrl from '../../mech-robot-kw-ii/textures/mech_torso_BaseColor.jpeg?url';
+import torsoEmissiveUrl from '../../mech-robot-kw-ii/textures/mech_torso_Emissive.jpeg?url';
 
 type StoredTransform = {
     position: THREE.Vector3;
@@ -57,17 +60,26 @@ type HeroTemplate = {
     animations: THREE.AnimationClip[];
 };
 
-type HeroSurfaceMode = 'baked' | 'flat';
+type HeroMaterialKey = 'hands' | 'legs' | 'torso';
 
 const heroLoader = new GLTFLoader();
 const heroTextureLoader = new THREE.TextureLoader();
 let heroTemplatePromise: Promise<HeroTemplate | null> | null = null;
 let heroTexturesPromise: Promise<{
-    ao: THREE.Texture;
-    baseColor: THREE.Texture;
-    emission: THREE.Texture;
-    normal: THREE.Texture;
+    hands: {
+        baseColor: THREE.Texture;
+        emissive: THREE.Texture;
+    };
+    legs: {
+        baseColor: THREE.Texture;
+        emissive: THREE.Texture;
+    };
+    torso: {
+        baseColor: THREE.Texture;
+        emissive: THREE.Texture;
+    };
 }> | null = null;
+const materialAssignments = materialAssignmentsRaw as Record<string, HeroMaterialKey>;
 
 function markShadow(root: THREE.Object3D) {
     root.traverse((child) => {
@@ -108,15 +120,25 @@ function configureTexture(
 async function getHeroTextures() {
     if (!heroTexturesPromise) {
         heroTexturesPromise = Promise.all([
-            heroTextureLoader.loadAsync(kwiiAoUrl),
-            heroTextureLoader.loadAsync(kwiiBaseColorUrl),
-            heroTextureLoader.loadAsync(kwiiEmissionUrl),
-            heroTextureLoader.loadAsync(kwiiNormalUrl)
-        ]).then(([ao, baseColor, emission, normal]) => ({
-            ao: configureTexture(ao, THREE.NoColorSpace, true),
-            baseColor: configureTexture(baseColor, THREE.SRGBColorSpace, true),
-            emission: configureTexture(emission, THREE.SRGBColorSpace, true),
-            normal: configureTexture(normal, THREE.NoColorSpace, true)
+            heroTextureLoader.loadAsync(handsBaseColorUrl),
+            heroTextureLoader.loadAsync(handsEmissiveUrl),
+            heroTextureLoader.loadAsync(legsBaseColorUrl),
+            heroTextureLoader.loadAsync(legsEmissiveUrl),
+            heroTextureLoader.loadAsync(torsoBaseColorUrl),
+            heroTextureLoader.loadAsync(torsoEmissiveUrl)
+        ]).then(([handsBaseColor, handsEmissive, legsBaseColor, legsEmissive, torsoBaseColor, torsoEmissive]) => ({
+            hands: {
+                baseColor: configureTexture(handsBaseColor, THREE.SRGBColorSpace),
+                emissive: configureTexture(handsEmissive, THREE.SRGBColorSpace)
+            },
+            legs: {
+                baseColor: configureTexture(legsBaseColor, THREE.SRGBColorSpace),
+                emissive: configureTexture(legsEmissive, THREE.SRGBColorSpace)
+            },
+            torso: {
+                baseColor: configureTexture(torsoBaseColor, THREE.SRGBColorSpace),
+                emissive: configureTexture(torsoEmissive, THREE.SRGBColorSpace)
+            }
         }));
     }
 
@@ -133,8 +155,14 @@ function getBone(root: THREE.Object3D, ...names: string[]) {
     return null;
 }
 
-function findClip(animations: THREE.AnimationClip[], name: string) {
-    return animations.find((clip) => clip.name === name) ?? null;
+function findClip(animations: THREE.AnimationClip[], ...names: string[]) {
+    for (const name of names) {
+        const clip = animations.find((candidate) => candidate.name === name);
+        if (clip) {
+            return clip;
+        }
+    }
+    return null;
 }
 
 function normalizeClip(clip: THREE.AnimationClip) {
@@ -162,123 +190,69 @@ function normalizeClip(clip: THREE.AnimationClip) {
     return new THREE.AnimationClip(clip.name, Math.max(0.001, maxTime - minTime), normalizedTracks);
 }
 
-function ensureSecondaryUv(root: THREE.Object3D) {
-    root.traverse((child) => {
-        if (!(child instanceof THREE.Mesh || child instanceof THREE.SkinnedMesh)) return;
-        const geometry = child.geometry;
-        if (!geometry || geometry.getAttribute('uv2') || !geometry.getAttribute('uv')) return;
-        geometry.setAttribute('uv2', geometry.getAttribute('uv').clone());
-    });
-}
-
-function detectSurfaceMode(root: THREE.Object3D): HeroSurfaceMode {
-    let meshCount = 0;
-    let uvMeshCount = 0;
-
-    root.traverse((child) => {
-        if (!(child instanceof THREE.Mesh || child instanceof THREE.SkinnedMesh)) return;
-        meshCount += 1;
-        if (child.geometry?.getAttribute('uv')) {
-            uvMeshCount += 1;
+function resolveSourceObjectName(node: THREE.Object3D | null) {
+    let current: THREE.Object3D | null = node;
+    while (current) {
+        const sourceName = current.userData?.name;
+        if (typeof sourceName === 'string' && sourceName.length > 0) {
+            return sourceName;
         }
-    });
-
-    if (meshCount === 0) return 'flat';
-    return uvMeshCount / meshCount >= 0.9 ? 'baked' : 'flat';
+        current = current.parent;
+    }
+    return null;
 }
 
-function buildBakedMaterial(
+function resolveHeroMaterialKey(node: THREE.Object3D): HeroMaterialKey {
+    const sourceObjectName = resolveSourceObjectName(node);
+    if (sourceObjectName) {
+        const materialKey = materialAssignments[sourceObjectName];
+        if (materialKey) {
+            return materialKey;
+        }
+    }
+    return 'torso';
+}
+
+function buildHeroMaterial(
     source: THREE.Material,
-    textures: Awaited<ReturnType<typeof getHeroTextures>>,
-    surfaceMode: HeroSurfaceMode
+    materialKey: HeroMaterialKey,
+    textures: Awaited<ReturnType<typeof getHeroTextures>>
 ) {
-    if (!(source instanceof THREE.MeshStandardMaterial)) {
-        return source;
-    }
+    const material = source instanceof THREE.MeshStandardMaterial
+        ? source.clone()
+        : new THREE.MeshStandardMaterial();
+    const textureSet = textures[materialKey];
 
-    const material = source.clone();
-    material.map = null;
-    material.normalMap = null;
+    material.name = `KWII_Source_${materialKey}`;
+    material.color.setHex(0xffffff);
+    material.map = textureSet.baseColor;
+    material.emissiveMap = textureSet.emissive;
+    material.emissive.setHex(0xa9e7ff);
     material.aoMap = null;
-    material.normalScale.set(1, 1);
-    material.aoMapIntensity = 0;
-    material.emissiveMap = null;
-    material.emissive.setHex(0x000000);
-    material.emissiveIntensity = 0;
-
-    if (surfaceMode === 'baked') {
-        material.map = textures.baseColor;
-        material.normalMap = textures.normal;
-        material.aoMap = textures.ao;
-        material.normalScale.set(0.6, 0.6);
-        material.aoMapIntensity = 0.22;
-        material.emissiveMap = textures.emission;
-        material.emissive.setHex(0x83d8ff);
-        material.emissiveIntensity = 0.34;
-    }
-
-    if (material.name === 'KWII_Runtime_Dark') {
-        material.color.setHex(surfaceMode === 'baked' ? 0xd7dde4 : 0x57606c);
-        material.metalness = 0.08;
-        material.roughness = surfaceMode === 'baked' ? 0.9 : 0.86;
-        if (surfaceMode === 'baked') {
-            material.aoMapIntensity = 0.16;
-        }
-    } else if (material.name === 'KWII_Runtime_Glow') {
-        material.color.setHex(surfaceMode === 'baked' ? 0xffffff : 0xbfd0dc);
-        material.metalness = 0.04;
-        material.roughness = surfaceMode === 'baked' ? 0.72 : 0.64;
-        material.emissive.setHex(0x83d8ff);
-        material.emissiveIntensity = surfaceMode === 'baked' ? 1.55 : 1.25;
-        if (surfaceMode === 'baked') {
-            material.aoMapIntensity = 0.08;
-            material.emissiveMap = textures.emission;
-        }
-    } else {
-        material.color.setHex(surfaceMode === 'baked' ? 0xffffff : 0xb6bec9);
-        material.metalness = 0.12;
-        material.roughness = surfaceMode === 'baked' ? 0.84 : 0.8;
-    }
+    material.normalMap = null;
+    material.metalness = materialKey === 'hands' ? 0.16 : materialKey === 'legs' ? 0.1 : 0.08;
+    material.roughness = materialKey === 'hands' ? 0.72 : materialKey === 'legs' ? 0.84 : 0.8;
+    material.emissiveIntensity = materialKey === 'torso' ? 0.9 : 0.58;
 
     material.needsUpdate = true;
     return material;
 }
 
-function applyBakedMaterials(root: THREE.Object3D, textures: Awaited<ReturnType<typeof getHeroTextures>>) {
-    const materialCache = new Map<string, THREE.Material>();
-    const surfaceMode = detectSurfaceMode(root);
-    if (surfaceMode === 'baked') {
-        ensureSecondaryUv(root);
-    } else {
-        console.warn('KWII runtime asset has incomplete UVs; using flat material fallback.');
-    }
+function applyHeroMaterials(root: THREE.Object3D, textures: Awaited<ReturnType<typeof getHeroTextures>>) {
+    const materialCache = new Map<HeroMaterialKey, THREE.Material>();
 
     root.traverse((child) => {
         if (!(child instanceof THREE.Mesh || child instanceof THREE.SkinnedMesh)) return;
-
-        if (Array.isArray(child.material)) {
-            child.material = child.material.map((material) => {
-                const cacheKey = `${material.uuid}:${surfaceMode}`;
-                const cached = materialCache.get(cacheKey);
-                if (cached) return cached;
-
-                const bakedMaterial = buildBakedMaterial(material, textures, surfaceMode);
-                materialCache.set(cacheKey, bakedMaterial);
-                return bakedMaterial;
-            });
-            return;
-        }
-
-        const cacheKey = `${child.material.uuid}:${surfaceMode}`;
-        const cached = materialCache.get(cacheKey);
+        const materialKey = resolveHeroMaterialKey(child);
+        const cached = materialCache.get(materialKey);
         if (cached) {
             child.material = cached;
             return;
         }
-
-        const bakedMaterial = buildBakedMaterial(child.material, textures, surfaceMode);
-        materialCache.set(cacheKey, bakedMaterial);
-        child.material = bakedMaterial;
+        const sourceMaterial = Array.isArray(child.material) ? child.material[0] : child.material;
+        const material = buildHeroMaterial(sourceMaterial, materialKey, textures);
+        materialCache.set(materialKey, material);
+        child.material = material;
     });
 }
 
@@ -291,7 +265,7 @@ async function getHeroTemplate() {
                     const root = gltf.scene;
                     root.name = 'KWIIRuntimeRoot';
                     try {
-                        applyBakedMaterials(root, await getHeroTextures());
+                        applyHeroMaterials(root, await getHeroTextures());
                     } catch (error) {
                         console.warn('Failed to load KWII mech textures', error);
                     }
@@ -345,47 +319,52 @@ export async function createKWIIRuntimeVisual(): Promise<KWIIRuntimeVisual | nul
 
     const mixer = new THREE.AnimationMixer(root);
     const actions: Partial<Record<HeroAnimationKey, THREE.AnimationAction>> = {
-        idle: setupLoopAction(mixer, findClip(template.animations, 'KWII_Idle'), true) ?? undefined,
-        walk: setupLoopAction(mixer, findClip(template.animations, 'KWII_Walk'), false) ?? undefined,
+        idle: setupLoopAction(mixer, findClip(template.animations, 'KWII_Idle', '00-keying', '00-keying_1'), true) ?? undefined,
+        walk: setupLoopAction(mixer, findClip(template.animations, 'KWII_Walk', '01-walk'), false) ?? undefined,
         fire: setupOneShotAction(mixer, findClip(template.animations, 'KWII_Fire')) ?? undefined,
         torsoTurn: setupLoopAction(mixer, findClip(template.animations, 'KWII_TorsoTurn'), false) ?? undefined
     };
 
+    const viewAnchor = root.getObjectByName('viewAnchor') ?? getBone(root, 'DEF-CAMERAS-BASE');
+    const leftArmMount = root.getObjectByName('leftArmMount') ?? getBone(root, 'DEF-CANONL', 'DEF-MINIGUNL');
+    const rightArmMount = root.getObjectByName('rightArmMount') ?? getBone(root, 'DEF-CANONR', 'DEF-MINIGUNR');
+    const torsoMount = root.getObjectByName('torsoMount') ?? getBone(root, 'DEF-BODY', 'DEF-UPPER-BODY');
+
     return {
         root,
-        viewAnchor: root.getObjectByName('viewAnchor'),
+        viewAnchor,
         sockets: {
-            leftArmMount: root.getObjectByName('leftArmMount') ?? undefined,
-            rightArmMount: root.getObjectByName('rightArmMount') ?? undefined,
-            torsoMount: root.getObjectByName('torsoMount') ?? undefined
+            leftArmMount: leftArmMount ?? undefined,
+            rightArmMount: rightArmMount ?? undefined,
+            torsoMount: torsoMount ?? undefined
         },
         bones: {
-            pelvis: getBone(root, 'Pelvis'),
-            waist: getBone(root, 'Waist'),
-            torso: getBone(root, 'Torso'),
-            head: getBone(root, 'Head'),
-            leftArm: getBone(root, 'ArmL', 'Arm.L'),
-            rightArm: getBone(root, 'ArmR', 'Arm.R'),
-            leftThigh: getBone(root, 'ThighL', 'Thigh.L'),
-            rightThigh: getBone(root, 'ThighR', 'Thigh.R'),
-            leftShin: getBone(root, 'ShinL', 'Shin.L'),
-            rightShin: getBone(root, 'ShinR', 'Shin.R'),
-            leftFoot: getBone(root, 'FootL', 'Foot.L'),
-            rightFoot: getBone(root, 'FootR', 'Foot.R')
+            pelvis: getBone(root, 'DEF-HIPS'),
+            waist: getBone(root, 'DEF-BODY'),
+            torso: getBone(root, 'DEF-UPPER-BODY'),
+            head: getBone(root, 'DEF-CAMERAS-BASE'),
+            leftArm: getBone(root, 'DEF-ARML', 'DEF-ARM.L'),
+            rightArm: getBone(root, 'DEF-ARMR', 'DEF-ARM.R'),
+            leftThigh: null,
+            rightThigh: null,
+            leftShin: null,
+            rightShin: null,
+            leftFoot: null,
+            rightFoot: null
         },
         restPose: {
-            pelvis: captureTransform(getBone(root, 'Pelvis')),
-            waist: captureTransform(getBone(root, 'Waist')),
-            torso: captureTransform(getBone(root, 'Torso')),
-            head: captureTransform(getBone(root, 'Head')),
-            leftArm: captureTransform(getBone(root, 'ArmL', 'Arm.L')),
-            rightArm: captureTransform(getBone(root, 'ArmR', 'Arm.R')),
-            leftThigh: captureTransform(getBone(root, 'ThighL', 'Thigh.L')),
-            rightThigh: captureTransform(getBone(root, 'ThighR', 'Thigh.R')),
-            leftShin: captureTransform(getBone(root, 'ShinL', 'Shin.L')),
-            rightShin: captureTransform(getBone(root, 'ShinR', 'Shin.R')),
-            leftFoot: captureTransform(getBone(root, 'FootL', 'Foot.L')),
-            rightFoot: captureTransform(getBone(root, 'FootR', 'Foot.R'))
+            pelvis: captureTransform(getBone(root, 'DEF-HIPS')),
+            waist: captureTransform(getBone(root, 'DEF-BODY')),
+            torso: captureTransform(getBone(root, 'DEF-UPPER-BODY')),
+            head: captureTransform(getBone(root, 'DEF-CAMERAS-BASE')),
+            leftArm: captureTransform(getBone(root, 'DEF-ARML', 'DEF-ARM.L')),
+            rightArm: captureTransform(getBone(root, 'DEF-ARMR', 'DEF-ARM.R')),
+            leftThigh: null,
+            rightThigh: null,
+            leftShin: null,
+            rightShin: null,
+            leftFoot: null,
+            rightFoot: null
         },
         mixer,
         actions,
