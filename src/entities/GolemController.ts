@@ -527,6 +527,9 @@ export class GolemController {
         resetNode(this.heroVisual.bones.rightShin, this.heroVisual.restPose.rightShin);
         resetNode(this.heroVisual.bones.leftFoot, this.heroVisual.restPose.leftFoot);
         resetNode(this.heroVisual.bones.rightFoot, this.heroVisual.restPose.rightFoot);
+        this.heroVisual.torsoRigNodes.forEach((node, index) => {
+            resetNode(node, this.heroVisual!.torsoRigRestPose[index] ?? null);
+        });
 
         if (idleAction) {
             if (desiredLocomotion === 'idle') {

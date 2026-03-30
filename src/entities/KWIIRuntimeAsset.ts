@@ -23,6 +23,7 @@ export type KWIIRuntimeVisual = {
     viewAnchor: THREE.Object3D | null;
     torsoPivot: THREE.Vector3 | null;
     torsoRigNodes: THREE.Bone[];
+    torsoRigRestPose: StoredTransform[];
     sockets: Partial<Record<WeaponMountId, THREE.Object3D>>;
     bones: {
         pelvis: THREE.Bone | null;
@@ -346,6 +347,10 @@ export async function createKWIIRuntimeVisual(): Promise<KWIIRuntimeVisual | nul
     const rightArmMount = root.getObjectByName('rightArmMount') ?? getBone(root, 'DEF-CANONR', 'DEF-MINIGUNR');
     const torsoMount = root.getObjectByName('torsoMount') ?? getBone(root, 'DEF-UPPER-BODY', 'DEF-BODY');
     const torsoRigNodes = collectHeroTorsoRig(root);
+    const torsoRigRestPose = torsoRigNodes.map((node) => captureTransform(node) ?? {
+        position: node.position.clone(),
+        quaternion: node.quaternion.clone()
+    });
     const torsoPivot = waistBone?.position.clone() ?? torsoBone?.position.clone() ?? null;
 
     return {
@@ -353,6 +358,7 @@ export async function createKWIIRuntimeVisual(): Promise<KWIIRuntimeVisual | nul
         viewAnchor,
         torsoPivot,
         torsoRigNodes,
+        torsoRigRestPose,
         sockets: {
             leftArmMount: leftArmMount ?? undefined,
             rightArmMount: rightArmMount ?? undefined,
