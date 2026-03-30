@@ -23,6 +23,7 @@ const _sideVel = new THREE.Vector3();
 const _muzzleOffset = new THREE.Vector3();
 const _heroTwistQuat = new THREE.Quaternion();
 const _heroArmQuat = new THREE.Quaternion();
+const _heroLegQuat = new THREE.Quaternion();
 const _heroUpAxis = new THREE.Vector3(0, 1, 0);
 const _heroPitchAxis = new THREE.Vector3(1, 0, 0);
 
@@ -128,6 +129,7 @@ export class GolemController {
     mass = 2.0;
     throttle = 0;
     walkCycle = 0;
+    heroStrideCycle = 0;
     lastStepPhase = 0;
     currentSpeed = 0;
     damageFlashTimer = 0;
@@ -483,7 +485,9 @@ export class GolemController {
 
         const idleAction = this.heroVisual.actions.idle;
         const walkAction = this.heroVisual.actions.walk;
-        const desiredLocomotion = this.currentSpeed > 0.55 ? 'walk' : 'idle';
+        const locomotionAmount = clamp(Math.max(Math.abs(this.throttle), this.currentSpeed / GOLEM.classes.medium.speed), 0, 1);
+        const desiredLocomotion = locomotionAmount > 0.06 ? 'walk' : 'idle';
+        const fadeDuration = 0.16;
 
         const resetNode = (node: THREE.Object3D | null, rest: { position: THREE.Vector3; quaternion: THREE.Quaternion } | null) => {
             if (!node || !rest) return;
@@ -497,26 +501,43 @@ export class GolemController {
         resetNode(this.heroVisual.bones.head, this.heroVisual.restPose.head);
         resetNode(this.heroVisual.bones.leftArm, this.heroVisual.restPose.leftArm);
         resetNode(this.heroVisual.bones.rightArm, this.heroVisual.restPose.rightArm);
+        resetNode(this.heroVisual.bones.leftThigh, this.heroVisual.restPose.leftThigh);
+        resetNode(this.heroVisual.bones.rightThigh, this.heroVisual.restPose.rightThigh);
+        resetNode(this.heroVisual.bones.leftShin, this.heroVisual.restPose.leftShin);
+        resetNode(this.heroVisual.bones.rightShin, this.heroVisual.restPose.rightShin);
+        resetNode(this.heroVisual.bones.leftFoot, this.heroVisual.restPose.leftFoot);
+        resetNode(this.heroVisual.bones.rightFoot, this.heroVisual.restPose.rightFoot);
 
         if (idleAction && walkAction && desiredLocomotion !== this.heroVisual.locomotionState) {
             if (desiredLocomotion === 'walk') {
+                idleAction.enabled = true;
+                idleAction.fadeOut(fadeDuration);
                 walkAction.enabled = true;
                 walkAction.reset();
+                walkAction.setEffectiveWeight(1);
+                walkAction.fadeIn(fadeDuration);
                 walkAction.play();
-                walkAction.crossFadeFrom(idleAction, 0.18, true);
             } else {
                 idleAction.enabled = true;
                 idleAction.reset();
+                idleAction.setEffectiveWeight(1);
+                idleAction.fadeIn(fadeDuration);
                 idleAction.play();
-                idleAction.crossFadeFrom(walkAction, 0.18, true);
+                walkAction.fadeOut(fadeDuration);
             }
             this.heroVisual.locomotionState = desiredLocomotion;
         }
 
         this.heroVisual.mixer.update(dt);
 
+        const strideDirection = this.throttle < -0.05 ? -1 : 1;
+        if (locomotionAmount > 0.05) {
+            this.heroStrideCycle += dt * (3.1 + locomotionAmount * 5.2) * strideDirection;
+        }
+
         const torsoTwist = angleDiff(this.legYaw, this.torsoYaw);
-        const bob = Math.abs(Math.sin(this.walkCycle * 2)) * 0.08;
+        const gaitPhase = this.heroStrideCycle;
+        const bob = Math.abs(Math.sin(gaitPhase * 2)) * 0.08 * (0.35 + locomotionAmount * 0.65);
         this.heroVisual.root.rotation.set(0, Math.PI - this.legYaw, 0);
         this.heroVisual.root.position.set(0, 0, 0);
 
@@ -564,6 +585,46 @@ export class GolemController {
             _heroArmQuat.setFromAxisAngle(_heroPitchAxis, -this.weaponRecoil.rightArmMount * 0.55);
             rightArm.quaternion.multiply(_heroArmQuat);
         }
+
+        const applyLegGait = (
+            thigh: THREE.Object3D | null,
+            shin: THREE.Object3D | null,
+            foot: THREE.Object3D | null,
+            footRest: { position: THREE.Vector3; quaternion: THREE.Quaternion } | null,
+            phase: number
+        ) => {
+            if (!thigh || !shin || !foot || !footRest) return;
+
+            const swing = Math.sin(phase) * locomotionAmount;
+            const kneeBend = Math.max(0, -Math.sin(phase)) * locomotionAmount;
+            const footLift = Math.max(0, Math.cos(phase)) * locomotionAmount;
+
+            _heroLegQuat.setFromAxisAngle(_heroPitchAxis, swing * 0.58);
+            thigh.quaternion.multiply(_heroLegQuat);
+
+            _heroLegQuat.setFromAxisAngle(_heroPitchAxis, kneeBend * 0.82);
+            shin.quaternion.multiply(_heroLegQuat);
+
+            _heroLegQuat.setFromAxisAngle(_heroPitchAxis, -swing * 0.26 - footLift * 0.18);
+            foot.quaternion.multiply(_heroLegQuat);
+            foot.position.y += footLift * 0.085;
+            foot.position.z += Math.max(0, swing) * 0.04;
+        };
+
+        applyLegGait(
+            this.heroVisual.bones.leftThigh,
+            this.heroVisual.bones.leftShin,
+            this.heroVisual.bones.leftFoot,
+            this.heroVisual.restPose.leftFoot,
+            gaitPhase
+        );
+        applyLegGait(
+            this.heroVisual.bones.rightThigh,
+            this.heroVisual.bones.rightShin,
+            this.heroVisual.bones.rightFoot,
+            this.heroVisual.restPose.rightFoot,
+            gaitPhase + Math.PI
+        );
 
         this.heroVisual.root.updateMatrixWorld(true);
     }

@@ -26,6 +26,12 @@ export type KWIIRuntimeVisual = {
         head: THREE.Bone | null;
         leftArm: THREE.Bone | null;
         rightArm: THREE.Bone | null;
+        leftThigh: THREE.Bone | null;
+        rightThigh: THREE.Bone | null;
+        leftShin: THREE.Bone | null;
+        rightShin: THREE.Bone | null;
+        leftFoot: THREE.Bone | null;
+        rightFoot: THREE.Bone | null;
     };
     restPose: {
         pelvis: StoredTransform | null;
@@ -34,6 +40,12 @@ export type KWIIRuntimeVisual = {
         head: StoredTransform | null;
         leftArm: StoredTransform | null;
         rightArm: StoredTransform | null;
+        leftThigh: StoredTransform | null;
+        rightThigh: StoredTransform | null;
+        leftShin: StoredTransform | null;
+        rightShin: StoredTransform | null;
+        leftFoot: StoredTransform | null;
+        rightFoot: StoredTransform | null;
     };
     mixer: THREE.AnimationMixer;
     actions: Partial<Record<HeroAnimationKey, THREE.AnimationAction>>;
@@ -296,7 +308,13 @@ export async function createKWIIRuntimeVisual(): Promise<KWIIRuntimeVisual | nul
             torso: getBone(root, 'Torso'),
             head: getBone(root, 'Head'),
             leftArm: getBone(root, 'ArmL', 'Arm.L'),
-            rightArm: getBone(root, 'ArmR', 'Arm.R')
+            rightArm: getBone(root, 'ArmR', 'Arm.R'),
+            leftThigh: getBone(root, 'ThighL'),
+            rightThigh: getBone(root, 'ThighR'),
+            leftShin: getBone(root, 'ShinL'),
+            rightShin: getBone(root, 'ShinR'),
+            leftFoot: getBone(root, 'FootL'),
+            rightFoot: getBone(root, 'FootR')
         },
         restPose: {
             pelvis: captureTransform(getBone(root, 'Pelvis')),
@@ -304,7 +322,13 @@ export async function createKWIIRuntimeVisual(): Promise<KWIIRuntimeVisual | nul
             torso: captureTransform(getBone(root, 'Torso')),
             head: captureTransform(getBone(root, 'Head')),
             leftArm: captureTransform(getBone(root, 'ArmL', 'Arm.L')),
-            rightArm: captureTransform(getBone(root, 'ArmR', 'Arm.R'))
+            rightArm: captureTransform(getBone(root, 'ArmR', 'Arm.R')),
+            leftThigh: captureTransform(getBone(root, 'ThighL')),
+            rightThigh: captureTransform(getBone(root, 'ThighR')),
+            leftShin: captureTransform(getBone(root, 'ShinL')),
+            rightShin: captureTransform(getBone(root, 'ShinR')),
+            leftFoot: captureTransform(getBone(root, 'FootL')),
+            rightFoot: captureTransform(getBone(root, 'FootR'))
         },
         mixer,
         actions,
