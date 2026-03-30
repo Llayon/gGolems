@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { WeaponMountId } from '../combat/weaponTypes';
-import heroMechUrl from '../assets/mechs/KWII_runtime_baked.glb?url';
+import heroMechUrl from '../assets/mechs/KWII_runtime_low.glb?url';
 import kwiiAoUrl from '../assets/mechs/kwii_bakes/KWII_AO.png?url';
 import kwiiBaseColorUrl from '../assets/mechs/kwii_bakes/KWII_BaseColor.png?url';
 import kwiiEmissionUrl from '../assets/mechs/kwii_bakes/KWII_Emission.png?url';
