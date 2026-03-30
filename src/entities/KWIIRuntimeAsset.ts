@@ -83,7 +83,7 @@ let heroTexturesPromise: Promise<{
     };
 }> | null = null;
 const materialAssignments = materialAssignmentsRaw as Record<string, HeroMaterialKey>;
-const HERO_TORSO_RIG_PATTERN = /^(?:DEF-(?:UPPER-BODY|BODY(?:-|$)|ARM(?:-|L|R|$)|CANON|CAMERAS|MCH-BODY)|MCH-BODY)/;
+const HERO_LOWER_RIG_PATTERN = /^(?:DEF-(?:HIPS|LEG|KNEE|SHIN|ANKLE|FOOT|TOE)|IK-|MCH-(?:INT-FOOT-ROLL|SWITCH-LEG))/;
 
 function markShadow(root: THREE.Object3D) {
     root.traverse((child) => {
@@ -164,7 +164,7 @@ function collectHeroTorsoRig(root: THREE.Object3D) {
     root.traverse((node) => {
         if (!(node instanceof THREE.Bone)) return;
         if (node.parent?.name !== 'Armature') return;
-        if (!HERO_TORSO_RIG_PATTERN.test(node.name)) return;
+        if (HERO_LOWER_RIG_PATTERN.test(node.name)) return;
         rigNodes.push(node);
     });
     return rigNodes;
