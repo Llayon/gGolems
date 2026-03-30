@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { WeaponMountId } from '../combat/weaponTypes';
-import heroMechUrl from '../assets/mechs/KWII_runtime_low.glb?url';
+import heroMechUrl from '../assets/mechs/KWII_runtime_baked.glb?url';
 import kwiiAoUrl from '../assets/mechs/kwii_bakes/KWII_AO.png?url';
 import kwiiBaseColorUrl from '../assets/mechs/kwii_bakes/KWII_BaseColor.png?url';
 import kwiiEmissionUrl from '../assets/mechs/kwii_bakes/KWII_Emission.png?url';
@@ -212,6 +212,9 @@ function buildBakedMaterial(
         material.aoMap = textures.ao;
         material.normalScale.set(0.6, 0.6);
         material.aoMapIntensity = 0.22;
+        material.emissiveMap = textures.emission;
+        material.emissive.setHex(0x83d8ff);
+        material.emissiveIntensity = 0.34;
     }
 
     if (material.name === 'KWII_Runtime_Dark') {
@@ -363,12 +366,12 @@ export async function createKWIIRuntimeVisual(): Promise<KWIIRuntimeVisual | nul
             head: getBone(root, 'Head'),
             leftArm: getBone(root, 'ArmL', 'Arm.L'),
             rightArm: getBone(root, 'ArmR', 'Arm.R'),
-            leftThigh: getBone(root, 'ThighL'),
-            rightThigh: getBone(root, 'ThighR'),
-            leftShin: getBone(root, 'ShinL'),
-            rightShin: getBone(root, 'ShinR'),
-            leftFoot: getBone(root, 'FootL'),
-            rightFoot: getBone(root, 'FootR')
+            leftThigh: getBone(root, 'ThighL', 'Thigh.L'),
+            rightThigh: getBone(root, 'ThighR', 'Thigh.R'),
+            leftShin: getBone(root, 'ShinL', 'Shin.L'),
+            rightShin: getBone(root, 'ShinR', 'Shin.R'),
+            leftFoot: getBone(root, 'FootL', 'Foot.L'),
+            rightFoot: getBone(root, 'FootR', 'Foot.R')
         },
         restPose: {
             pelvis: captureTransform(getBone(root, 'Pelvis')),
@@ -377,12 +380,12 @@ export async function createKWIIRuntimeVisual(): Promise<KWIIRuntimeVisual | nul
             head: captureTransform(getBone(root, 'Head')),
             leftArm: captureTransform(getBone(root, 'ArmL', 'Arm.L')),
             rightArm: captureTransform(getBone(root, 'ArmR', 'Arm.R')),
-            leftThigh: captureTransform(getBone(root, 'ThighL')),
-            rightThigh: captureTransform(getBone(root, 'ThighR')),
-            leftShin: captureTransform(getBone(root, 'ShinL')),
-            rightShin: captureTransform(getBone(root, 'ShinR')),
-            leftFoot: captureTransform(getBone(root, 'FootL')),
-            rightFoot: captureTransform(getBone(root, 'FootR'))
+            leftThigh: captureTransform(getBone(root, 'ThighL', 'Thigh.L')),
+            rightThigh: captureTransform(getBone(root, 'ThighR', 'Thigh.R')),
+            leftShin: captureTransform(getBone(root, 'ShinL', 'Shin.L')),
+            rightShin: captureTransform(getBone(root, 'ShinR', 'Shin.R')),
+            leftFoot: captureTransform(getBone(root, 'FootL', 'Foot.L')),
+            rightFoot: captureTransform(getBone(root, 'FootR', 'Foot.R'))
         },
         mixer,
         actions,
