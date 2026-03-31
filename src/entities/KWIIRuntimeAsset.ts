@@ -83,6 +83,7 @@ let heroTexturesPromise: Promise<{
     };
 }> | null = null;
 const materialAssignments = materialAssignmentsRaw as Record<string, Array<HeroMaterialKey | null>>;
+const HERO_LOWER_RIG_PATTERN = /^(?:DEF-(?:HIPS|LEG|KNEE|SHIN|ANKLE|FOOT|TOE)|DEF-MCH-INT-(?:SHIN|ANKLE)|IK-|FK-|MCH-(?:SWITCH|INT-FOOT|FOOT|IK-FOOT|POLE-LEG))/;
 
 function markShadow(root: THREE.Object3D) {
     root.traverse((child) => {
@@ -155,6 +156,18 @@ function getBone(root: THREE.Object3D, ...names: string[]) {
         }
     }
     return null;
+}
+
+function collectHeroTorsoRig(root: THREE.Object3D) {
+    const rigNodes: THREE.Bone[] = [];
+    root.traverse((node) => {
+        if (!(node instanceof THREE.Bone)) return;
+        if (node.parent instanceof THREE.Bone) return;
+        if (!node.name.startsWith('DEF-')) return;
+        if (HERO_LOWER_RIG_PATTERN.test(node.name)) return;
+        rigNodes.push(node);
+    });
+    return rigNodes;
 }
 
 function findClip(animations: THREE.AnimationClip[], ...names: string[]) {
@@ -327,6 +340,11 @@ export async function createKWIIRuntimeVisual(): Promise<KWIIRuntimeVisual | nul
     const head = getBone(root, 'DEF-CAMERAS-BASE');
     const leftArm = getBone(root, 'DEF-ARML', 'DEF-ARM.L');
     const rightArm = getBone(root, 'DEF-ARMR', 'DEF-ARM.R');
+    const torsoRigNodes = collectHeroTorsoRig(root);
+    const torsoRigRestPose = torsoRigNodes.map((node) => captureTransform(node) ?? {
+        position: node.position.clone(),
+        quaternion: node.quaternion.clone()
+    });
 
     const actions: Partial<Record<HeroAnimationKey, THREE.AnimationAction>> = {
         idle: setupLoopAction(mixer, findClip(template.animations, 'KWII_Idle'), true) ?? undefined,
@@ -338,9 +356,9 @@ export async function createKWIIRuntimeVisual(): Promise<KWIIRuntimeVisual | nul
     return {
         root,
         viewAnchor: root.getObjectByName('viewAnchor') ?? head,
-        torsoPivot: null,
-        torsoRigNodes: [],
-        torsoRigRestPose: [],
+        torsoPivot: waist?.position.clone() ?? torso?.position.clone() ?? null,
+        torsoRigNodes,
+        torsoRigRestPose,
         sockets: {
             leftArmMount: root.getObjectByName('leftArmMount') ?? getBone(root, 'DEF-CANONL', 'DEF-MINIGUNL') ?? undefined,
             rightArmMount: root.getObjectByName('rightArmMount') ?? getBone(root, 'DEF-CANONR', 'DEF-MINIGUNR') ?? undefined,
