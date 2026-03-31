@@ -905,11 +905,7 @@ function PilotAccountCard(props: {
                                 {props.authBusy === 'magic' ? props.t('supabase.actions.magicBusy') : props.t('supabase.actions.magicSend')}
                             </button>
                         </div>
-                    ) : (
-                        <div className="mt-3 border-t border-[#8f6a38]/25 pt-3 text-center text-[10px] tracking-[0.14em] text-[#9de5b0]">
-                            {props.t('supabase.permanentHint')}
-                        </div>
-                    )}
+                    ) : null}
                     {props.authMessage ? (
                         <div className={`mt-3 text-center text-[10px] tracking-[0.14em] ${props.authMessage.tone === 'error' ? 'text-[#ffb09a]' : props.authMessage.tone === 'success' ? 'text-[#9de5b0]' : 'text-[#8fb8c2]'}`}>
                             {props.authMessage.text}
@@ -1024,7 +1020,7 @@ export default function App() {
             setAuthUpgradeBusy('idle');
             if (!snapshot.isAnonymous) {
                 setAuthUpgradeEmail('');
-                setAuthUpgradeMessage((current) => current?.text === t('supabase.permanentHint') ? null : current);
+                setAuthUpgradeMessage(null);
             }
 
             setPilotAccount({
