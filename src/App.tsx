@@ -8,6 +8,8 @@ import { initGame } from './core/Engine';
 import type { NetworkStartupErrorCode } from './network/NetworkManager';
 import { getFirebaseLobbyStatus } from './firebase/client';
 import { registerFirebaseLobby, subscribeFirebaseLobbies, type FirebaseLobbyRegistration, type FirebaseLobbyRoom } from './firebase/lobbyRegistry';
+import { getSupabaseStatus } from './supabase/client';
+import { bootstrapPilotAccount, recordPilotMatch, syncPilotLocale } from './supabase/progression';
 import { CombatOverlayCore } from './ui/mobile/CombatOverlayCore';
 import { MobileCombatLayout } from './ui/mobile/MobileCombatLayout';
 import { MobileSettingsOverlay } from './ui/mobile/MobileSettingsOverlay';
@@ -102,6 +104,18 @@ type StartupFailure = {
     cause?: unknown;
 };
 
+type PilotAccountState = {
+    status: 'disabled' | 'booting' | 'ready' | 'error';
+    userId: string | null;
+    callsign: string;
+    isAnonymous: boolean;
+    matchesPlayed: number;
+    matchesWon: number;
+    xp: number;
+    credits: number;
+    error: string;
+};
+
 const startupPhaseLabelKeys: Record<StartupPhase, TranslationKey> = {
     startWorld: 'errors.startWorld',
     createSession: 'errors.createSession',
@@ -156,6 +170,20 @@ const initialGameState: GameHudState = {
     terrainColliderMode: 'heightfield',
     terrainColliderError: ''
 };
+
+function createInitialPilotAccountState(enabled: boolean): PilotAccountState {
+    return {
+        status: enabled ? 'booting' : 'disabled',
+        userId: null,
+        callsign: '',
+        isAnonymous: true,
+        matchesPlayed: 0,
+        matchesWon: 0,
+        xp: 0,
+        credits: 0,
+        error: ''
+    };
+}
 
 function clamp(value: number, min: number, max: number) {
     return Math.max(min, Math.min(max, value));
@@ -690,12 +718,73 @@ function MatchStatusOverlay(props: { scores: TeamScoreState; points: ControlPoin
     );
 }
 
+function PilotAccountCard(props: { account: PilotAccountState; t: Translator }) {
+    const statusKey: TranslationKey = props.account.status === 'ready'
+        ? 'supabase.status.ready'
+        : props.account.status === 'error'
+            ? 'supabase.status.error'
+            : props.account.status === 'disabled'
+                ? 'supabase.status.disabled'
+                : 'supabase.status.booting';
+    const statusTone = props.account.status === 'ready'
+        ? 'text-[#9de5b0]'
+        : props.account.status === 'error'
+            ? 'text-[#ffb09a]'
+            : props.account.status === 'disabled'
+                ? 'text-[#d3bc94]'
+                : 'text-[#8fb8c2]';
+    const shortId = props.account.userId ? props.account.userId.slice(0, 8).toUpperCase() : '--';
+
+    return (
+        <div className="rounded-xl border border-[#8f6a38]/30 bg-black/25 px-4 py-3">
+            <div className="text-center text-xs tracking-[0.28em] text-[#8fb8c2]">{props.t('supabase.title')}</div>
+            <div className={`mt-2 text-center text-[11px] tracking-[0.18em] ${statusTone}`}>
+                {props.t(statusKey)}
+            </div>
+            {props.account.status === 'ready' ? (
+                <>
+                    <div className="mt-2 text-center text-[13px] font-bold tracking-[0.18em] text-[#f3deb5]">
+                        {props.account.callsign}
+                    </div>
+                    <div className="mt-1 text-center text-[10px] tracking-[0.18em] text-[#c5b187]">
+                        {props.t('supabase.profile', { idLabel: props.t('common.id'), id: shortId })}
+                    </div>
+                    <div className="mt-1 text-center text-[10px] tracking-[0.18em] text-[#8fb8c2]">
+                        {props.t(props.account.isAnonymous ? 'supabase.guest' : 'supabase.linked')}
+                    </div>
+                    <div className="mt-2 text-center text-[10px] tracking-[0.18em] text-[#d7c5a1]">
+                        {props.t('supabase.matches', {
+                            played: props.account.matchesPlayed,
+                            wins: props.account.matchesWon
+                        })}
+                    </div>
+                    <div className="mt-1 text-center text-[10px] tracking-[0.18em] text-[#d7c5a1]">
+                        {props.t('supabase.resources', {
+                            xp: props.account.xp,
+                            credits: props.account.credits
+                        })}
+                    </div>
+                </>
+            ) : props.account.status === 'error' ? (
+                <div className="mt-2 text-center text-[10px] tracking-[0.14em] text-[#ffb09a]">
+                    {props.account.error}
+                </div>
+            ) : (
+                <div className="mt-2 text-center text-[10px] tracking-[0.14em] text-[#b9c7c8]">
+                    {props.t(props.account.status === 'disabled' ? 'supabase.disabledHint' : 'supabase.bootingHint')}
+                </div>
+            )}
+        </div>
+    );
+}
+
 export default function App() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const copyResetRef = useRef<number | null>(null);
     const firebaseLobbyRef = useRef<FirebaseLobbyRegistration | null>(null);
     const latestGameRef = useRef<any>(null);
     const latestHudStateRef = useRef<GameHudState>(initialGameState);
+    const recordedMatchRef = useRef<string | null>(null);
     const [locale, setLocale] = useState<Locale>(() => getInitialLocale());
     const [loading, setLoading] = useState(false);
     const [inLobby, setInLobby] = useState(true);
@@ -717,6 +806,8 @@ export default function App() {
     const [gameInstance, setGameInstance] = useState<any>(null);
     const [gameState, setGameState] = useState<GameHudState>(initialGameState);
     const [firebaseRooms, setFirebaseRooms] = useState<FirebaseLobbyRoom[]>([]);
+    const supabaseStatus = getSupabaseStatus();
+    const [pilotAccount, setPilotAccount] = useState<PilotAccountState>(() => createInitialPilotAccountState(supabaseStatus.enabled));
     const t = createTranslator(locale);
     const firebaseLobbyStatus = getFirebaseLobbyStatus();
 
@@ -858,6 +949,51 @@ export default function App() {
     }, [locale]);
 
     useEffect(() => {
+        if (!supabaseStatus.enabled) {
+            setPilotAccount(createInitialPilotAccountState(false));
+            return;
+        }
+
+        let cancelled = false;
+        setPilotAccount(createInitialPilotAccountState(true));
+
+        void (async () => {
+            try {
+                const snapshot = await bootstrapPilotAccount(locale);
+                if (cancelled) return;
+
+                if (!snapshot) {
+                    setPilotAccount(createInitialPilotAccountState(false));
+                    return;
+                }
+
+                setPilotAccount({
+                    status: 'ready',
+                    userId: snapshot.userId,
+                    callsign: snapshot.callsign,
+                    isAnonymous: snapshot.isAnonymous,
+                    matchesPlayed: snapshot.progress.matches_played,
+                    matchesWon: snapshot.progress.matches_won,
+                    xp: snapshot.progress.xp,
+                    credits: snapshot.progress.credits,
+                    error: ''
+                });
+            } catch (error) {
+                if (cancelled) return;
+                setPilotAccount({
+                    ...createInitialPilotAccountState(true),
+                    status: 'error',
+                    error: describeError(error, 'Supabase bootstrap failed.')
+                });
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [supabaseStatus.enabled]);
+
+    useEffect(() => {
         if (!inLobby || !firebaseLobbyStatus.enabled) {
             setFirebaseRooms([]);
             return;
@@ -880,6 +1016,54 @@ export default function App() {
     useEffect(() => {
         latestHudStateRef.current = gameState;
     }, [gameState]);
+
+    useEffect(() => {
+        if (pilotAccount.status !== 'ready' || !pilotAccount.userId) {
+            return;
+        }
+
+        void syncPilotLocale(pilotAccount.userId, locale).catch((error) => {
+            console.warn('[supabase] Failed to sync locale:', error);
+        });
+    }, [locale, pilotAccount.status, pilotAccount.userId]);
+
+    useEffect(() => {
+        if (pilotAccount.status !== 'ready' || !pilotAccount.userId || inLobby) {
+            return;
+        }
+
+        const winner = gameState.teamScores.winner;
+        if (!winner) {
+            recordedMatchRef.current = null;
+            return;
+        }
+
+        const signature = `${gameState.gameMode}:${winner}:${gameState.teamScores.blue}:${gameState.teamScores.red}`;
+        if (recordedMatchRef.current === signature) {
+            return;
+        }
+        recordedMatchRef.current = signature;
+
+        void recordPilotMatch(pilotAccount.userId, {
+            mode: gameState.gameMode,
+            won: winner === 'blue',
+            blueScore: gameState.teamScores.blue,
+            redScore: gameState.teamScores.red
+        }).then((snapshot) => {
+            if (!snapshot) return;
+            setPilotAccount((current) => current.status !== 'ready'
+                ? current
+                : {
+                    ...current,
+                    matchesPlayed: snapshot.matchesPlayed,
+                    matchesWon: snapshot.matchesWon,
+                    xp: snapshot.xp,
+                    credits: snapshot.credits
+                });
+        }).catch((error) => {
+            console.warn('[supabase] Failed to record match:', error);
+        });
+    }, [gameState.gameMode, gameState.teamScores, inLobby, pilotAccount.status, pilotAccount.userId]);
 
     useEffect(() => {
         if (!firebaseLobbyStatus.enabled || !firebaseLobbyRef.current || !isHost || inLobby) {
@@ -1125,6 +1309,8 @@ export default function App() {
                                 {t('lobby.roomNameHint')}
                             </div>
                         </div>
+
+                        <PilotAccountCard account={pilotAccount} t={t} />
 
                         <button
                             onClick={() => startGame('solo')}

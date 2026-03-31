@@ -12,6 +12,7 @@ const ru: typeof en = {
     'common.copied': 'СКОПИРОВАНО',
     'common.failed': 'НЕ УДАЛОСЬ',
     'common.or': 'ИЛИ',
+    'common.retry': 'ПОВТОРИТЬ',
     'common.network': 'СЕТЬ',
     'common.id': 'ID',
 
@@ -52,6 +53,19 @@ const ru: typeof en = {
     'lobby.hideUnavailable': 'СКРЫТЬ ПОЛНЫЕ / ЗАВЕРШЕННЫЕ',
     'lobby.noJoinableRooms': 'НЕТ ДОСТУПНЫХ КОМНАТ',
     'lobby.hiddenUnavailable': 'СКРЫТО НЕДОСТУПНЫХ КОМНАТ: {{count}}',
+
+    'supabase.title': 'ЛИСТ ПИЛОТА',
+    'supabase.status.ready': 'SUPABASE ПОДКЛЮЧЕН',
+    'supabase.status.booting': 'ПОДЪЕМ ГОСТЕВОГО ПИЛОТА',
+    'supabase.status.disabled': 'SUPABASE ОТКЛЮЧЕН',
+    'supabase.status.error': 'СБОЙ ЗАПУСКА SUPABASE',
+    'supabase.disabledHint': 'Укажи VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY, чтобы включить постоянные данные пилота.',
+    'supabase.bootingHint': 'Создается анонимная сессия пилота и загружается постоянный прогресс.',
+    'supabase.profile': '{{idLabel}} {{id}}',
+    'supabase.guest': 'ГОСТЕВОЙ ПИЛОТ',
+    'supabase.linked': 'ПРИВЯЗАННЫЙ ПИЛОТ',
+    'supabase.matches': '{{played}} вылетов | {{wins}} побед',
+    'supabase.resources': 'XP {{xp}} | ЛОМ {{credits}}',
 
     'session.solo': 'ЛОКАЛЬНЫЙ БОЙ',
     'session.host': 'КАНАЛ ХОСТА',

@@ -12,6 +12,7 @@ const en = {
     'common.copied': 'COPIED',
     'common.failed': 'FAILED',
     'common.or': 'OR',
+    'common.retry': 'RETRY',
     'common.network': 'NETWORK',
     'common.id': 'ID',
 
@@ -52,6 +53,19 @@ const en = {
     'lobby.hideUnavailable': 'HIDE FULL / ENDED',
     'lobby.noJoinableRooms': 'NO JOINABLE ROOMS',
     'lobby.hiddenUnavailable': '{{count}} UNAVAILABLE ROOMS HIDDEN',
+
+    'supabase.title': 'PILOT RECORD',
+    'supabase.status.ready': 'SUPABASE LINK LIVE',
+    'supabase.status.booting': 'BOOTING GUEST PILOT',
+    'supabase.status.disabled': 'SUPABASE OFFLINE',
+    'supabase.status.error': 'SUPABASE BOOT FAILURE',
+    'supabase.disabledHint': 'Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to enable persistent pilot data.',
+    'supabase.bootingHint': 'Creating an anonymous pilot session and loading persistent progress.',
+    'supabase.profile': '{{idLabel}} {{id}}',
+    'supabase.guest': 'GUEST PILOT',
+    'supabase.linked': 'LINKED PILOT',
+    'supabase.matches': '{{played}} sorties | {{wins}} victories',
+    'supabase.resources': 'XP {{xp}} | SCRAP {{credits}}',
 
     'session.solo': 'LOCAL MATCH',
     'session.host': 'HOST CHANNEL',
