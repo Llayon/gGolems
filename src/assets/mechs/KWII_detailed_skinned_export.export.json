@@ -1,0 +1,16 @@
+{
+  "armature": "KWII_DetailedSkinnedRig",
+  "meshCount": 156,
+  "socketNames": [
+    "viewAnchor",
+    "leftArmMount",
+    "rightArmMount",
+    "torsoMount"
+  ],
+  "actions": [
+    "KWII_Idle",
+    "KWII_Fire",
+    "KWII_Walk",
+    "KWII_TorsoTurn"
+  ]
+}
