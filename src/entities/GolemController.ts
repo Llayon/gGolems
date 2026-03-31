@@ -7,9 +7,22 @@ import { ParticleManager } from '../fx/ParticleManager';
 import { AudioManager } from '../core/AudioManager';
 import { DecalManager } from '../fx/DecalManager';
 import { MechCamera } from '../camera/MechCamera';
-import { getWeaponDefinition, WEAPON_MOUNT_ORDER } from '../combat/weapons';
+import { getWeaponDefinition } from '../combat/weapons';
 import type { WeaponFireRequest, WeaponGroupId, WeaponId, WeaponMountId, WeaponMountRuntime, WeaponStatusView } from '../combat/weaponTypes';
 import { createKWIIRuntimeVisual, type KWIIRuntimeVisual } from './KWIIRuntimeAsset';
+import {
+    DEFAULT_CHASSIS_ID,
+    getChassisDefinition,
+    getDefaultLoadoutForChassis,
+    getLoadoutDefinition
+} from '../mechs/definitions';
+import {
+    cloneSectionState,
+    GOLEM_SECTION_ORDER,
+    type GolemSection,
+    type GolemSectionState
+} from '../mechs/sections';
+import type { ChassisDefinition, ChassisId, LoadoutDefinition, LoadoutId } from '../mechs/types';
 
 const _moveDir = new THREE.Vector3();
 const _currentVel = new THREE.Vector3();
@@ -28,42 +41,18 @@ const _heroUpAxis = new THREE.Vector3(0, 1, 0);
 const _heroPitchAxis = new THREE.Vector3(1, 0, 0);
 const _heroRigOffset = new THREE.Vector3();
 
-export type GolemSection =
-    | 'head'
-    | 'centerTorso'
-    | 'leftTorso'
-    | 'rightTorso'
-    | 'leftArm'
-    | 'rightArm'
-    | 'leftLeg'
-    | 'rightLeg';
+export type { GolemSection, GolemSectionState } from '../mechs/sections';
+export { GOLEM_SECTION_ORDER } from '../mechs/sections';
 
-export type GolemSectionState = Record<GolemSection, number>;
+const DEFAULT_CHASSIS = getChassisDefinition(DEFAULT_CHASSIS_ID);
+const DEFAULT_LOADOUT = getDefaultLoadoutForChassis(DEFAULT_CHASSIS_ID);
 
-export const GOLEM_SECTION_ORDER: GolemSection[] = [
-    'head',
-    'centerTorso',
-    'leftTorso',
-    'rightTorso',
-    'leftArm',
-    'rightArm',
-    'leftLeg',
-    'rightLeg'
-];
-
-const GOLEM_SECTION_MAX: GolemSectionState = {
-    head: 18,
-    centerTorso: 48,
-    leftTorso: 34,
-    rightTorso: 34,
-    leftArm: 24,
-    rightArm: 24,
-    leftLeg: 36,
-    rightLeg: 36
-};
-
-function createSectionState(): GolemSectionState {
-    return { ...GOLEM_SECTION_MAX };
+function createWeaponRecoilState(): Record<WeaponMountId, number> {
+    return {
+        rightArmMount: 0,
+        leftArmMount: 0,
+        torsoMount: 0
+    };
 }
 
 export interface GolemState {
@@ -90,6 +79,11 @@ export interface GolemEvents {
     footstep: boolean;
 }
 
+export interface GolemControllerOptions {
+    chassisId?: ChassisId;
+    loadoutId?: LoadoutId;
+}
+
 export class GolemController {
     model: THREE.Group;
     legs: THREE.Group;
@@ -108,26 +102,25 @@ export class GolemController {
     runeMaterial: THREE.MeshStandardMaterial;
     boilerMaterial: THREE.MeshStandardMaterial;
     heroVisual: KWIIRuntimeVisual | null = null;
-    sections: GolemSectionState = createSectionState();
-    maxSections: GolemSectionState = createSectionState();
+    chassis: ChassisDefinition = DEFAULT_CHASSIS;
+    loadout: LoadoutDefinition = DEFAULT_LOADOUT;
+    sections: GolemSectionState = cloneSectionState(DEFAULT_CHASSIS.sectionMax);
+    maxSections: GolemSectionState = cloneSectionState(DEFAULT_CHASSIS.sectionMax);
+    weaponMountOrder: WeaponMountId[] = DEFAULT_CHASSIS.mountLayout.map((slot) => slot.mountId);
     weaponMounts: Record<WeaponMountId, WeaponMountRuntime>;
-    weaponRecoil: Record<WeaponMountId, number> = {
-        rightArmMount: 0,
-        leftArmMount: 0,
-        torsoMount: 0
-    };
+    weaponRecoil: Record<WeaponMountId, number> = createWeaponRecoilState();
 
     legYaw = 0;
     torsoYaw = 0;
 
     hp = 100;
     maxHp = 100;
-    steam = 100;
-    maxSteam = 100;
+    steam = DEFAULT_CHASSIS.maxSteam;
+    maxSteam = DEFAULT_CHASSIS.maxSteam;
     isOverheated = false;
     overheatTimer = 0;
 
-    mass = 2.0;
+    mass = DEFAULT_CHASSIS.mass;
     throttle = 0;
     walkCycle = 0;
     heroStrideCycle = 0;
@@ -140,7 +133,22 @@ export class GolemController {
     targetLegYaw = 0;
     targetTorsoYaw = 0;
 
-    constructor(scene: THREE.Scene, physics: RAPIER.World, isLocal: boolean = true) {
+    constructor(scene: THREE.Scene, physics: RAPIER.World, isLocal: boolean = true, options: GolemControllerOptions = {}) {
+        const chassis = getChassisDefinition(options.chassisId ?? DEFAULT_CHASSIS_ID);
+        const loadout = getLoadoutDefinition(options.loadoutId ?? chassis.defaultLoadoutId);
+        if (loadout.chassisId !== chassis.id) {
+            throw new Error(`Loadout "${loadout.id}" does not belong to chassis "${chassis.id}".`);
+        }
+
+        this.chassis = chassis;
+        this.loadout = loadout;
+        this.sections = cloneSectionState(chassis.sectionMax);
+        this.maxSections = cloneSectionState(chassis.sectionMax);
+        this.weaponMountOrder = chassis.mountLayout.map((slot) => slot.mountId);
+        this.weaponRecoil = createWeaponRecoilState();
+        this.mass = chassis.mass;
+        this.maxSteam = chassis.maxSteam;
+        this.steam = chassis.maxSteam;
         this.isLocal = isLocal;
         const parts = GolemFactory.create();
         this.model = parts.model;
@@ -177,32 +185,25 @@ export class GolemController {
     }
 
     createWeaponMounts(): Record<WeaponMountId, WeaponMountRuntime> {
-        return {
-            rightArmMount: {
-                mountId: 'rightArmMount',
-                weaponId: 'rune_bolt',
-                group: 1,
-                section: 'rightArm',
-                cooldownRemaining: 0,
-                enabled: true
-            },
-            leftArmMount: {
-                mountId: 'leftArmMount',
-                weaponId: 'arc_emitter',
-                group: 2,
-                section: 'leftArm',
-                cooldownRemaining: 0,
-                enabled: true
-            },
-            torsoMount: {
-                mountId: 'torsoMount',
-                weaponId: 'steam_cannon',
-                group: 3,
-                section: 'rightTorso',
-                cooldownRemaining: 0,
-                enabled: true
+        const mounts = {} as Record<WeaponMountId, WeaponMountRuntime>;
+
+        for (const slot of this.chassis.mountLayout) {
+            const assignment = this.loadout.assignments.find((item) => item.mountId === slot.mountId);
+            if (!assignment) {
+                throw new Error(`Missing loadout assignment for mount "${slot.mountId}".`);
             }
-        };
+
+            mounts[slot.mountId] = {
+                mountId: slot.mountId,
+                weaponId: assignment.weaponId,
+                group: slot.group,
+                section: slot.section,
+                cooldownRemaining: 0,
+                enabled: true
+            };
+        }
+
+        return mounts;
     }
 
     async initHeroVisual() {
@@ -238,13 +239,13 @@ export class GolemController {
     }
 
     updateWeaponCooldowns(dt: number) {
-        for (const mountId of WEAPON_MOUNT_ORDER) {
+        for (const mountId of this.weaponMountOrder) {
             this.weaponMounts[mountId].cooldownRemaining = Math.max(0, this.weaponMounts[mountId].cooldownRemaining - dt);
         }
     }
 
     syncMountAvailabilityFromSections() {
-        for (const mountId of WEAPON_MOUNT_ORDER) {
+        for (const mountId of this.weaponMountOrder) {
             const mount = this.weaponMounts[mountId];
             mount.enabled = this.sections[mount.section] > 0;
         }
@@ -272,8 +273,8 @@ export class GolemController {
     }
 
     resetSections() {
-        this.sections = createSectionState();
-        for (const mountId of WEAPON_MOUNT_ORDER) {
+        this.sections = cloneSectionState(this.maxSections);
+        for (const mountId of this.weaponMountOrder) {
             this.weaponMounts[mountId].cooldownRemaining = 0;
             this.weaponRecoil[mountId] = 0;
         }
@@ -309,7 +310,7 @@ export class GolemController {
     }
 
     canFire() {
-        return WEAPON_MOUNT_ORDER.some((mountId) => {
+        return this.weaponMountOrder.some((mountId) => {
             const mount = this.weaponMounts[mountId];
             const definition = getWeaponDefinition(mount.weaponId);
             return mount.enabled && mount.cooldownRemaining <= 0 && !this.isOverheated && this.steam >= definition.heatCost;
@@ -321,7 +322,7 @@ export class GolemController {
     }
 
     getWeaponStatus(): WeaponStatusView[] {
-        return WEAPON_MOUNT_ORDER.map((mountId) => {
+        return this.weaponMountOrder.map((mountId) => {
             const mount = this.weaponMounts[mountId];
             const definition = getWeaponDefinition(mount.weaponId);
 
@@ -377,8 +378,11 @@ export class GolemController {
         return out;
     }
 
-    triggerWeaponRecoil(weaponId: WeaponId) {
-        const mountId = getWeaponDefinition(weaponId).mountId;
+    getMountIdForWeapon(weaponId: WeaponId): WeaponMountId {
+        return this.weaponMountOrder.find((mountId) => this.weaponMounts[mountId].weaponId === weaponId) ?? 'torsoMount';
+    }
+
+    triggerWeaponRecoil(mountId: WeaponMountId) {
         this.weaponRecoil[mountId] = 1;
         const fireAction = this.heroVisual?.actions.fire;
         if (fireAction) {
@@ -411,7 +415,7 @@ export class GolemController {
     }
 
     gatherReadyMounts(groupId?: WeaponGroupId) {
-        const mounts = WEAPON_MOUNT_ORDER
+        const mounts = this.weaponMountOrder
             .map((mountId) => this.weaponMounts[mountId])
             .filter((mount) => groupId === undefined || mount.group === groupId)
             .filter((mount) => mount.enabled && mount.cooldownRemaining <= 0);
@@ -457,7 +461,7 @@ export class GolemController {
                 : 1;
         const dir = _bodyForward.clone().multiplyScalar(dashSign || 1);
         if (this.isLocal) {
-            const dashSpeed = 16.5;
+            const dashSpeed = this.chassis.dashSpeed;
             this.body.setLinvel({
                 x: dir.x * dashSpeed,
                 y: Math.min(vel.y, 0),
@@ -493,7 +497,7 @@ export class GolemController {
 
         const idleAction = this.heroVisual.actions.idle;
         const walkAction = this.heroVisual.actions.walk;
-        const locomotionAmount = clamp(Math.max(Math.abs(this.throttle), this.currentSpeed / GOLEM.classes.medium.speed), 0, 1);
+        const locomotionAmount = clamp(Math.max(Math.abs(this.throttle), this.currentSpeed / this.chassis.topSpeed), 0, 1);
         const desiredLocomotion = locomotionAmount > 0.06 ? 'walk' : 'idle';
 
         const resetNode = (node: THREE.Object3D | null, rest: { position: THREE.Vector3; quaternion: THREE.Quaternion } | null) => {
@@ -691,7 +695,7 @@ export class GolemController {
             this.damageFlashTimer = Math.max(0, this.damageFlashTimer - dt);
         }
         this.updateWeaponCooldowns(dt);
-        for (const mountId of WEAPON_MOUNT_ORDER) {
+        for (const mountId of this.weaponMountOrder) {
             this.weaponRecoil[mountId] = Math.max(0, this.weaponRecoil[mountId] - dt * 8.5);
         }
         const flashRatio = this.damageFlashTimer > 0 ? this.damageFlashTimer / 0.16 : 0;
@@ -712,7 +716,7 @@ export class GolemController {
         }
 
         if (this.isLocal) {
-            const torsoStep = ROTATION.torsoTurnRate.medium * dt;
+            const torsoStep = ROTATION.torsoTurnRate[this.chassis.weightClass] * dt;
             const maxTwist = ROTATION.maxTorsoTwist;
             const throttleRamp = 1.05;
             const brakeResponse = 6.4;
@@ -722,8 +726,8 @@ export class GolemController {
                 0.25,
                 (this.sections.leftLeg / this.maxSections.leftLeg + this.sections.rightLeg / this.maxSections.rightLeg) * 0.5
             );
-            const bodyTurnStep = ROTATION.legsTurnRate.medium * dt * (0.45 + legIntegrity * 0.55);
-            const maxSpeed = GOLEM.classes.medium.speed * (0.3 + legIntegrity * 0.72);
+            const bodyTurnStep = ROTATION.legsTurnRate[this.chassis.weightClass] * dt * (0.45 + legIntegrity * 0.55);
+            const maxSpeed = this.chassis.topSpeed * (0.3 + legIntegrity * 0.72);
 
             if (centerTorso) {
                 aimYawUnclamped = this.legYaw;
@@ -816,8 +820,8 @@ export class GolemController {
                 });
             }
 
-            this.legYaw = moveTowardsAngle(this.legYaw, this.targetLegYaw, ROTATION.legsTurnRate.medium * dt * 4);
-            this.torsoYaw = moveTowardsAngle(this.torsoYaw, this.targetTorsoYaw, ROTATION.torsoTurnRate.medium * dt * 5);
+            this.legYaw = moveTowardsAngle(this.legYaw, this.targetLegYaw, ROTATION.legsTurnRate[this.chassis.weightClass] * dt * 4);
+            this.torsoYaw = moveTowardsAngle(this.torsoYaw, this.targetTorsoYaw, ROTATION.torsoTurnRate[this.chassis.weightClass] * dt * 5);
         }
 
         const pos = this.body.translation();
@@ -916,5 +920,9 @@ export class GolemController {
             maxSections: { ...this.maxSections },
             weaponStatus: this.getWeaponStatus()
         };
+    }
+
+    getMaxSpeed() {
+        return this.chassis.topSpeed;
     }
 }

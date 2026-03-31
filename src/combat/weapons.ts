@@ -4,7 +4,7 @@ import type {
     WeaponDefinition,
     WeaponGroupId,
     WeaponId,
-    WeaponMountId
+    WeaponSlotClass
 } from './weaponTypes';
 
 export const PROJECTILE_PROFILES: Record<ProjectileProfileId, ProjectileProfileDefinition> = {
@@ -36,9 +36,7 @@ export const WEAPON_DEFINITIONS: Record<WeaponId, WeaponDefinition> = {
         id: 'rune_bolt',
         nameKey: 'weapon.runeBolt',
         shortKey: 'weapon.short.runeBolt',
-        mountId: 'rightArmMount',
-        section: 'rightArm',
-        group: 1,
+        allowedSlotClasses: ['arm'],
         damage: 16,
         cooldown: 0.45,
         heatCost: 8,
@@ -64,9 +62,7 @@ export const WEAPON_DEFINITIONS: Record<WeaponId, WeaponDefinition> = {
         id: 'arc_emitter',
         nameKey: 'weapon.arcEmitter',
         shortKey: 'weapon.short.arcEmitter',
-        mountId: 'leftArmMount',
-        section: 'leftArm',
-        group: 2,
+        allowedSlotClasses: ['arm'],
         damage: 7,
         cooldown: 0.8,
         heatCost: 14,
@@ -92,9 +88,7 @@ export const WEAPON_DEFINITIONS: Record<WeaponId, WeaponDefinition> = {
         id: 'steam_cannon',
         nameKey: 'weapon.steamCannon',
         shortKey: 'weapon.short.steamCannon',
-        mountId: 'torsoMount',
-        section: 'rightTorso',
-        group: 3,
+        allowedSlotClasses: ['torso'],
         damage: 34,
         cooldown: 1.35,
         heatCost: 22,
@@ -119,20 +113,11 @@ export const WEAPON_DEFINITIONS: Record<WeaponId, WeaponDefinition> = {
 };
 
 export const WEAPON_GROUP_ORDER: WeaponGroupId[] = [1, 2, 3];
-export const WEAPON_MOUNT_ORDER: WeaponMountId[] = ['rightArmMount', 'leftArmMount', 'torsoMount'];
 
 export function getWeaponDefinition(id: WeaponId) {
     return WEAPON_DEFINITIONS[id];
 }
 
-export function getDefaultMountWeaponId(mountId: WeaponMountId): WeaponId {
-    switch (mountId) {
-        case 'rightArmMount':
-            return 'rune_bolt';
-        case 'leftArmMount':
-            return 'arc_emitter';
-        case 'torsoMount':
-        default:
-            return 'steam_cannon';
-    }
+export function isWeaponCompatibleWithSlot(weaponId: WeaponId, slotClass: WeaponSlotClass) {
+    return getWeaponDefinition(weaponId).allowedSlotClasses.includes(slotClass);
 }

@@ -1,10 +1,12 @@
 import type { TranslationKey } from '../i18n';
+import type { GolemSection } from '../mechs/sections';
 
 export type WeaponId = 'rune_bolt' | 'arc_emitter' | 'steam_cannon';
 export type WeaponMountId = 'rightArmMount' | 'leftArmMount' | 'torsoMount';
 export type WeaponGroupId = 1 | 2 | 3;
 export type ProjectileProfileId = 'bolt' | 'arc_pulse' | 'steam_slug';
-export type WeaponSection = 'leftArm' | 'rightArm' | 'leftTorso' | 'rightTorso' | 'centerTorso';
+export type WeaponSlotClass = 'arm' | 'torso';
+export type WeaponSection = Extract<GolemSection, 'leftArm' | 'rightArm' | 'leftTorso' | 'rightTorso' | 'centerTorso'>;
 export type WeaponState = 'ready' | 'recycle' | 'offline' | 'heat';
 
 export type CockpitRecoilProfile = {
@@ -22,9 +24,7 @@ export type WeaponDefinition = {
     id: WeaponId;
     nameKey: TranslationKey;
     shortKey: TranslationKey;
-    mountId: WeaponMountId;
-    section: WeaponSection;
-    group: WeaponGroupId;
+    allowedSlotClasses: WeaponSlotClass[];
     damage: number;
     cooldown: number;
     heatCost: number;

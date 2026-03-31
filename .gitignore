@@ -6,3 +6,8 @@ coverage/
 *.log
 .env*
 !.env.example
+actions.html
+pages_*.html
+pages_bundle*.js
+browser-*.png
+*.blend1

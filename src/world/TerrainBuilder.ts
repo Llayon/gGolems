@@ -40,11 +40,18 @@ type RockMoundConfig = {
     rotationZ?: number;
 };
 
+type TerrainPadConfig = {
+    x: number;
+    z: number;
+    radius: number;
+    targetY?: number;
+};
+
 const _quat = new THREE.Quaternion();
 const _euler = new THREE.Euler();
 const _color = new THREE.Color();
 const _normal = new THREE.Vector3();
-const TERRAIN_SPAWN_PADS = [
+const TERRAIN_SPAWN_PADS: TerrainPadConfig[] = [
     { x: -46, z: 92, radius: 16, targetY: 2.4 },
     { x: 46, z: -92, radius: 16, targetY: 2.4 },
     { x: -92, z: 30, radius: 16, targetY: 2.5 },
@@ -61,7 +68,13 @@ const TERRAIN_SPAWN_PADS = [
     { x: 118, z: 0, radius: 18, targetY: 2.8 },
     { x: 118, z: 42, radius: 18, targetY: 2.8 },
     { x: 118, z: 82, radius: 18, targetY: 2.8 }
-] as const;
+];
+
+const TERRAIN_OBJECTIVE_PADS: TerrainPadConfig[] = [
+    { x: -74, z: 34, radius: 18 },
+    { x: 0, z: -18, radius: 18 },
+    { x: 76, z: 38, radius: 18 }
+];
 
 function clamp(value: number, min: number, max: number) {
     return Math.max(min, Math.min(max, value));
@@ -82,7 +95,10 @@ function markShadows(mesh: THREE.Mesh) {
     mesh.receiveShadow = true;
 }
 
-function isProtectedSpawnArea(x: number, z: number, extraRadius = 0) {
+function isProtectedTerrainPadArea(x: number, z: number, extraRadius = 0) {
+    if (TERRAIN_OBJECTIVE_PADS.some((pad) => Math.hypot(x - pad.x, z - pad.z) < pad.radius + extraRadius)) {
+        return true;
+    }
     return TERRAIN_SPAWN_PADS.some((pad) => Math.hypot(x - pad.x, z - pad.z) < pad.radius + extraRadius);
 }
 
@@ -150,64 +166,71 @@ export class TerrainBuilder {
         return texture;
     }
 
-    sampleHeight(x: number, z: number) {
+    sampleBaseHeight(x: number, z: number) {
         const nx = x / this.halfSize;
         const nz = z / this.halfSize;
         const radial = Math.sqrt(nx * nx + nz * nz);
 
-        const centerBowl = -Math.max(0, 1 - radial / 0.58) * 1.3;
-        const subtleWave = Math.sin(x * 0.038) * Math.cos(z * 0.034) * 0.75;
-        const flankChannel = -Math.exp(-Math.pow((x + z * 0.22) / 34, 2)) * 0.9;
-        const westChannel = -Math.exp(-Math.pow((x + 82) / 20, 2) - Math.pow((z - 6) / 72, 2)) * 1.35;
-        const northRise = Math.exp(-Math.pow((z - 96) / 22, 2)) * Math.exp(-Math.pow(x / 74, 2)) * 2.2;
-        const eastShelf = Math.max(0, 1 - Math.abs(x - this.halfSize * 0.58) / (this.halfSize * 0.24))
-            * Math.max(0, 1 - Math.abs(z) / (this.halfSize * 0.86))
-            * 3.2;
-        const southRise = Math.exp(-Math.pow((z + 88) / 20, 2)) * Math.exp(-Math.pow((x - 14) / 68, 2)) * 1.8;
-        const centerKnoll = Math.exp(-Math.pow((x - 16) / 16, 2) - Math.pow((z + 4) / 14, 2)) * 1.75;
-        const eastKnoll = Math.exp(-Math.pow((x - 54) / 20, 2) - Math.pow((z + 42) / 16, 2)) * 1.8;
-        const westKnoll = Math.exp(-Math.pow((x + 42) / 22, 2) - Math.pow((z - 26) / 20, 2)) * 1.65;
-        const westBerm = Math.exp(-Math.pow((x + 38) / 11, 2) - Math.pow((z + 4) / 34, 2)) * 5.4;
-        const eastBerm = Math.exp(-Math.pow((x - 40) / 11, 2) - Math.pow((z - 6) / 32, 2)) * 5.1;
-        const northBerm = Math.exp(-Math.pow((x + 4) / 25, 2) - Math.pow((z - 40) / 10, 2)) * 3.9;
-        const southBerm = Math.exp(-Math.pow((x - 2) / 23, 2) - Math.pow((z + 44) / 10, 2)) * 4.0;
-        const centerSaddle = -Math.exp(-Math.pow(x / 18, 2) - Math.pow((z + 2) / 20, 2)) * 1.2;
-        const westPass = -Math.exp(-Math.pow((x + 32) / 10, 2) - Math.pow((z + 42) / 14, 2)) * 1.35;
-        const eastPass = -Math.exp(-Math.pow((x - 34) / 10, 2) - Math.pow((z - 42) / 14, 2)) * 1.25;
-        const northPass = -Math.exp(-Math.pow((x - 26) / 14, 2) - Math.pow((z - 28) / 10, 2)) * 1.1;
-        const southPass = -Math.exp(-Math.pow((x + 24) / 14, 2) - Math.pow((z + 28) / 10, 2)) * 1.1;
-        const perimeterLift = smoothstep(0.72, 0.98, radial) * 8.4;
+        const duneWave = Math.sin(x * 0.024) * 0.34 + Math.cos(z * 0.029) * 0.26 + Math.sin((x + z) * 0.015) * 0.18;
+        const centerBasin = -Math.max(0, 1 - radial / 0.68) * 0.65;
+        const serviceShelf = Math.exp(-Math.pow((x + 74) / 26, 2) - Math.pow((z - 34) / 22, 2)) * 1.35;
+        const annexShelf = Math.exp(-Math.pow((x - 76) / 22, 2) - Math.pow((z - 40) / 22, 2)) * 1.95;
+        const centralChannel = -Math.exp(-Math.pow((z + 18) / 10, 2)) * (2.35 + Math.exp(-Math.pow(x / 68, 2)) * 0.95);
+        const channelCore = -Math.exp(-Math.pow(x / 28, 2) - Math.pow((z + 18) / 8, 2)) * 1.2;
+        const channelNorthLip = Math.exp(-Math.pow(x / 46, 2) - Math.pow((z + 2) / 14, 2)) * 0.85;
+        const blueBerm = Math.exp(-Math.pow((x + 58) / 13, 2) - Math.pow((z + 6) / 32, 2)) * 4.15;
+        const redBerm = Math.exp(-Math.pow((x - 58) / 13, 2) - Math.pow((z + 4) / 32, 2)) * 4.15;
+        const westPass = -Math.exp(-Math.pow((x + 78) / 16, 2) - Math.pow((z - 2) / 20, 2)) * 0.7;
+        const eastPass = -Math.exp(-Math.pow((x - 78) / 16, 2) - Math.pow((z - 2) / 20, 2)) * 0.72;
+        const northRise = Math.exp(-Math.pow((z - 96) / 20, 2)) * Math.exp(-Math.pow(x / 76, 2)) * 2.1;
+        const southRise = Math.exp(-Math.pow((z + 94) / 20, 2)) * Math.exp(-Math.pow((x - 4) / 78, 2)) * 1.9;
+        const westPerimeter = Math.max(0, 1 - Math.abs(x + this.halfSize * 0.82) / (this.halfSize * 0.18))
+            * Math.max(0, 1 - Math.abs(z) / (this.halfSize * 0.94))
+            * 3.4;
+        const eastPerimeter = Math.max(0, 1 - Math.abs(x - this.halfSize * 0.82) / (this.halfSize * 0.18))
+            * Math.max(0, 1 - Math.abs(z) / (this.halfSize * 0.94))
+            * 3.5;
+        const perimeterLift = smoothstep(0.78, 0.99, radial) * 7.2;
 
-        let height = Math.max(
-            0.35,
-            1.1
-            + centerBowl
-            + subtleWave
-            + flankChannel
-            + westChannel
-            + northRise
-            + eastShelf
-            + southRise
-            + centerKnoll
-            + eastKnoll
-            + westKnoll
-            + westBerm
-            + eastBerm
-            + northBerm
-            + southBerm
-            + centerSaddle
+        return Math.max(
+            0.42,
+            1.45
+            + duneWave
+            + centerBasin
+            + serviceShelf
+            + annexShelf
+            + centralChannel
+            + channelCore
+            + channelNorthLip
+            + blueBerm
+            + redBerm
             + westPass
             + eastPass
-            + northPass
-            + southPass
+            + northRise
+            + southRise
+            + westPerimeter
+            + eastPerimeter
             + perimeterLift
         );
+    }
+
+    sampleHeight(x: number, z: number) {
+        let height = this.sampleBaseHeight(x, z);
 
         for (const pad of TERRAIN_SPAWN_PADS) {
             const distance = Math.hypot(x - pad.x, z - pad.z);
             const influence = 1 - smoothstep(pad.radius * 0.45, pad.radius, distance);
             if (influence > 0) {
                 height = THREE.MathUtils.lerp(height, pad.targetY, influence);
+            }
+        }
+
+        for (const pad of TERRAIN_OBJECTIVE_PADS) {
+            const distance = Math.hypot(x - pad.x, z - pad.z);
+            const influence = 1 - smoothstep(pad.radius * 0.42, pad.radius, distance);
+            if (influence > 0) {
+                const targetY = pad.targetY ?? this.sampleBaseHeight(pad.x, pad.z);
+                height = THREE.MathUtils.lerp(height, targetY, influence);
             }
         }
 
@@ -328,46 +351,43 @@ export class TerrainBuilder {
         const darkRock = 0x473c34;
 
         const ridgeMounds: RockMoundConfig[] = [
-            { x: -108, y: 6.2, z: -74, sx: 11, sy: 7.2, sz: 12, color: darkRock, rotationY: 0.24 },
-            { x: -110, y: 7.0, z: -30, sx: 13, sy: 8.6, sz: 14, color: darkRock, rotationY: 0.18 },
-            { x: -108, y: 7.4, z: 12, sx: 12, sy: 8.8, sz: 16, color: darkRock, rotationY: -0.12 },
-            { x: -104, y: 6.4, z: 58, sx: 11, sy: 7.4, sz: 13, color: darkRock, rotationY: -0.24 },
-            { x: -84, y: 4.6, z: 70, sx: 15, sy: 6.1, sz: 11, color: rock, rotationY: -0.18 },
+            { x: -110, y: 6.2, z: -74, sx: 11, sy: 7.2, sz: 12, color: darkRock, rotationY: 0.24 },
+            { x: -112, y: 6.8, z: -26, sx: 13, sy: 8.2, sz: 14, color: darkRock, rotationY: 0.18 },
+            { x: -108, y: 6.9, z: 22, sx: 12, sy: 8.1, sz: 16, color: darkRock, rotationY: -0.12 },
+            { x: -102, y: 6.2, z: 68, sx: 11, sy: 7.2, sz: 13, color: darkRock, rotationY: -0.24 },
+            { x: -86, y: 4.8, z: 80, sx: 15, sy: 6.1, sz: 11, color: rock, rotationY: -0.16 },
 
-            { x: -76, y: 5.6, z: -108, sx: 16, sy: 7.4, sz: 10, color: darkRock, rotationY: 0.04 },
-            { x: -26, y: 5.2, z: -108, sx: 18, sy: 6.6, sz: 9, color: darkRock, rotationY: -0.08 },
-            { x: 24, y: 5.4, z: -106, sx: 18, sy: 6.4, sz: 10, color: darkRock, rotationY: 0.1 },
-            { x: 74, y: 5.1, z: -104, sx: 15, sy: 6.2, sz: 9, color: darkRock, rotationY: -0.1 },
+            { x: -78, y: 5.6, z: -108, sx: 16, sy: 7.2, sz: 10, color: darkRock, rotationY: 0.04 },
+            { x: -28, y: 5.2, z: -110, sx: 18, sy: 6.4, sz: 9, color: darkRock, rotationY: -0.08 },
+            { x: 26, y: 5.2, z: -106, sx: 18, sy: 6.2, sz: 10, color: darkRock, rotationY: 0.1 },
+            { x: 78, y: 5.0, z: -102, sx: 15, sy: 6.0, sz: 9, color: darkRock, rotationY: -0.1 },
 
-            { x: -58, y: 5.4, z: 108, sx: 18, sy: 6.3, sz: 10, color: darkRock, rotationY: 0.08 },
-            { x: -4, y: 5.8, z: 106, sx: 18, sy: 6.5, sz: 11, color: darkRock, rotationY: -0.04 },
-            { x: 48, y: 5.4, z: 110, sx: 17, sy: 6.2, sz: 10, color: darkRock, rotationY: 0.06 },
-            { x: 94, y: 5.0, z: 106, sx: 14, sy: 5.8, sz: 9, color: darkRock, rotationY: -0.08 },
+            { x: -58, y: 5.4, z: 110, sx: 18, sy: 6.2, sz: 10, color: darkRock, rotationY: 0.08 },
+            { x: -2, y: 5.6, z: 108, sx: 18, sy: 6.3, sz: 11, color: darkRock, rotationY: -0.04 },
+            { x: 50, y: 5.4, z: 110, sx: 17, sy: 6.1, sz: 10, color: darkRock, rotationY: 0.06 },
+            { x: 96, y: 5.0, z: 104, sx: 14, sy: 5.8, sz: 9, color: darkRock, rotationY: -0.08 },
 
-            { x: 106, y: 6.2, z: -62, sx: 12, sy: 6.8, sz: 11, color: rock, rotationY: -0.18 },
-            { x: 102, y: 6.4, z: -10, sx: 12, sy: 7.4, sz: 14, color: rock, rotationY: 0.04 },
-            { x: 104, y: 6.3, z: 42, sx: 11, sy: 6.8, sz: 13, color: rock, rotationY: -0.12 },
-            { x: 98, y: 5.6, z: 86, sx: 11, sy: 6.1, sz: 10, color: rock, rotationY: 0.2 },
+            { x: 108, y: 6.0, z: -58, sx: 12, sy: 6.6, sz: 11, color: rock, rotationY: -0.18 },
+            { x: 104, y: 6.1, z: -8, sx: 12, sy: 7.0, sz: 14, color: rock, rotationY: 0.04 },
+            { x: 104, y: 6.1, z: 44, sx: 11, sy: 6.8, sz: 13, color: rock, rotationY: -0.12 },
+            { x: 98, y: 5.5, z: 86, sx: 11, sy: 6.0, sz: 10, color: rock, rotationY: 0.2 },
 
-            { x: -44, y: 3.0, z: -26, sx: 11, sy: 4.8, sz: 9, color: rock, rotationY: -0.22 },
-            { x: -34, y: 2.8, z: 26, sx: 10, sy: 4.4, sz: 8, color: rock, rotationY: 0.18 },
-            { x: 26, y: 2.6, z: -38, sx: 9, sy: 4.0, sz: 8, color: 0x64584c, rotationY: -0.16 },
-            { x: 34, y: 2.8, z: 34, sx: 10, sy: 4.1, sz: 8, color: 0x64584c, rotationY: 0.14 },
-            { x: -8, y: 3.2, z: 88, sx: 15, sy: 4.2, sz: 7, color: 0x5c4f43, rotationY: 0.04 },
-            { x: 10, y: 3.2, z: -86, sx: 13, sy: 4.2, sz: 7, color: 0x5c4f43, rotationY: -0.08 }
+            { x: -66, y: 3.8, z: -52, sx: 10, sy: 4.4, sz: 8, color: 0x64584c, rotationY: -0.16 },
+            { x: 64, y: 3.8, z: -48, sx: 10, sy: 4.4, sz: 8, color: 0x64584c, rotationY: 0.14 },
+            { x: 84, y: 4.6, z: 62, sx: 14, sy: 5.0, sz: 9, color: 0x5c4f43, rotationY: -0.06 }
         ];
 
         ridgeMounds
-            .filter((config) => !isProtectedSpawnArea(config.x, config.z, Math.max(config.sx, config.sz) * 0.8))
+            .filter((config) => !isProtectedTerrainPadArea(config.x, config.z, Math.max(config.sx, config.sz) * 0.8))
             .forEach((config) => this.addRockMound(config));
 
         [
-            { x: -16, y: 2.8, z: 82, radius: 8, height: 5.6, color: 0x5e5146 },
-            { x: 52, y: 2.3, z: -78, radius: 6, height: 4.6, color: 0x5b4d42 },
-            { x: -78, y: 2.6, z: 92, radius: 7.4, height: 5.2, color: 0x5d5147 },
-            { x: 98, y: 2.8, z: 74, radius: 7.6, height: 5.4, color: 0x61544a }
+            { x: -18, y: 2.8, z: 96, radius: 8, height: 5.6, color: 0x5e5146 },
+            { x: 54, y: 2.3, z: -82, radius: 6, height: 4.6, color: 0x5b4d42 },
+            { x: -82, y: 2.6, z: 92, radius: 7.4, height: 5.2, color: 0x5d5147 },
+            { x: 100, y: 2.8, z: 74, radius: 7.6, height: 5.4, color: 0x61544a }
         ]
-            .filter((config) => !isProtectedSpawnArea(config.x, config.z, config.radius * 1.25))
+            .filter((config) => !isProtectedTerrainPadArea(config.x, config.z, config.radius * 1.25))
             .forEach((config) => this.addCylinderMass(config));
     }
 
