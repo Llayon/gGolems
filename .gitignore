@@ -11,3 +11,19 @@ pages_*.html
 pages_bundle*.js
 browser-*.png
 *.blend1
+Lancer 3D Models-*.zip
+Lancer 3D Models-*/
+Medieval Village MegaKit*/
+animated-mech-marceline-sentinel-armor-marcy.zip
+animated-mech-marceline-sentinel-armor-marcy/
+free-skybox-savanna/
+gGolems/
+mech-robot-kw-ii.zip
+mech-robot-kw-ii/
+docs/blender_exports/MarcelineSentinel/
+docs/blender_exports/VillagePrefab_House_A/
+docs/blender_exports/kwii_previews/
+scripts/generate_kwii_uvs.mjs
+scripts/inspect_kwii_blend.py
+src/assets/mechs/KWII_runtime_low.generated.glb
+src/assets/mechs/KWII_source_controls_test.glb
