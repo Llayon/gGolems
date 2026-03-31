@@ -843,7 +843,7 @@ function PilotAccountCard(props: {
                             {props.t('supabase.historyTitle')}
                         </div>
                         {props.account.recentMatches.length > 0 ? (
-                            <div className="mt-2 space-y-2">
+                            <div className="mt-2 max-h-48 space-y-2 overflow-y-auto pr-1">
                                 {props.account.recentMatches.map((match) => (
                                     <div
                                         key={match.id}
@@ -1511,20 +1511,21 @@ export default function App() {
             ) : null}
 
             {inLobby ? (
-                <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[radial-gradient(circle_at_center,#2a1c12_0%,#130e0b_60%,#090807_100%)] px-4 text-white">
+                <div className="absolute inset-0 z-50 overflow-y-auto bg-[radial-gradient(circle_at_center,#2a1c12_0%,#130e0b_60%,#090807_100%)] px-4 py-4 text-white sm:py-6">
+                    <div className="flex min-h-full flex-col items-center justify-start">
                     <button
                         type="button"
                         onClick={() => setLocale((current) => current === 'ru' ? 'en' : 'ru')}
-                        className="absolute right-4 top-4 rounded-full border border-[#8f6a38]/55 bg-black/40 px-4 py-2 text-[10px] tracking-[0.24em] text-[#d8c19a] transition-colors hover:border-[#efb768]/70 hover:text-[#efb768]"
+                        className="sticky top-0 z-10 ml-auto rounded-full border border-[#8f6a38]/55 bg-black/65 px-4 py-2 text-[10px] tracking-[0.24em] text-[#d8c19a] backdrop-blur-sm transition-colors hover:border-[#efb768]/70 hover:text-[#efb768]"
                     >
                         {localeLabel}
                     </button>
 
-                    <h1 className="mb-6 text-center text-2xl font-bold tracking-[0.22em] text-[#efb768] drop-shadow-[0_0_14px_rgba(239,183,104,0.45)] sm:mb-8 sm:text-4xl sm:tracking-[0.35em]">
+                    <h1 className="mb-5 mt-4 text-center text-2xl font-bold tracking-[0.22em] text-[#efb768] drop-shadow-[0_0_14px_rgba(239,183,104,0.45)] sm:mb-8 sm:mt-6 sm:text-4xl sm:tracking-[0.35em]">
                         {t('lobby.title')}
                     </h1>
 
-                    <div className="flex w-[min(92vw,24rem)] flex-col gap-5 rounded-2xl border border-[#8f6a38]/40 bg-black/45 p-5 backdrop-blur-sm sm:gap-6 sm:p-8">
+                    <div className="flex w-[min(92vw,24rem)] max-w-full flex-col gap-5 rounded-2xl border border-[#8f6a38]/40 bg-black/45 p-5 backdrop-blur-sm sm:gap-6 sm:p-8">
                         <div className="flex flex-col gap-2">
                             <div className="text-center text-xs tracking-[0.28em] text-[#8fb8c2]">{t('lobby.modeTitle')}</div>
                             <div className="grid grid-cols-2 gap-2">
@@ -1741,6 +1742,7 @@ export default function App() {
                                 ) : null}
                             </div>
                         )}
+                    </div>
                     </div>
                 </div>
             ) : null}
