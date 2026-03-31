@@ -6,6 +6,7 @@ This repo now contains a minimal Supabase integration for:
 - pilot profile bootstrap
 - player progress bootstrap
 - lightweight match result persistence
+- optional Edge Function path for server-side match updates
 
 Firebase still handles the public room browser. Supabase is intended to become the long-lived account/progression/social layer.
 
@@ -78,7 +79,26 @@ VITE_SUPABASE_ANON_KEY="YOUR_SUPABASE_ANON_KEY"
 
 The app will silently fall back to `disabled` mode if these are missing.
 
-## 7. Runtime behavior
+## 7. Deploy the `finish-match` Edge Function
+
+The repo now includes a server-side match progression function at:
+
+- [`supabase/functions/finish-match/index.ts`](../supabase/functions/finish-match/index.ts)
+
+The frontend will try to invoke this function first when a match ends. If the function is not deployed yet, it falls back to the current direct client write so the game keeps working.
+
+To deploy it:
+
+1. Install and log into the Supabase CLI.
+2. From the repo root, run:
+
+```bash
+supabase functions deploy finish-match --project-ref YOUR_PROJECT_REF
+```
+
+The function uses the built-in Supabase function environment and does not require extra custom secrets for this MVP path.
+
+## 8. Runtime behavior
 
 When Supabase is configured:
 
@@ -87,6 +107,7 @@ When Supabase is configured:
 - a `player_progress` row is upserted
 - the latest match results are stored in `match_results`
 - the lobby shows a short recent battle history
+- match progression first tries the `finish-match` Edge Function
 - guest pilots can be upgraded with Google linking
 - guest pilots can request an email Magic Link upgrade
 - locale preference is synced to Supabase
@@ -99,6 +120,6 @@ If Supabase is not configured:
 
 ## Notes
 
-- Match progression in this MVP is still client-trusted.
-- For competitive progression, move final result validation to a server-side function before updating XP/currency.
+- Until `finish-match` is deployed, match progression still falls back to client-trusted writes.
+- Even with `finish-match`, the reported match result is still client-reported. This is better separation, but not a cheat-proof authoritative backend yet.
 - The current schema is intentionally small so it can evolve into clans, Telegram linking, loadouts, and inventory later.

@@ -2,6 +2,49 @@ import { getSupabaseClient } from './client';
 import type { MatchProgressUpdate, MatchRecordInput, PlayerMatchRecord, PlayerProgress } from './types';
 import { describeError, isMissingRelationError } from './utils';
 
+function calculateRewards(result: MatchRecordInput) {
+    return {
+        xp: result.won ? 125 : 55,
+        credits: result.won ? 60 : 25,
+        outcome: result.won ? 'win' as const : 'loss' as const
+    };
+}
+
+function canFallbackToDirectProgressWrite(error: unknown) {
+    const message = describeError(error, '').toLowerCase();
+    return message.includes('404')
+        || message.includes('not found')
+        || message.includes('failed to fetch')
+        || message.includes('network')
+        || message.includes('cors')
+        || message.includes('edge function');
+}
+
+async function invokeFinishMatchFunction(result: MatchRecordInput): Promise<MatchProgressUpdate | null> {
+    const client = getSupabaseClient();
+    if (!client) {
+        return null;
+    }
+
+    const { data, error } = await client.functions.invoke('finish-match', {
+        body: result
+    });
+
+    if (error) {
+        if (canFallbackToDirectProgressWrite(error)) {
+            console.warn('[supabase] Edge function finish-match unavailable, falling back to direct write:', error);
+            return null;
+        }
+        throw new Error(describeError(error, 'Failed to record pilot match via Edge Function.'));
+    }
+
+    if (!data || typeof data !== 'object') {
+        return null;
+    }
+
+    return data as MatchProgressUpdate;
+}
+
 export async function ensurePilotProgress(userId: string): Promise<PlayerProgress> {
     const client = getSupabaseClient();
     if (!client) {
@@ -60,6 +103,11 @@ export async function recordPilotMatch(userId: string, result: MatchRecordInput)
     const client = getSupabaseClient();
     if (!client) return null;
 
+    const functionResult = await invokeFinishMatchFunction(result);
+    if (functionResult) {
+        return functionResult;
+    }
+
     const { data: existing, error: loadError } = await client
         .from('player_progress')
         .select('matches_played, matches_won, xp, credits')
@@ -70,11 +118,12 @@ export async function recordPilotMatch(userId: string, result: MatchRecordInput)
         throw new Error(describeError(loadError, 'Failed to load pilot progress before recording match.'));
     }
 
+    const rewards = calculateRewards(result);
     const now = new Date().toISOString();
     const matchesPlayed = (existing?.matches_played ?? 0) + 1;
     const matchesWon = (existing?.matches_won ?? 0) + (result.won ? 1 : 0);
-    const xp = (existing?.xp ?? 0) + (result.won ? 125 : 55);
-    const credits = (existing?.credits ?? 0) + (result.won ? 60 : 25);
+    const xp = (existing?.xp ?? 0) + rewards.xp;
+    const credits = (existing?.credits ?? 0) + rewards.credits;
 
     const { error } = await client.from('player_progress').upsert({
         player_id: userId,
@@ -83,7 +132,7 @@ export async function recordPilotMatch(userId: string, result: MatchRecordInput)
         xp,
         credits,
         last_match_mode: result.mode,
-        last_match_result: result.won ? 'win' : 'loss',
+        last_match_result: rewards.outcome,
         last_match_blue: result.blueScore,
         last_match_red: result.redScore,
         updated_at: now
@@ -101,7 +150,7 @@ export async function recordPilotMatch(userId: string, result: MatchRecordInput)
         .insert({
             player_id: userId,
             mode: result.mode,
-            result: result.won ? 'win' : 'loss',
+            result: rewards.outcome,
             blue_score: result.blueScore,
             red_score: result.redScore
         })
