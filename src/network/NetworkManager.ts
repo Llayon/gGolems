@@ -131,4 +131,27 @@ export class NetworkManager {
             this.connections.values().next().value.send(data);
         }
     }
+
+    destroy() {
+        this.connections.forEach((conn) => {
+            try {
+                conn.close();
+            } catch {
+                // Ignore connection shutdown errors during teardown.
+            }
+        });
+        this.connections.clear();
+
+        if (this.peer) {
+            try {
+                this.peer.destroy();
+            } catch {
+                // Ignore peer shutdown errors during teardown.
+            }
+        }
+
+        this.peer = null;
+        this.myId = '';
+        this.isHost = false;
+    }
 }

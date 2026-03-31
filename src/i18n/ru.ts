@@ -160,6 +160,7 @@ const ru: typeof en = {
     'hud.results.wave': 'ВОЛНА',
     'hud.results.none': '--',
     'hud.results.restart': 'ПЕРЕЗАПУСК МАТЧА',
+    'hud.results.returnToLobby': 'ВЕРНУТЬСЯ В ЛОББИ',
 
     'weapon.runeBolt': 'РУННЫЙ БОЛТ',
     'weapon.arcEmitter': 'ДУГОВОЙ ИЗЛУЧАТЕЛЬ',

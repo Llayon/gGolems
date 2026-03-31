@@ -27,32 +27,51 @@ export class InputManager {
         centerTorso: false,
         stopThrottle: false
     };
+    onKeyDown = (e: KeyboardEvent) => {
+        this.keys[e.code] = true;
+    };
+    onKeyUp = (e: KeyboardEvent) => {
+        this.keys[e.code] = false;
+    };
+    onMouseMove = (e: MouseEvent) => {
+        if (this.isLocked) {
+            this.movementX += e.movementX;
+            this.movementY += e.movementY;
+        }
+    };
+    onMouseDown = (e: MouseEvent) => {
+        if (!this.isLocked) return;
+        if (e.button === 0) {
+            this.justPressedPrimary = true;
+        } else if (e.button === 2) {
+            this.justPressedSecondary = true;
+        }
+    };
+    onContextMenu = (e: MouseEvent) => {
+        if (this.isLocked) {
+            e.preventDefault();
+        }
+    };
+    onPointerLockChange = () => {
+        this.isLocked = document.pointerLockElement !== null;
+    };
 
     constructor() {
-        window.addEventListener('keydown', (e) => this.keys[e.code] = true);
-        window.addEventListener('keyup', (e) => this.keys[e.code] = false);
-        window.addEventListener('mousemove', (e) => {
-            if (this.isLocked) {
-                this.movementX += e.movementX;
-                this.movementY += e.movementY;
-            }
-        });
-        window.addEventListener('mousedown', (e) => {
-            if (!this.isLocked) return;
-            if (e.button === 0) {
-                this.justPressedPrimary = true;
-            } else if (e.button === 2) {
-                this.justPressedSecondary = true;
-            }
-        });
-        window.addEventListener('contextmenu', (e) => {
-            if (this.isLocked) {
-                e.preventDefault();
-            }
-        });
-        document.addEventListener('pointerlockchange', () => {
-            this.isLocked = document.pointerLockElement !== null;
-        });
+        window.addEventListener('keydown', this.onKeyDown);
+        window.addEventListener('keyup', this.onKeyUp);
+        window.addEventListener('mousemove', this.onMouseMove);
+        window.addEventListener('mousedown', this.onMouseDown);
+        window.addEventListener('contextmenu', this.onContextMenu);
+        document.addEventListener('pointerlockchange', this.onPointerLockChange);
+    }
+
+    dispose() {
+        window.removeEventListener('keydown', this.onKeyDown);
+        window.removeEventListener('keyup', this.onKeyUp);
+        window.removeEventListener('mousemove', this.onMouseMove);
+        window.removeEventListener('mousedown', this.onMouseDown);
+        window.removeEventListener('contextmenu', this.onContextMenu);
+        document.removeEventListener('pointerlockchange', this.onPointerLockChange);
     }
 
     consumeMovement() {

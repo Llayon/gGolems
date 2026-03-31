@@ -160,6 +160,7 @@ const en = {
     'hud.results.wave': 'WAVE',
     'hud.results.none': '--',
     'hud.results.restart': 'RESTART MATCH',
+    'hud.results.returnToLobby': 'RETURN TO LOBBY',
 
     'weapon.runeBolt': 'RUNE BOLT',
     'weapon.arcEmitter': 'ARC EMITTER',

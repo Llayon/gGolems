@@ -82,6 +82,7 @@ const RESPAWN_WAVE_DELAY = 8;
 const LOCAL_PLAYER_ID = 'local-player';
 
 export class Game {
+    canvas: HTMLCanvasElement;
     renderer: Renderer;
     input: InputManager;
     world: Arena;
@@ -117,8 +118,13 @@ export class Game {
     animationFrameId = 0;
     networkTickTimer = 0;
     boilerParticleTimer = 0;
+    onCanvasClick = () => {
+        this.canvas.requestPointerLock();
+        this.sounds.init();
+    };
 
     constructor(canvas: HTMLCanvasElement, onStateUpdate: (state: any) => void, sessionMode: SessionMode = 'solo', gameMode: GameMode = 'control') {
+        this.canvas = canvas;
         this.onStateUpdate = onStateUpdate;
         this.sessionMode = sessionMode;
         this.gameMode = gameMode;
@@ -154,10 +160,7 @@ export class Game {
             this.syncTeamBotRoster();
         }
 
-        canvas.addEventListener('click', () => {
-            canvas.requestPointerLock();
-            this.sounds.init();
-        });
+        this.canvas.addEventListener('click', this.onCanvasClick);
 
         this.setupNetwork();
     }
@@ -1251,6 +1254,10 @@ export class Game {
     stop() {
         this.isRunning = false;
         cancelAnimationFrame(this.animationFrameId);
+        this.canvas.removeEventListener('click', this.onCanvasClick);
+        this.input.dispose();
+        this.network.destroy();
+        this.sounds.dispose();
         this.renderer.dispose();
     }
 

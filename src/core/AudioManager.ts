@@ -225,4 +225,29 @@ export class AudioManager {
         noiseGain.connect(this.ctx.destination);
         noise.start(time);
     }
+
+    dispose() {
+        try {
+            this.humOsc?.stop();
+        } catch {
+            // Oscillator may already be stopped.
+        }
+        try {
+            this.servoOsc?.stop();
+        } catch {
+            // Oscillator may already be stopped.
+        }
+
+        this.humOsc = null;
+        this.humGain = null;
+        this.servoOsc = null;
+        this.servoGain = null;
+
+        if (this.ctx) {
+            void this.ctx.close().catch(() => {
+                // Ignore audio context shutdown errors during teardown.
+            });
+        }
+        this.ctx = null;
+    }
 }

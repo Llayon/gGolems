@@ -587,7 +587,7 @@ function getHeldPoints(points: ControlPointView[], owner: 'blue' | 'red') {
     return points.filter((point) => point.owner === owner).length;
 }
 
-function MatchStatusOverlay(props: { scores: TeamScoreState; points: ControlPointView[]; teamOverview: TeamOverview; respawnTimer: number; isTouchDevice: boolean; locale: Locale; gameMode: GameMode; t: Translator; onRestart?: () => void }) {
+function MatchStatusOverlay(props: { scores: TeamScoreState; points: ControlPointView[]; teamOverview: TeamOverview; respawnTimer: number; isTouchDevice: boolean; locale: Locale; gameMode: GameMode; t: Translator; onRestart?: () => void; onReturnToLobby?: () => void }) {
     const pointTone = (point: ControlPointView) => point.contested
         ? 'border-[#b57d3c]/60 bg-[#f0b35c]/16 text-[#ffd489]'
         : point.owner === 'blue'
@@ -693,13 +693,20 @@ function MatchStatusOverlay(props: { scores: TeamScoreState; points: ControlPoin
                                 <div>{props.teamOverview.red.waveTimer > 0.05 ? formatSeconds(props.locale, props.teamOverview.red.waveTimer) : props.t('hud.results.none')}</div>
                             </div>
                         </div>
-                        <div className="mt-5 flex justify-center">
+                        <div className="mt-5 flex flex-wrap justify-center gap-3">
                             <button
                                 type="button"
                                 onClick={props.onRestart}
                                 className="pointer-events-auto rounded-full border border-[#8f6a38]/60 bg-black/40 px-5 py-3 text-[11px] font-bold tracking-[0.24em] text-[#f3deb5] transition-colors hover:border-[#efb768]/80 hover:text-[#fff1d4]"
                             >
                                 {props.t('hud.results.restart')}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={props.onReturnToLobby}
+                                className="pointer-events-auto rounded-full border border-[#5b7f8f]/60 bg-black/35 px-5 py-3 text-[11px] font-bold tracking-[0.24em] text-[#cfe7ef] transition-colors hover:border-[#7ee6f0]/80 hover:text-[#f3fcff]"
+                            >
+                                {props.t('hud.results.returnToLobby')}
                             </button>
                         </div>
                     </div>
@@ -716,6 +723,15 @@ function MatchStatusOverlay(props: { scores: TeamScoreState; points: ControlPoin
             ) : null}
         </>
     );
+}
+
+function releasePointerLock() {
+    if (typeof document === 'undefined' || typeof document.exitPointerLock !== 'function') {
+        return;
+    }
+    if (document.pointerLockElement) {
+        document.exitPointerLock();
+    }
 }
 
 function PilotAccountCard(props: { account: PilotAccountState; t: Translator }) {
@@ -828,6 +844,27 @@ export default function App() {
         showCopyState(success ? 'copied' : 'error');
     };
 
+    const leaveGame = (gameOverride?: any) => {
+        releasePointerLock();
+
+        const activeGame = gameOverride ?? latestGameRef.current;
+        activeGame?.stop?.();
+
+        void firebaseLobbyRef.current?.unregister();
+        firebaseLobbyRef.current = null;
+        latestGameRef.current = null;
+        recordedMatchRef.current = null;
+        setGameInstance(null);
+        setGameState(initialGameState);
+        setSessionMode('solo');
+        setIsHost(false);
+        setMyId('');
+        setInLobby(true);
+        setLoading(false);
+        setCopyState('idle');
+        setShowMobileSettings(false);
+    };
+
     const startGame = async (mode: SessionMode, targetHostId?: string, requestedMode: GameMode = selectedGameMode) => {
         if (!canvasRef.current) return;
         setInLobby(false);
@@ -840,17 +877,7 @@ export default function App() {
 
         const failStart = (error: unknown) => {
             console.error(error);
-            if (game) {
-                game.stop();
-            }
-            void firebaseLobbyRef.current?.unregister();
-            firebaseLobbyRef.current = null;
-            setGameInstance(null);
-            setSessionMode('solo');
-            setIsHost(false);
-            setMyId('');
-            setInLobby(true);
-            setLoading(false);
+            leaveGame(game);
             alert(getStartupFailureMessage(t, locale, toStartupFailure(error)));
         };
 
@@ -1016,6 +1043,12 @@ export default function App() {
     useEffect(() => {
         latestHudStateRef.current = gameState;
     }, [gameState]);
+
+    useEffect(() => {
+        if (gameState.teamScores.winner) {
+            releasePointerLock();
+        }
+    }, [gameState.teamScores.winner]);
 
     useEffect(() => {
         if (pilotAccount.status !== 'ready' || !pilotAccount.userId) {
@@ -1253,7 +1286,11 @@ export default function App() {
                     locale={locale}
                     gameMode={gameState.gameMode}
                     t={t}
-                    onRestart={() => gameInstance?.restartMatch?.()}
+                    onRestart={() => {
+                        releasePointerLock();
+                        gameInstance?.restartMatch?.();
+                    }}
+                    onReturnToLobby={() => leaveGame()}
                 />
             ) : null}
 
