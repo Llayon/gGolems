@@ -23,19 +23,24 @@ import type { BotStateView, GameMode, TeamId, TeamScoreState } from '../gameplay
 import { buildGameHudState } from './buildGameHudState';
 import type { GameHudState } from './gameHudState';
 import {
-    buildRadarContacts as buildRadarContactsRuntime,
-    confirmHitForOwner as confirmHitForOwnerRuntime,
-    registerHitConfirmState
+    buildRadarContacts as buildRadarContactsRuntime
 } from './gameHudTelemetry';
 import {
-    applyRemoteFire,
-    type FireShotPayload,
     fireWeaponRequests as fireWeaponRequestsRuntime,
-    handlePlayerHit as handlePlayerHitRuntime,
-    playWeaponVolleyFx as playWeaponVolleyFxRuntime,
     spawnShot as spawnShotRuntime,
     updateProjectileCombat
 } from './combat/ProjectileCombatRuntime';
+import {
+    playProjectileImpactFx as playProjectileImpactFxRuntime,
+    playWeaponVolleyFx as playWeaponVolleyFxRuntime
+} from './combat/ProjectileCombatFxRuntime';
+import { playWorldPropFx as playWorldPropFxRuntime } from './world/WorldFxRuntime';
+import {
+    createNetworkDataDispatchContext,
+    createProjectileCollisionRuntimeContext,
+    createProjectileImpactFxContext,
+    createWeaponFireRuntimeContext
+} from './EngineRuntimeContexts';
 import { buildClientInputPacket, readClientInputPacket } from './network/clientInputPacket';
 import {
     type RemotePlayerLifecycleContext
@@ -49,12 +54,7 @@ import {
     type NetworkSyncTickContext
 } from './network/NetworkSyncAdapter';
 import {
-    applyAuthoritativeStateMessage,
-    applyClientInputToRemotePlayer,
-    applyHitConfirmMessage,
-    applyRemoteFireMessage,
-    applyRespawnMessage,
-    applyRestartMatchMessage
+    dispatchNetworkDataMessage
 } from './network/NetworkMessageRuntime';
 import {
     buildAuthoritativePlayerSnapshots,
@@ -91,8 +91,6 @@ const _weaponOrigin = new THREE.Vector3();
 const _aimPoint = new THREE.Vector3();
 const _botTarget = new THREE.Vector3();
 const _spawnDir = new THREE.Vector3();
-const _propFxPos = new THREE.Vector3();
-const _listenerPos = new THREE.Vector3();
 const _cameraAimDir = new THREE.Vector3();
 
 function clamp(value: number, min: number, max: number) {
@@ -270,24 +268,6 @@ export class Game {
         };
     }
 
-    getHitConfirmRuntimeContext() {
-        return {
-            sessionMode: this.sessionMode,
-            myId: this.network.myId,
-            getLocalUnitId: () => this.getLocalUnitId(),
-            registerHitConfirm: (targetHp: number, targetMaxHp: number) => {
-                registerHitConfirmState((next) => {
-                    this.hitConfirmTimer = next.hitConfirmTimer;
-                    this.hitTargetHp = next.hitTargetHp;
-                    this.hitTargetMaxHp = next.hitTargetMaxHp;
-                }, targetHp, targetMaxHp);
-            },
-            sendHitConfirm: (ownerId: string, payload: { type: 'hitConfirm'; hp: number; maxHp: number }) => {
-                this.network.sendTo(ownerId, payload);
-            }
-        };
-    }
-
     getMatchRestartContext() {
         return {
             sessionMode: this.sessionMode,
@@ -364,37 +344,6 @@ export class Game {
             return out.copy(hits[0].point);
         }
         return out.copy(this.renderer.camera.position).addScaledVector(_cameraAimDir, CAMERA.aimRayDistance);
-    }
-
-    playPropFx() {
-        const localPos = this.golem.body.translation();
-        _listenerPos.set(localPos.x, localPos.y, localPos.z);
-        for (const event of this.world.propManager.consumeFxEvents()) {
-            _propFxPos.set(event.x, event.y, event.z);
-            const distance = _propFxPos.distanceTo(_listenerPos);
-            const proximity = THREE.MathUtils.clamp(1 - distance / 28, 0, 1);
-
-            if (event.kind === 'tree_fall') {
-                this.particles.emitBurst(event.x, event.y, event.z, 14, 1.8, 2.8, 1.15);
-                this.debris.emitBurst(event.x, event.y, event.z, 'tree', event.intensity);
-                this.decals.addRuinMark(_propFxPos, 2.8, 22);
-                this.sounds.playStructureHit(0.7 * event.intensity);
-            } else if (event.kind === 'house_damage') {
-                this.particles.emitBurst(event.x, event.y, event.z, 20, 2.8, 3.1, 1.2);
-                this.debris.emitBurst(event.x, event.y, event.z, 'houseDamage', event.intensity);
-                this.decals.addRuinMark(_propFxPos, 3.6, 28);
-                this.sounds.playStructureHit(1.0 * event.intensity);
-            } else {
-                this.particles.emitBurst(event.x, event.y, event.z, 34, 4.2, 4.2, 1.5);
-                this.debris.emitBurst(event.x, event.y, event.z, 'houseCollapse', event.intensity);
-                this.decals.addRuinMark(_propFxPos, 5.4, 34);
-                this.sounds.playCollapse(1.0 * event.intensity);
-            }
-
-            if (proximity > 0) {
-                this.mechCamera.addTrauma(proximity * 0.28 * event.intensity);
-            }
-        }
     }
 
     getLocalUnitId() {
@@ -658,44 +607,7 @@ export class Game {
 
         this.network.onData = (id, data) => {
             const inputPacket = this.network.isHost ? readClientInputPacket(data) : null;
-
-            if (data.type === 'state' && !this.network.isHost) {
-                applyAuthoritativeStateMessage(this.getAuthoritativeStateRuntimeContext(), data);
-            } else if (this.network.isHost && inputPacket) {
-                applyClientInputToRemotePlayer(this.getHostClientInputRuntimeContext(), id, inputPacket);
-            } else if (data.type === 'restartRequest' && this.network.isHost) {
-                this.restartMatch();
-            } else if (data.type === 'respawn') {
-                applyRespawnMessage(this.getRespawnMessageRuntimeContext(), data);
-            } else if (data.type === 'restartMatch') {
-                applyRestartMatchMessage({
-                    setGameMode: (mode: GameMode) => this.setGameMode(mode),
-                    restartMatch: (fromNetwork = false) => this.restartMatch(fromNetwork)
-                }, data);
-            } else if (data.type === 'fire') {
-                applyRemoteFireMessage({
-                    myId: this.network.myId,
-                    isHost: this.network.isHost,
-                    applyRemoteFire: (ownerId, shots) => applyRemoteFire({
-                        projectiles: this.projectiles,
-                        remotePlayers: this.remotePlayers,
-                        playWeaponVolleyFx: (payloads) => playWeaponVolleyFxRuntime({
-                            particles: this.particles,
-                            sounds: this.sounds
-                        }, payloads)
-                    }, ownerId, shots),
-                    forwardFireMessage: (senderId, message) => {
-                        this.network.connections.forEach((conn, peerId) => {
-                            if (peerId !== senderId) conn.send(message);
-                        });
-                    }
-                }, id, data);
-            } else if (data.type === 'hitConfirm') {
-                applyHitConfirmMessage(
-                    (targetHp, targetMaxHp) => this.getHitConfirmRuntimeContext().registerHitConfirm(targetHp, targetMaxHp),
-                    data
-                );
-            }
+            dispatchNetworkDataMessage(createNetworkDataDispatchContext(this), id, data, inputPacket);
         };
     }
 
@@ -856,25 +768,7 @@ export class Game {
 
         if (canControlLocal) {
             const localOwnerId = this.getLocalUnitId();
-            const weaponFireContext = {
-                golem: this.golem,
-                mechCamera: this.mechCamera,
-                camera: this.renderer.camera,
-                projectiles: this.projectiles,
-                playWeaponVolleyFx: (shots: FireShotPayload[]) => playWeaponVolleyFxRuntime({
-                    particles: this.particles,
-                    sounds: this.sounds
-                }, shots),
-                broadcastFire: this.sessionMode === 'solo'
-                    ? undefined
-                    : (ownerId: string, shots: FireShotPayload[]) => {
-                        this.network.broadcast({
-                            type: 'fire',
-                            ownerId,
-                            shots
-                        });
-                    }
-            };
+            const weaponFireContext = createWeaponFireRuntimeContext(this);
             if (fireGroup1) {
                 fireWeaponRequestsRuntime(weaponFireContext, localOwnerId, this.golem.tryFireGroup(1), _aimPoint);
             }
@@ -917,48 +811,18 @@ export class Game {
 
         if (!matchEnded) {
             const localPlayerId = this.getLocalUnitId();
-            updateProjectileCombat({
-                projectiles: this.projectiles,
-                bots: this.bots,
-                remotePlayers: this.remotePlayers,
-                localPlayer: this.golem,
-                localPlayerId,
-                authorityMode,
-                collisionMeshes: this.world.getCollisionMeshes(),
+            updateProjectileCombat(createProjectileCollisionRuntimeContext(this, authorityMode, localPlayerId));
+            playProjectileImpactFxRuntime(createProjectileImpactFxContext(this));
+
+            playWorldPropFxRuntime({
                 propManager: this.world.propManager,
-                decals: this.decals,
-                getUnitTeam: (unitId) => this.getUnitTeam(unitId),
-                isTargetAlive: (targetId) => targetId === localPlayerId
-                    ? this.localRespawnState.alive
-                    : (this.remotePlayerStates.get(targetId)?.alive ?? true),
-                onPlayerHit: (ownerId, targetId, damage, section) => handlePlayerHitRuntime({
-                    bots: this.bots,
-                    remotePlayers: this.remotePlayers,
-                    localPlayer: this.golem,
-                    mechCamera: this.mechCamera,
-                    gameMode: this.gameMode,
-                    teamScores: this.teamScores,
-                    localPlayerId,
-                    getUnitTeam: (id) => this.getUnitTeam(id),
-                    queueLocalRespawn: () => this.queueLocalRespawn(),
-                    queueRemoteRespawn: (id) => this.queueRemoteRespawn(id),
-                    scheduleRespawnWave: (team) => this.scheduleRespawnWave(team),
-                    confirmHitForOwner: (ownerId, targetHp, targetMaxHp) => confirmHitForOwnerRuntime(
-                        this.getHitConfirmRuntimeContext(),
-                        ownerId,
-                        targetHp,
-                        targetMaxHp
-                    )
-                }, ownerId, targetId, damage, section)
-            }, {
                 particles: this.particles,
+                debris: this.debris,
+                decals: this.decals,
                 sounds: this.sounds,
                 mechCamera: this.mechCamera,
-                projectiles: this.projectiles,
                 listenerPosition: this.golem.body.translation()
             });
-
-            this.playPropFx();
             this.updateRespawns(dt);
         }
         

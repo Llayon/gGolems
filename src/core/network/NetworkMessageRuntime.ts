@@ -95,6 +95,17 @@ export type HitConfirmMessageLike = {
     maxHp?: number;
 };
 
+export type NetworkDataDispatchContext = {
+    isHost: boolean;
+    onStateMessage: (data: AuthoritativeStateMessageLike) => void;
+    onClientInputPacket: (senderId: string, inputPacket: ClientInputPacket) => void;
+    onRestartRequest: () => void;
+    onRespawnMessage: (data: RespawnMessageLike) => void;
+    onRestartMatchMessage: (data: RestartMatchMessageLike) => void;
+    onRemoteFireMessage: (senderId: string, data: RemoteFireMessageLike) => void;
+    onHitConfirmMessage: (data: HitConfirmMessageLike) => void;
+};
+
 export function applyAuthoritativeStateMessage(
     context: AuthoritativeStateRuntimeContext,
     data: AuthoritativeStateMessageLike
@@ -241,4 +252,45 @@ export function applyHitConfirmMessage(
     data: HitConfirmMessageLike
 ) {
     registerHitConfirm(data.hp ?? 0, data.maxHp ?? 100);
+}
+
+export function dispatchNetworkDataMessage(
+    context: NetworkDataDispatchContext,
+    senderId: string,
+    data: any,
+    inputPacket?: ClientInputPacket | null
+) {
+    if (data.type === 'state' && !context.isHost) {
+        context.onStateMessage(data);
+        return;
+    }
+
+    if (context.isHost && inputPacket) {
+        context.onClientInputPacket(senderId, inputPacket);
+        return;
+    }
+
+    if (data.type === 'restartRequest' && context.isHost) {
+        context.onRestartRequest();
+        return;
+    }
+
+    if (data.type === 'respawn') {
+        context.onRespawnMessage(data);
+        return;
+    }
+
+    if (data.type === 'restartMatch') {
+        context.onRestartMatchMessage(data);
+        return;
+    }
+
+    if (data.type === 'fire') {
+        context.onRemoteFireMessage(senderId, data);
+        return;
+    }
+
+    if (data.type === 'hitConfirm') {
+        context.onHitConfirmMessage(data);
+    }
 }

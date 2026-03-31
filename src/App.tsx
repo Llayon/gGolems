@@ -4,17 +4,12 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { initGame } from './core/Engine';
-import type { NetworkStartupErrorCode } from './network/NetworkManager';
+import { useFirebaseLobbyRooms } from './app/useFirebaseLobbyRooms';
+import { type SessionMode, type StartupFailure, useGameSession } from './app/useGameSession';
+import { usePilotAccount } from './app/usePilotAccount';
 import { getFirebaseLobbyStatus } from './firebase/client';
-import { registerFirebaseLobby, subscribeFirebaseLobbies, type FirebaseLobbyRegistration, type FirebaseLobbyRoom } from './firebase/lobbyRegistry';
-import { getSupabaseStatus } from './supabase/client';
-import { subscribePilotAuthChanges, linkPilotGoogleIdentity, sendPilotMagicLinkUpgrade } from './supabase/auth';
-import { bootstrapPilotAccount } from './supabase/pilotAccount';
-import { syncPilotLocale } from './supabase/profile';
-import { recordPilotMatch } from './supabase/progression';
-import type { PlayerMatchRecord } from './supabase/types';
 import { CombatOverlayCore } from './ui/mobile/CombatOverlayCore';
+import { LobbyScreen } from './ui/lobby/LobbyScreen';
 import { MobileCombatLayout } from './ui/mobile/MobileCombatLayout';
 import { MobileSettingsOverlay } from './ui/mobile/MobileSettingsOverlay';
 import { createTranslator, getInitialLocale, saveLocale, translateMessage, type TranslationDescriptor, type TranslationKey, type Translator } from './i18n';
@@ -22,12 +17,9 @@ import { formatPercent, formatSeconds, formatSpeedUnit } from './i18n/format';
 import type { Locale } from './i18n/types';
 import type { WeaponStatusView } from './combat/weaponTypes';
 import type { ControlPointView, GameMode, TeamOverview, TeamScoreState } from './gameplay/types';
-import type { LobbyJoinability } from './firebase/lobbyRegistry';
 import { CHASSIS_DEFINITIONS, DEFAULT_CHASSIS_ID, LOADOUT_DEFINITIONS, getDefaultLoadoutForChassis } from './mechs/definitions';
 import type { ChassisId, LoadoutId } from './mechs/types';
-import { INITIAL_GAME_HUD_STATE, type GameHudState, type SectionName, type SectionState } from './core/gameHudState';
-
-type SessionMode = 'solo' | 'host' | 'client';
+import { type SectionName, type SectionState } from './core/gameHudState';
 
 const sectionLabelKeys: Record<SectionName, TranslationKey> = {
     head: 'hud.section.head',
@@ -40,97 +32,11 @@ const sectionLabelKeys: Record<SectionName, TranslationKey> = {
     rightLeg: 'hud.section.rightLeg'
 };
 
-type StartupPhase = 'startWorld' | 'createSession' | 'connectToHost';
-
-type StartupFailureCode = NetworkStartupErrorCode | 'timeout' | 'hostIdRequired' | 'unknown';
-
-type StartupFailure = {
-    code: StartupFailureCode;
-    phase?: StartupPhase;
-    seconds?: number;
-    detail?: string;
-    cause?: unknown;
-};
-
-type PilotAuthState = {
-    status: 'disabled' | 'booting' | 'ready' | 'error';
-    userId: string | null;
-    isAnonymous: boolean;
-    email: string | null;
-    linkedProviders: string[];
-    error: string;
-};
-
-type PilotProfileState = {
-    callsign: string;
-};
-
-type PilotProgressState = {
-    matchesPlayed: number;
-    matchesWon: number;
-    xp: number;
-    credits: number;
-    recentMatches: PlayerMatchRecord[];
-};
-
-type PilotAccountState = PilotAuthState & PilotProfileState & PilotProgressState;
-
-type AuthUpgradeMessage = {
-    tone: 'info' | 'success' | 'error';
-    text: string;
-};
-
-const startupPhaseLabelKeys: Record<StartupPhase, TranslationKey> = {
+const startupPhaseLabelKeys: Record<'startWorld' | 'createSession' | 'connectToHost', TranslationKey> = {
     startWorld: 'errors.startWorld',
     createSession: 'errors.createSession',
     connectToHost: 'errors.connectToHost'
 };
-
-const lobbyJoinabilityKeys: Record<LobbyJoinability, TranslationKey> = {
-    open: 'lobby.joinability.open',
-    closing: 'lobby.joinability.closing',
-    full: 'lobby.joinability.full',
-    ended: 'lobby.joinability.ended'
-};
-
-function createInitialPilotAuthState(enabled: boolean): PilotAuthState {
-    return {
-        status: enabled ? 'booting' : 'disabled',
-        userId: null,
-        isAnonymous: true,
-        email: null,
-        linkedProviders: [],
-        error: ''
-    };
-}
-
-function createInitialPilotProfileState(): PilotProfileState {
-    return {
-        callsign: ''
-    };
-}
-
-function createInitialPilotProgressState(): PilotProgressState {
-    return {
-        matchesPlayed: 0,
-        matchesWon: 0,
-        xp: 0,
-        credits: 0,
-        recentMatches: []
-    };
-}
-
-function composePilotAccountState(
-    auth: PilotAuthState,
-    profile: PilotProfileState,
-    progress: PilotProgressState
-): PilotAccountState {
-    return {
-        ...auth,
-        ...profile,
-        ...progress
-    };
-}
 
 function clamp(value: number, min: number, max: number) {
     return Math.max(min, Math.min(max, value));
@@ -196,33 +102,6 @@ async function copyText(text: string) {
     }
 }
 
-function describeError(error: unknown, fallback: string) {
-    if (error instanceof Error && error.message) {
-        return error.message;
-    }
-    return typeof error === 'string' ? error : fallback;
-}
-
-function isStartupFailure(error: unknown): error is StartupFailure {
-    if (!error || typeof error !== 'object') return false;
-    return 'code' in error && typeof (error as { code?: unknown }).code === 'string';
-}
-
-function toStartupFailure(error: unknown, phase?: StartupPhase): StartupFailure {
-    if (isStartupFailure(error)) {
-        return phase && !error.phase
-            ? { ...error, phase }
-            : error;
-    }
-
-    return {
-        code: 'unknown',
-        phase,
-        detail: describeError(error, ''),
-        cause: error
-    };
-}
-
 function getStartupFailureMessage(t: Translator, locale: Locale, failure: StartupFailure) {
     const withDetail = (message: string) => failure.detail
         ? `${message}\n\n${t('errors.detail', { detail: failure.detail })}`
@@ -254,30 +133,6 @@ function getStartupFailureMessage(t: Translator, locale: Locale, failure: Startu
             }
             return t('errors.startup', { message: failure.detail || t('errors.unknown') });
     }
-}
-
-function withTimeout<T>(promiseFactory: () => Promise<T>, timeoutMs: number, timeoutFailure: StartupFailure) {
-    return new Promise<T>((resolve, reject) => {
-        const timeoutId = window.setTimeout(() => {
-            reject(timeoutFailure);
-        }, timeoutMs);
-
-        try {
-            promiseFactory().then(
-                (value) => {
-                    window.clearTimeout(timeoutId);
-                    resolve(value);
-                },
-                (error) => {
-                    window.clearTimeout(timeoutId);
-                    reject(error);
-                }
-            );
-        } catch (error) {
-            window.clearTimeout(timeoutId);
-            reject(error);
-        }
-    });
 }
 
 function HeadingTape(props: { legYaw: number; torsoYaw: number; maxTwist: number; t: Translator }) {
@@ -681,205 +536,17 @@ function releasePointerLock() {
     }
 }
 
-function getPilotMatchModeLabel(t: Translator, mode: string) {
-    switch (mode) {
-        case 'control':
-            return t('lobby.mode.control');
-        case 'tdm':
-            return t('lobby.mode.tdm');
-        default:
-            return mode.toUpperCase();
-    }
-}
-
-function formatPilotMatchTime(locale: Locale, timestamp: string) {
-    const value = new Date(timestamp);
-    if (Number.isNaN(value.getTime())) {
-        return '--';
-    }
-
-    return new Intl.DateTimeFormat(locale === 'ru' ? 'ru-RU' : 'en-US', {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-    }).format(value);
-}
-
-function PilotAccountCard(props: {
-    account: PilotAccountState;
-    locale: Locale;
-    authEmail: string;
-    authBusy: 'idle' | 'google' | 'magic';
-    authMessage: AuthUpgradeMessage | null;
-    t: Translator;
-    onAuthEmailChange: (value: string) => void;
-    onLinkGoogle: () => void;
-    onSendMagicLink: () => void;
-}) {
-    const statusKey: TranslationKey = props.account.status === 'ready'
-        ? 'supabase.status.ready'
-        : props.account.status === 'error'
-            ? 'supabase.status.error'
-            : props.account.status === 'disabled'
-                ? 'supabase.status.disabled'
-                : 'supabase.status.booting';
-    const statusTone = props.account.status === 'ready'
-        ? 'text-[#9de5b0]'
-        : props.account.status === 'error'
-            ? 'text-[#ffb09a]'
-            : props.account.status === 'disabled'
-                ? 'text-[#d3bc94]'
-                : 'text-[#8fb8c2]';
-    const shortId = props.account.userId ? props.account.userId.slice(0, 8).toUpperCase() : '--';
-
-    return (
-        <div className="rounded-xl border border-[#8f6a38]/30 bg-black/25 px-4 py-3">
-            <div className="text-center text-xs tracking-[0.28em] text-[#8fb8c2]">{props.t('supabase.title')}</div>
-            <div className={`mt-2 text-center text-[11px] tracking-[0.18em] ${statusTone}`}>
-                {props.t(statusKey)}
-            </div>
-            {props.account.status === 'ready' ? (
-                <>
-                    <div className="mt-2 text-center text-[13px] font-bold tracking-[0.18em] text-[#f3deb5]">
-                        {props.account.callsign}
-                    </div>
-                    <div className="mt-1 text-center text-[10px] tracking-[0.18em] text-[#c5b187]">
-                        {props.t('supabase.profile', { idLabel: props.t('common.id'), id: shortId })}
-                    </div>
-                    <div className="mt-1 text-center text-[10px] tracking-[0.18em] text-[#8fb8c2]">
-                        {props.t(props.account.isAnonymous ? 'supabase.guest' : 'supabase.linked')}
-                    </div>
-                    {props.account.email ? (
-                        <div className="mt-1 text-center text-[10px] tracking-[0.14em] text-[#d7c5a1]">
-                            {props.account.email}
-                        </div>
-                    ) : null}
-                    {props.account.linkedProviders.length > 0 ? (
-                        <div className="mt-1 text-center text-[10px] tracking-[0.14em] text-[#8fb8c2]">
-                            {props.t('supabase.providers', {
-                                providers: props.account.linkedProviders.join(' | ').toUpperCase()
-                            })}
-                        </div>
-                    ) : null}
-                    <div className="mt-2 text-center text-[10px] tracking-[0.18em] text-[#d7c5a1]">
-                        {props.t('supabase.matches', {
-                            played: props.account.matchesPlayed,
-                            wins: props.account.matchesWon
-                        })}
-                    </div>
-                    <div className="mt-1 text-center text-[10px] tracking-[0.18em] text-[#d7c5a1]">
-                        {props.t('supabase.resources', {
-                            xp: props.account.xp,
-                            credits: props.account.credits
-                        })}
-                    </div>
-                    <div className="mt-3 border-t border-[#8f6a38]/25 pt-3">
-                        <div className="text-center text-[10px] tracking-[0.22em] text-[#8fb8c2]">
-                            {props.t('supabase.historyTitle')}
-                        </div>
-                        {props.account.recentMatches.length > 0 ? (
-                            <div className="mt-2 max-h-48 space-y-2 overflow-y-auto pr-1">
-                                {props.account.recentMatches.map((match) => (
-                                    <div
-                                        key={match.id}
-                                        className="rounded-lg border border-[#8f6a38]/25 bg-black/25 px-3 py-2 text-left"
-                                    >
-                                        <div className="flex items-center justify-between gap-3 text-[10px] tracking-[0.16em]">
-                                            <span className="text-[#f3deb5]">
-                                                {getPilotMatchModeLabel(props.t, match.mode)}
-                                            </span>
-                                            <span className={match.result === 'win' ? 'text-[#9de5b0]' : 'text-[#ffb09a]'}>
-                                                {props.t(match.result === 'win' ? 'supabase.result.win' : 'supabase.result.loss')}
-                                            </span>
-                                        </div>
-                                        <div className="mt-1 flex items-center justify-between gap-3 text-[10px] tracking-[0.14em] text-[#b9c7c8]">
-                                            <span>{match.blue_score} : {match.red_score}</span>
-                                            <span>{formatPilotMatchTime(props.locale, match.created_at)}</span>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <div className="mt-2 text-center text-[10px] tracking-[0.14em] text-[#b9c7c8]">
-                                {props.t('supabase.historyEmpty')}
-                            </div>
-                        )}
-                    </div>
-                    {props.account.isAnonymous ? (
-                        <div className="mt-3 border-t border-[#8f6a38]/25 pt-3">
-                            <div className="text-center text-[10px] tracking-[0.22em] text-[#8fb8c2]">
-                                {props.t('supabase.upgradeTitle')}
-                            </div>
-                            <div className="mt-1 text-center text-[10px] tracking-[0.14em] text-[#b9c7c8]">
-                                {props.t('supabase.upgradeHint')}
-                            </div>
-                            <button
-                                type="button"
-                                onClick={props.onLinkGoogle}
-                                disabled={props.authBusy !== 'idle'}
-                                className="mt-3 w-full rounded-full border border-[#5a7aa5]/60 bg-[#1c2a46]/45 px-4 py-2 text-[10px] font-bold tracking-[0.24em] text-[#d7e8ff] transition-colors hover:border-[#83b9ff]/80 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                                {props.authBusy === 'google' ? props.t('supabase.actions.googleBusy') : props.t('supabase.actions.google')}
-                            </button>
-                            <div className="mt-3 text-center text-[10px] tracking-[0.22em] text-[#8fb8c2]">
-                                {props.t('supabase.actions.magic')}
-                            </div>
-                            <input
-                                type="email"
-                                value={props.authEmail}
-                                onChange={(event) => props.onAuthEmailChange(event.target.value)}
-                                placeholder={props.t('supabase.actions.emailPlaceholder')}
-                                className="mt-2 w-full rounded border border-[#8f6a38]/40 bg-black/65 px-3 py-2 text-center text-[11px] tracking-[0.12em] text-[#f5dba8] outline-none focus:border-[#efb768]"
-                            />
-                            <button
-                                type="button"
-                                onClick={props.onSendMagicLink}
-                                disabled={props.authBusy !== 'idle'}
-                                className="mt-2 w-full rounded-full border border-[#8f6a38]/60 bg-black/40 px-4 py-2 text-[10px] font-bold tracking-[0.24em] text-[#f3deb5] transition-colors hover:border-[#efb768]/80 hover:text-[#fff1d4] disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                                {props.authBusy === 'magic' ? props.t('supabase.actions.magicBusy') : props.t('supabase.actions.magicSend')}
-                            </button>
-                        </div>
-                    ) : null}
-                    {props.authMessage ? (
-                        <div className={`mt-3 text-center text-[10px] tracking-[0.14em] ${props.authMessage.tone === 'error' ? 'text-[#ffb09a]' : props.authMessage.tone === 'success' ? 'text-[#9de5b0]' : 'text-[#8fb8c2]'}`}>
-                            {props.authMessage.text}
-                        </div>
-                    ) : null}
-                </>
-            ) : props.account.status === 'error' ? (
-                <div className="mt-2 text-center text-[10px] tracking-[0.14em] text-[#ffb09a]">
-                    {props.account.error}
-                </div>
-            ) : (
-                <div className="mt-2 text-center text-[10px] tracking-[0.14em] text-[#b9c7c8]">
-                    {props.t(props.account.status === 'disabled' ? 'supabase.disabledHint' : 'supabase.bootingHint')}
-                </div>
-            )}
-        </div>
-    );
-}
 
 export default function App() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const copyResetRef = useRef<number | null>(null);
-    const firebaseLobbyRef = useRef<FirebaseLobbyRegistration | null>(null);
-    const latestGameRef = useRef<any>(null);
-    const latestHudStateRef = useRef<GameHudState>(INITIAL_GAME_HUD_STATE);
-    const recordedMatchRef = useRef<string | null>(null);
     const [locale, setLocale] = useState<Locale>(() => getInitialLocale());
-    const [loading, setLoading] = useState(false);
-    const [inLobby, setInLobby] = useState(true);
     const [isTouchDevice, setIsTouchDevice] = useState(false);
     const [isPortrait, setIsPortrait] = useState(false);
     const [mobileLeftHanded, setMobileLeftHanded] = useState(false);
     const [mobileAimPreset, setMobileAimPreset] = useState<'LOW' | 'MID' | 'HIGH'>('MID');
     const [hostId, setHostId] = useState('');
     const [roomName, setRoomName] = useState('');
-    const [myId, setMyId] = useState('');
-    const [isHost, setIsHost] = useState(false);
-    const [sessionMode, setSessionMode] = useState<SessionMode>('solo');
     const [selectedGameMode, setSelectedGameMode] = useState<GameMode>('control');
     const [selectedChassisId, setSelectedChassisId] = useState<ChassisId>(DEFAULT_CHASSIS_ID);
     const [selectedLoadoutId, setSelectedLoadoutId] = useState<LoadoutId>(getDefaultLoadoutForChassis(DEFAULT_CHASSIS_ID).id);
@@ -888,23 +555,39 @@ export default function App() {
     const [showPilotPanel, setShowPilotPanel] = useState(true);
     const [showMobileSettings, setShowMobileSettings] = useState(false);
     const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
-    const [gameInstance, setGameInstance] = useState<any>(null);
-    const [gameState, setGameState] = useState<GameHudState>(INITIAL_GAME_HUD_STATE);
-    const [firebaseRooms, setFirebaseRooms] = useState<FirebaseLobbyRoom[]>([]);
-    const supabaseStatus = getSupabaseStatus();
-    const [pilotAuth, setPilotAuth] = useState<PilotAuthState>(() => createInitialPilotAuthState(supabaseStatus.enabled));
-    const [pilotProfile, setPilotProfile] = useState<PilotProfileState>(() => createInitialPilotProfileState());
-    const [pilotProgress, setPilotProgress] = useState<PilotProgressState>(() => createInitialPilotProgressState());
-    const [authUpgradeEmail, setAuthUpgradeEmail] = useState('');
-    const [authUpgradeBusy, setAuthUpgradeBusy] = useState<'idle' | 'google' | 'magic'>('idle');
-    const [authUpgradeMessage, setAuthUpgradeMessage] = useState<AuthUpgradeMessage | null>(null);
     const t = createTranslator(locale);
     const firebaseLobbyStatus = getFirebaseLobbyStatus();
+    const session = useGameSession({
+        canvasRef,
+        firebaseEnabled: firebaseLobbyStatus.enabled,
+        roomName,
+        selectedChassisId,
+        selectedLoadoutId,
+        releasePointerLock,
+        onStartupFailure: (failure: StartupFailure) => {
+            alert(getStartupFailureMessage(t, locale, failure));
+        }
+    });
+    const { gameInstance, gameState, inLobby, isHost, loading, myId, sessionMode } = session;
+    const firebaseRooms = useFirebaseLobbyRooms(firebaseLobbyStatus.enabled, inLobby);
+    const pilot = usePilotAccount({
+        locale,
+        inLobby,
+        gameMode: gameState.gameMode,
+        teamScores: gameState.teamScores,
+        messages: {
+            googleRedirect: t('supabase.actions.googleRedirect'),
+            googleFailed: t('supabase.actions.googleFailed'),
+            magicSending: t('supabase.actions.magicSending'),
+            magicSent: t('supabase.actions.magicSent'),
+            magicFailed: t('supabase.actions.magicFailed')
+        }
+    });
     const availableChassis = Object.values(CHASSIS_DEFINITIONS);
     const availableLoadouts = Object.values(LOADOUT_DEFINITIONS).filter((loadout) => loadout.chassisId === selectedChassisId);
     const selectedChassis = CHASSIS_DEFINITIONS[selectedChassisId];
     const selectedLoadout = LOADOUT_DEFINITIONS[selectedLoadoutId];
-    const pilotAccount = composePilotAccountState(pilotAuth, pilotProfile, pilotProgress);
+    const pilotAccount = pilot.account;
 
     const showCopyState = (nextState: 'copied' | 'error') => {
         setCopyState(nextState);
@@ -924,209 +607,16 @@ export default function App() {
     };
 
     const leaveGame = (gameOverride?: any) => {
-        releasePointerLock();
-
-        const activeGame = gameOverride ?? latestGameRef.current;
-        activeGame?.stop?.();
-
-        void firebaseLobbyRef.current?.unregister();
-        firebaseLobbyRef.current = null;
-        latestGameRef.current = null;
-        recordedMatchRef.current = null;
-        setGameInstance(null);
-        setGameState(INITIAL_GAME_HUD_STATE);
-        setSessionMode('solo');
-        setIsHost(false);
-        setMyId('');
-        setInLobby(true);
-        setLoading(false);
+        session.leaveGame(gameOverride);
         setCopyState('idle');
         setShowMobileSettings(false);
-    };
-
-    const refreshPilotAccount = async (mode: 'boot' | 'refresh' = 'refresh') => {
-        if (!supabaseStatus.enabled) {
-            setPilotAuth(createInitialPilotAuthState(false));
-            setPilotProfile(createInitialPilotProfileState());
-            setPilotProgress(createInitialPilotProgressState());
-            return;
-        }
-
-        if (mode === 'boot') {
-            setPilotAuth(createInitialPilotAuthState(true));
-            setPilotProfile(createInitialPilotProfileState());
-            setPilotProgress(createInitialPilotProgressState());
-        }
-
-        try {
-            const snapshot = await bootstrapPilotAccount(locale);
-
-            if (!snapshot) {
-                setPilotAuth(createInitialPilotAuthState(false));
-                setPilotProfile(createInitialPilotProfileState());
-                setPilotProgress(createInitialPilotProgressState());
-                return;
-            }
-
-            setAuthUpgradeBusy('idle');
-            if (!snapshot.auth.isAnonymous) {
-                setAuthUpgradeEmail('');
-                setAuthUpgradeMessage(null);
-            }
-
-            setPilotAuth({
-                status: 'ready',
-                userId: snapshot.auth.userId,
-                isAnonymous: snapshot.auth.isAnonymous,
-                email: snapshot.auth.email,
-                linkedProviders: snapshot.auth.linkedProviders,
-                error: ''
-            });
-            setPilotProfile({
-                callsign: snapshot.profile.callsign
-            });
-            setPilotProgress({
-                matchesPlayed: snapshot.progress.matches_played,
-                matchesWon: snapshot.progress.matches_won,
-                xp: snapshot.progress.xp,
-                credits: snapshot.progress.credits,
-                recentMatches: snapshot.recentMatches
-            });
-        } catch (error) {
-            setPilotAuth({
-                ...createInitialPilotAuthState(true),
-                status: 'error',
-                error: describeError(error, 'Supabase bootstrap failed.')
-            });
-            setPilotProfile(createInitialPilotProfileState());
-            setPilotProgress(createInitialPilotProgressState());
-        }
-    };
-
-    const startGoogleUpgrade = async () => {
-        if (pilotAuth.status !== 'ready' || !pilotAuth.isAnonymous) return;
-
-        setAuthUpgradeBusy('google');
-        setAuthUpgradeMessage({
-            tone: 'info',
-            text: t('supabase.actions.googleRedirect')
-        });
-
-        try {
-            await linkPilotGoogleIdentity();
-        } catch (error) {
-            setAuthUpgradeBusy('idle');
-            setAuthUpgradeMessage({
-                tone: 'error',
-                text: describeError(error, t('supabase.actions.googleFailed'))
-            });
-        }
-    };
-
-    const sendMagicLinkUpgrade = async () => {
-        if (pilotAuth.status !== 'ready' || !pilotAuth.isAnonymous) return;
-
-        setAuthUpgradeBusy('magic');
-        setAuthUpgradeMessage({
-            tone: 'info',
-            text: t('supabase.actions.magicSending')
-        });
-
-        try {
-            await sendPilotMagicLinkUpgrade(authUpgradeEmail);
-            setAuthUpgradeMessage({
-                tone: 'success',
-                text: t('supabase.actions.magicSent')
-            });
-        } catch (error) {
-            setAuthUpgradeMessage({
-                tone: 'error',
-                text: describeError(error, t('supabase.actions.magicFailed'))
-            });
-        } finally {
-            setAuthUpgradeBusy('idle');
-        }
     };
 
     const startGame = async (mode: SessionMode, targetHostId?: string, requestedMode: GameMode = selectedGameMode) => {
-        if (!canvasRef.current) return;
-        setInLobby(false);
-        setLoading(true);
         setShowPilotPanel(!isTouchDevice);
         setShowMobileSettings(false);
-        setSessionMode(mode);
         setCopyState('idle');
-        let game: any = null;
-
-        const failStart = (error: unknown) => {
-            console.error(error);
-            leaveGame(game);
-            alert(getStartupFailureMessage(t, locale, toStartupFailure(error)));
-        };
-
-        try {
-            game = await withTimeout(
-                async () => {
-                    try {
-                        return await initGame(canvasRef.current!, (state: GameHudState) => {
-                            setGameState({ ...state });
-                        }, mode, requestedMode, {
-                            chassisId: selectedChassisId,
-                            loadoutId: selectedLoadoutId
-                        });
-                    } catch (error) {
-                        throw toStartupFailure(error, 'startWorld');
-                    }
-                },
-                15000,
-                { code: 'timeout', phase: 'startWorld', seconds: 15 }
-            );
-
-            setGameInstance(game);
-
-            if (mode === 'solo') {
-                setMyId('');
-                setIsHost(false);
-                setLoading(false);
-                return;
-            }
-
-            if (mode === 'host') {
-                const createdHostId = await withTimeout(
-                    () => new Promise<string>((resolve, reject) => {
-                        game.network.initAsHost(resolve, (error) => reject(toStartupFailure(error, 'createSession')));
-                    }),
-                    15000,
-                    { code: 'timeout', phase: 'createSession', seconds: 15 }
-                );
-                setMyId(createdHostId);
-                setIsHost(true);
-                if (firebaseLobbyStatus.enabled) {
-                    firebaseLobbyRef.current = await registerFirebaseLobby(createdHostId, requestedMode, roomName);
-                }
-                setLoading(false);
-                return;
-            }
-
-            if (targetHostId) {
-                game.setClientMode();
-                const clientId = await withTimeout(
-                    () => new Promise<string>((resolve, reject) => {
-                        game.network.initAsClient(targetHostId, resolve, (error) => reject(toStartupFailure(error, 'connectToHost')));
-                    }),
-                    15000,
-                    { code: 'timeout', phase: 'connectToHost', seconds: 15 }
-                );
-                setMyId(clientId);
-                setIsHost(false);
-                setLoading(false);
-                return;
-            }
-
-            throw { code: 'hostIdRequired' } satisfies StartupFailure;
-        } catch (error) {
-            failStart(error);
-        }
+        await session.startGame(mode, targetHostId, requestedMode);
     };
 
     useEffect(() => {
@@ -1162,36 +652,6 @@ export default function App() {
     }, [locale]);
 
     useEffect(() => {
-        if (!supabaseStatus.enabled) {
-            setPilotAuth(createInitialPilotAuthState(false));
-            setPilotProfile(createInitialPilotProfileState());
-            setPilotProgress(createInitialPilotProgressState());
-            return;
-        }
-
-        let cancelled = false;
-
-        void (async () => {
-            await refreshPilotAccount('boot');
-            if (cancelled) return;
-        })();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [supabaseStatus.enabled]);
-
-    useEffect(() => {
-        if (!supabaseStatus.enabled) {
-            return;
-        }
-
-        return subscribePilotAuthChanges(() => {
-            void refreshPilotAccount();
-        });
-    }, [supabaseStatus.enabled, locale]);
-
-    useEffect(() => {
         try {
             const savedChassis = window.localStorage.getItem('golems_selected_chassis');
             const savedLoadout = window.localStorage.getItem('golems_selected_loadout');
@@ -1219,135 +679,19 @@ export default function App() {
         }
     }, [selectedChassisId, selectedLoadoutId]);
 
-        useEffect(() => {
-            if (!availableLoadouts.some((loadout) => loadout.id === selectedLoadoutId)) {
-                setSelectedLoadoutId(getDefaultLoadoutForChassis(selectedChassisId).id);
-            }
-        }, [availableLoadouts, selectedChassisId, selectedLoadoutId]);
- 
     useEffect(() => {
-        if (!inLobby || !firebaseLobbyStatus.enabled) {
-            setFirebaseRooms([]);
-            return;
+        if (!availableLoadouts.some((loadout) => loadout.id === selectedLoadoutId)) {
+            setSelectedLoadoutId(getDefaultLoadoutForChassis(selectedChassisId).id);
         }
-
-        return subscribeFirebaseLobbies(setFirebaseRooms);
-    }, [firebaseLobbyStatus.enabled, inLobby]);
+    }, [availableLoadouts, selectedChassisId, selectedLoadoutId]);
 
     useEffect(() => {
         return () => {
-            void firebaseLobbyRef.current?.unregister();
-            firebaseLobbyRef.current = null;
-        };
+            if (copyResetRef.current !== null) {
+                window.clearTimeout(copyResetRef.current);
+            }
+        }
     }, []);
-
-    useEffect(() => {
-        latestGameRef.current = gameInstance;
-    }, [gameInstance]);
-
-    useEffect(() => {
-        latestHudStateRef.current = gameState;
-    }, [gameState]);
-
-    useEffect(() => {
-        if (gameState.teamScores.winner) {
-            releasePointerLock();
-        }
-    }, [gameState.teamScores.winner]);
-
-    useEffect(() => {
-        if (pilotAuth.status !== 'ready' || !pilotAuth.userId) {
-            return;
-        }
-
-        void syncPilotLocale(pilotAuth.userId, locale).catch((error) => {
-            console.warn('[supabase] Failed to sync locale:', error);
-        });
-    }, [locale, pilotAuth.status, pilotAuth.userId]);
-
-    useEffect(() => {
-        if (pilotAuth.status !== 'ready' || !pilotAuth.userId || inLobby) {
-            return;
-        }
-
-        const winner = gameState.teamScores.winner;
-        if (!winner) {
-            recordedMatchRef.current = null;
-            return;
-        }
-
-        const signature = `${gameState.gameMode}:${winner}:${gameState.teamScores.blue}:${gameState.teamScores.red}`;
-        if (recordedMatchRef.current === signature) {
-            return;
-        }
-        recordedMatchRef.current = signature;
-
-        void recordPilotMatch(pilotAuth.userId, {
-            mode: gameState.gameMode,
-            won: winner === 'blue',
-            blueScore: gameState.teamScores.blue,
-            redScore: gameState.teamScores.red
-        }).then((snapshot) => {
-            if (!snapshot) return;
-            setPilotProgress((current) => ({
-                ...current,
-                matchesPlayed: snapshot.matchesPlayed,
-                matchesWon: snapshot.matchesWon,
-                xp: snapshot.xp,
-                credits: snapshot.credits,
-                recentMatches: snapshot.recentMatch
-                    ? [snapshot.recentMatch, ...current.recentMatches.filter((match) => match.id !== snapshot.recentMatch?.id)].slice(0, 5)
-                    : current.recentMatches
-            }));
-        }).catch((error) => {
-            console.warn('[supabase] Failed to record match:', error);
-        });
-    }, [gameState.gameMode, gameState.teamScores, inLobby, pilotAuth.status, pilotAuth.userId]);
-
-    useEffect(() => {
-        if (!firebaseLobbyStatus.enabled || !firebaseLobbyRef.current || !isHost || inLobby) {
-            return;
-        }
-
-        const resolveJoinability = (room: {
-            currentPlayers: number;
-            maxPlayers: number;
-            winner: boolean;
-            leadScore: number;
-            scoreToWin: number;
-        }) => {
-            if (room.winner) return 'ended' as const;
-            if (room.currentPlayers >= room.maxPlayers) return 'full' as const;
-            if (room.scoreToWin > 0 && room.leadScore / room.scoreToWin >= 0.8) return 'closing' as const;
-            return 'open' as const;
-        };
-
-        const pushLobbyMeta = () => {
-            const game = latestGameRef.current;
-            const hudState = latestHudStateRef.current;
-            const currentPlayers = 1 + (game?.remotePlayers?.size ?? 0);
-            const leadScore = Math.max(hudState.teamScores.blue, hudState.teamScores.red);
-            const joinability = resolveJoinability({
-                currentPlayers,
-                maxPlayers: 5,
-                winner: hudState.teamScores.winner !== null,
-                leadScore,
-                scoreToWin: hudState.teamScores.scoreToWin
-            });
-            void firebaseLobbyRef.current?.updateMeta({
-                currentPlayers,
-                inProgress: true,
-                joinability,
-                blueScore: hudState.teamScores.blue,
-                redScore: hudState.teamScores.red,
-                scoreToWin: hudState.teamScores.scoreToWin
-            });
-        };
-
-        pushLobbyMeta();
-        const timer = window.setInterval(pushLobbyMeta, 2500);
-        return () => window.clearInterval(timer);
-    }, [firebaseLobbyStatus.enabled, gameInstance, inLobby, isHost, loading]);
 
     useEffect(() => {
         try {
@@ -1357,15 +701,6 @@ export default function App() {
             // Ignore storage access issues.
         }
     }, [mobileAimPreset, mobileLeftHanded]);
-
-    useEffect(() => {
-        return () => {
-            if (copyResetRef.current !== null) {
-                window.clearTimeout(copyResetRef.current);
-            }
-            if (gameInstance) gameInstance.stop();
-        };
-    }, [gameInstance]);
 
     useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {
@@ -1431,33 +766,10 @@ export default function App() {
     const terrainDebugTone = gameState.terrainColliderMode === 'heightfield'
         ? 'text-[#8fb8c2]'
         : 'text-[#f3b56c]';
-    const filteredFirebaseRooms = roomFilter === 'all'
-        ? firebaseRooms
-        : firebaseRooms.filter((room) => room.gameMode === roomFilter);
-    const canJoinRoom = (room: FirebaseLobbyRoom) => room.joinability !== 'full' && room.joinability !== 'ended';
-    const visibleFirebaseRooms = showUnavailableRooms
-        ? filteredFirebaseRooms
-        : filteredFirebaseRooms.filter((room) => canJoinRoom(room));
-    const hiddenUnavailableCount = filteredFirebaseRooms.length - visibleFirebaseRooms.length;
-    const joinabilityTone = (room: FirebaseLobbyRoom) => room.joinability === 'ended'
-        ? 'border-[#8a4f44]/55 bg-[#5b231b]/24 text-[#ffb7a6]'
-        : room.joinability === 'full'
-            ? 'border-[#8f6a38]/55 bg-[#5e451b]/24 text-[#f3d08d]'
-            : room.joinability === 'closing'
-                ? 'border-[#b57d3c]/60 bg-[#6a4315]/24 text-[#ffd489]'
-                : 'border-[#4b7f5b]/55 bg-[#203622]/24 text-[#b8efc0]';
     const sessionLabel = translateMessage(t, sessionMessage);
     const copyTextLabel = translateMessage(t, copyMessage);
     const cameraModeLabel = translateMessage(t, cameraModeMessage);
     const terrainDebugLabel = translateMessage(t, terrainDebugMessage);
-    const directJoinRoom = firebaseRooms.find((room) => room.hostPeerId.trim().toLowerCase() === hostId.trim().toLowerCase());
-    const directJoinModeKey = directJoinRoom
-        ? directJoinRoom.gameMode === 'tdm'
-            ? 'lobby.mode.tdm'
-            : 'lobby.mode.control'
-        : null;
-    const directJoinStatusKey = directJoinRoom?.inProgress ? 'lobby.roomState.live' : 'lobby.roomState.open';
-    const directJoinAvailabilityKey = directJoinRoom ? lobbyJoinabilityKeys[directJoinRoom.joinability] : null;
     const sessionSummaryLabel = t(
         sessionMode === 'solo' ? 'pilot.summary.base' : 'pilot.summary.withId',
         sessionMode === 'solo'
@@ -1501,328 +813,58 @@ export default function App() {
             ) : null}
 
             {inLobby ? (
-                <div className="absolute inset-0 z-50 overflow-y-auto bg-[radial-gradient(circle_at_center,#2a1c12_0%,#130e0b_60%,#090807_100%)] px-4 py-4 text-white sm:py-6">
-                    <div className="flex min-h-full flex-col items-center justify-start">
-                    <button
-                        type="button"
-                        onClick={() => setLocale((current) => current === 'ru' ? 'en' : 'ru')}
-                        className="sticky top-0 z-10 ml-auto rounded-full border border-[#8f6a38]/55 bg-black/65 px-4 py-2 text-[10px] tracking-[0.24em] text-[#d8c19a] backdrop-blur-sm transition-colors hover:border-[#efb768]/70 hover:text-[#efb768]"
-                    >
-                        {localeLabel}
-                    </button>
-
-                    <h1 className="mb-5 mt-4 text-center text-2xl font-bold tracking-[0.22em] text-[#efb768] drop-shadow-[0_0_14px_rgba(239,183,104,0.45)] sm:mb-8 sm:mt-6 sm:text-4xl sm:tracking-[0.35em]">
-                        {t('lobby.title')}
-                    </h1>
-
-                    <div className="flex w-[min(92vw,24rem)] max-w-full flex-col gap-5 rounded-2xl border border-[#8f6a38]/40 bg-black/45 p-5 backdrop-blur-sm sm:gap-6 sm:p-8">
-                        <div className="flex flex-col gap-2">
-                            <div className="text-center text-xs tracking-[0.28em] text-[#8fb8c2]">{t('lobby.modeTitle')}</div>
-                            <div className="grid grid-cols-2 gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => setSelectedGameMode('control')}
-                                    className={`rounded-xl border px-4 py-3 text-[11px] font-bold tracking-[0.18em] transition-colors ${selectedGameMode === 'control' ? 'border-[#efb768]/80 bg-[#7d4f22]/55 text-[#fff1d4]' : 'border-[#8f6a38]/30 bg-black/25 text-[#d3bc94] hover:border-[#efb768]/50'}`}
-                                >
-                                    {t('lobby.mode.control')}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setSelectedGameMode('tdm')}
-                                    className={`rounded-xl border px-4 py-3 text-[11px] font-bold tracking-[0.18em] transition-colors ${selectedGameMode === 'tdm' ? 'border-[#efb768]/80 bg-[#7d4f22]/55 text-[#fff1d4]' : 'border-[#8f6a38]/30 bg-black/25 text-[#d3bc94] hover:border-[#efb768]/50'}`}
-                                >
-                                    {t('lobby.mode.tdm')}
-                                </button>
-                            </div>
-                            <div className="text-center text-[11px] tracking-[0.12em] text-[#b9c7c8]">
-                                {t(selectedGameMode === 'control' ? 'lobby.modeHint.control' : 'lobby.modeHint.tdm')}
-                            </div>
-                        </div>
-
-                        <div className="flex flex-col gap-3">
-                            <div className="text-center text-xs tracking-[0.28em] text-[#8fb8c2]">{t('lobby.frameTitle')}</div>
-                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                                {availableChassis.map((chassis) => (
-                                    <button
-                                        key={chassis.id}
-                                        type="button"
-                                        onClick={() => {
-                                            setSelectedChassisId(chassis.id);
-                                            setSelectedLoadoutId(getDefaultLoadoutForChassis(chassis.id).id);
-                                        }}
-                                        className={`rounded-xl border px-3 py-3 text-left transition-colors ${
-                                            selectedChassisId === chassis.id
-                                                ? 'border-[#efb768]/80 bg-[#7d4f22]/40 text-[#fff1d4]'
-                                                : 'border-[#8f6a38]/30 bg-black/25 text-[#d3bc94] hover:border-[#efb768]/50'
-                                        }`}
-                                    >
-                                        <div className="text-[11px] font-bold tracking-[0.18em]">{chassis.name}</div>
-                                        <div className="mt-1 text-[9px] tracking-[0.18em] text-[#8fb8c2]">
-                                            {t(`lobby.weight.${chassis.weightClass}` as TranslationKey)} · {chassis.familyId.toUpperCase()}
-                                        </div>
-                                        <div className="mt-2 text-[10px] leading-4 tracking-[0.08em] text-[#cdbb97]">
-                                            {chassis.description}
-                                        </div>
-                                    </button>
-                                ))}
-                            </div>
-                            <div className="rounded-xl border border-[#8f6a38]/25 bg-black/25 px-4 py-3 text-[11px] tracking-[0.12em] text-[#cdbb97]">
-                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                    <span>{selectedChassis.name}</span>
-                                    <span className="text-[#8fb8c2]">
-                                        {t('lobby.chassisStats', {
-                                            speed: selectedChassis.topSpeed.toFixed(1),
-                                            steam: selectedChassis.maxSteam,
-                                            mass: selectedChassis.mass.toFixed(1)
-                                        })}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="flex flex-col gap-3">
-                            <div className="text-center text-xs tracking-[0.28em] text-[#8fb8c2]">{t('lobby.loadoutTitle')}</div>
-                            <div className="grid grid-cols-1 gap-2">
-                                {availableLoadouts.map((loadout) => (
-                                    <button
-                                        key={loadout.id}
-                                        type="button"
-                                        onClick={() => setSelectedLoadoutId(loadout.id)}
-                                        className={`rounded-xl border px-4 py-3 text-left transition-colors ${
-                                            selectedLoadoutId === loadout.id
-                                                ? 'border-[#efb768]/80 bg-[#7d4f22]/40 text-[#fff1d4]'
-                                                : 'border-[#8f6a38]/30 bg-black/25 text-[#d3bc94] hover:border-[#efb768]/50'
-                                        }`}
-                                    >
-                                        <div className="flex items-center justify-between gap-3">
-                                            <div className="text-[11px] font-bold tracking-[0.18em]">{loadout.name}</div>
-                                            <div className="text-[9px] tracking-[0.18em] text-[#8fb8c2]">
-                                                {loadout.assignments.map((assignment) => assignment.weaponId.replace('_', ' ')).join(' / ')}
-                                            </div>
-                                        </div>
-                                        <div className="mt-2 text-[10px] leading-4 tracking-[0.08em] text-[#cdbb97]">
-                                            {loadout.description}
-                                        </div>
-                                    </button>
-                                ))}
-                            </div>
-                            <div className="text-center text-[11px] tracking-[0.12em] text-[#b9c7c8]">
-                                {t('lobby.loadoutHint', { loadout: selectedLoadout.name })}
-                            </div>
-                        </div>
-
-                        <PilotAccountCard
-                            account={pilotAccount}
-                            locale={locale}
-                            authEmail={authUpgradeEmail}
-                            authBusy={authUpgradeBusy}
-                            authMessage={authUpgradeMessage}
-                            t={t}
-                            onAuthEmailChange={setAuthUpgradeEmail}
-                            onLinkGoogle={() => {
-                                void startGoogleUpgrade();
-                            }}
-                            onSendMagicLink={() => {
-                                void sendMagicLinkUpgrade();
-                            }}
-                        />
-
-                        <div className="flex flex-col gap-2">
-                            <div className="text-center text-xs tracking-[0.28em] text-[#8fb8c2]">{t('lobby.roomNameTitle')}</div>
-                            <input
-                                type="text"
-                                placeholder={t('lobby.roomNamePlaceholder')}
-                                value={roomName}
-                                maxLength={32}
-                                onChange={(e) => setRoomName(e.target.value)}
-                                className="rounded border border-[#8f6a38]/40 bg-black/65 px-4 py-2 text-[#f5dba8] outline-none focus:border-[#efb768]"
-                            />
-                            <div className="text-center text-[11px] tracking-[0.12em] text-[#b9c7c8]">
-                                {t('lobby.roomNameHint')}
-                            </div>
-                        </div>
-
-                        <PilotAccountCard
-                            account={pilotAccount}
-                            locale={locale}
-                            authEmail={authUpgradeEmail}
-                            authBusy={authUpgradeBusy}
-                            authMessage={authUpgradeMessage}
-                            t={t}
-                            onAuthEmailChange={setAuthUpgradeEmail}
-                            onLinkGoogle={() => {
-                                void startGoogleUpgrade();
-                            }}
-                            onSendMagicLink={() => {
-                                void sendMagicLinkUpgrade();
-                            }}
-                        />
-
-                        <button
-                            onClick={() => startGame('solo')}
-                            className="rounded bg-[#7d4f22] py-3 font-bold tracking-[0.22em] text-white shadow-[0_0_15px_rgba(125,79,34,0.35)] transition-colors hover:bg-[#99622d]"
-                        >
-                            {t('lobby.soloBot')}
-                        </button>
-
-                        <div className="flex items-center gap-4">
-                            <div className="h-px flex-1 bg-[#8f6a38]/30" />
-                            <span className="text-sm tracking-[0.35em] text-[#d2b78d]/60">{t('common.network')}</span>
-                            <div className="h-px flex-1 bg-[#8f6a38]/30" />
-                        </div>
-
-                        <button
-                            onClick={() => startGame('host')}
-                            className="rounded bg-[#b0622d] py-3 font-bold tracking-[0.22em] text-white shadow-[0_0_15px_rgba(176,98,45,0.35)] transition-colors hover:bg-[#ca7240]"
-                        >
-                            {t('lobby.createSession')}
-                        </button>
-
-                        <div className="flex items-center gap-4">
-                            <div className="h-px flex-1 bg-[#8f6a38]/30" />
-                            <span className="text-sm tracking-[0.35em] text-[#d2b78d]/60">{t('common.or')}</span>
-                            <div className="h-px flex-1 bg-[#8f6a38]/30" />
-                        </div>
-
-                        <div className="flex flex-col gap-2">
-                            <div className="text-center text-xs tracking-[0.28em] text-[#8fb8c2]">{t('lobby.directJoinTitle')}</div>
-                            <input
-                                type="text"
-                                placeholder={t('lobby.hostIdPlaceholder')}
-                                value={hostId}
-                                onChange={(e) => setHostId(e.target.value)}
-                                className="rounded border border-[#8f6a38]/40 bg-black/65 px-4 py-2 text-[#f5dba8] outline-none focus:border-[#efb768]"
-                            />
-                            <button
-                                onClick={() => startGame('client', hostId)}
-                                disabled={!hostId || (directJoinRoom ? !canJoinRoom(directJoinRoom) : false)}
-                                className="rounded bg-[#24677e] py-3 font-bold tracking-[0.22em] text-white shadow-[0_0_15px_rgba(36,103,126,0.35)] transition-colors hover:bg-[#2f7d99] disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                                {t('lobby.connect')}
-                            </button>
-                            {hostId.trim() ? (
-                                <div className="text-center text-[11px] tracking-[0.14em] text-[#d7c5a1]">
-                                    {directJoinModeKey
-                                        ? t('lobby.directJoinResolved', {
-                                            mode: t(directJoinModeKey),
-                                            players: directJoinRoom?.currentPlayers ?? 1,
-                                            max: directJoinRoom?.maxPlayers ?? 5,
-                                            state: `${t(directJoinStatusKey)} / ${t(directJoinAvailabilityKey ?? lobbyJoinabilityKeys.open)}`
-                                        })
-                                        : firebaseLobbyStatus.enabled
-                                            ? t('lobby.directJoinUnknown')
-                                            : t('lobby.directJoinHint')}
-                                </div>
-                            ) : null}
-                            <div className="text-center text-[11px] tracking-[0.12em] text-[#b9c7c8]">
-                                {t('lobby.directJoinHint')}
-                            </div>
-                        </div>
-
-                        {firebaseLobbyStatus.enabled ? (
-                            <div className="flex flex-col gap-2 border-t border-[#8f6a38]/30 pt-4">
-                                <div className="text-center text-xs tracking-[0.28em] text-[#8fb8c2]">{t('lobby.availableRooms')}</div>
-                                <div className="grid grid-cols-3 gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => setRoomFilter('all')}
-                                        className={`rounded-xl border px-2 py-2 text-[10px] font-bold tracking-[0.16em] transition-colors ${roomFilter === 'all' ? 'border-[#efb768]/80 bg-[#7d4f22]/55 text-[#fff1d4]' : 'border-[#8f6a38]/30 bg-black/25 text-[#d3bc94] hover:border-[#efb768]/50'}`}
-                                    >
-                                        {t('lobby.filter.all')}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setRoomFilter('control')}
-                                        className={`rounded-xl border px-2 py-2 text-[10px] font-bold tracking-[0.16em] transition-colors ${roomFilter === 'control' ? 'border-[#efb768]/80 bg-[#7d4f22]/55 text-[#fff1d4]' : 'border-[#8f6a38]/30 bg-black/25 text-[#d3bc94] hover:border-[#efb768]/50'}`}
-                                    >
-                                        {t('lobby.mode.control')}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setRoomFilter('tdm')}
-                                        className={`rounded-xl border px-2 py-2 text-[10px] font-bold tracking-[0.16em] transition-colors ${roomFilter === 'tdm' ? 'border-[#efb768]/80 bg-[#7d4f22]/55 text-[#fff1d4]' : 'border-[#8f6a38]/30 bg-black/25 text-[#d3bc94] hover:border-[#efb768]/50'}`}
-                                    >
-                                        {t('lobby.mode.tdm')}
-                                    </button>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={() => setShowUnavailableRooms((current) => !current)}
-                                    className={`rounded-xl border px-3 py-2 text-[10px] font-bold tracking-[0.16em] transition-colors ${showUnavailableRooms ? 'border-[#efb768]/70 bg-[#7d4f22]/45 text-[#fff1d4]' : 'border-[#8f6a38]/30 bg-black/25 text-[#d3bc94] hover:border-[#efb768]/50'}`}
-                                >
-                                    {t(showUnavailableRooms ? 'lobby.hideUnavailable' : 'lobby.showUnavailable')}
-                                </button>
-                                {visibleFirebaseRooms.length > 0 ? (
-                                    <div className="flex max-h-56 flex-col gap-2 overflow-y-auto pr-1">
-                                        {visibleFirebaseRooms.slice(0, 8).map((room) => (
-                                            <button
-                                                key={room.id}
-                                                type="button"
-                                                disabled={!canJoinRoom(room)}
-                                                onClick={() => {
-                                                    setHostId(room.hostPeerId);
-                                                    setSelectedGameMode(room.gameMode);
-                                                    void startGame('client', room.hostPeerId, room.gameMode);
-                                                }}
-                                                className="rounded-xl border border-[#8f6a38]/35 bg-black/35 px-4 py-3 text-left transition-colors hover:border-[#efb768]/60 disabled:cursor-not-allowed disabled:opacity-60"
-                                            >
-                                                <div className="text-[10px] tracking-[0.26em] text-[#8fb8c2]">{t('lobby.roomCode')}</div>
-                                                <div className="mt-1 truncate text-[12px] font-bold tracking-[0.16em] text-[#f3deb5]">{room.roomName}</div>
-                                                <div className="mt-1 flex items-center justify-between gap-3">
-                                                    <div className="font-bold tracking-[0.22em] text-[#efb768]">{room.shortCode}</div>
-                                                    <div className="rounded-full border border-[#8f6a38]/45 bg-black/30 px-2 py-1 text-[9px] tracking-[0.18em] text-[#d7c5a1]">
-                                                        {t(room.gameMode === 'tdm' ? 'lobby.mode.tdm' : 'lobby.mode.control')}
-                                                    </div>
-                                                </div>
-                                                <div className="mt-1 flex items-center justify-between gap-3 text-[10px] tracking-[0.16em] text-[#bfa987]">
-                                                    <div>{t('lobby.playerCount', { current: room.currentPlayers, max: room.maxPlayers })}</div>
-                                                    <div>{t(room.inProgress ? 'lobby.roomState.live' : 'lobby.roomState.open')}</div>
-                                                </div>
-                                                <div className="mt-1 flex items-center justify-between gap-3 text-[10px] tracking-[0.16em]">
-                                                    <div className={`rounded-full border px-2 py-1 ${joinabilityTone(room)}`}>
-                                                        {t(lobbyJoinabilityKeys[room.joinability])}
-                                                    </div>
-                                                    <div className="text-[#d7c5a1]">
-                                                        {t('lobby.scoreSummary', {
-                                                            blue: room.blueScore,
-                                                            red: room.redScore,
-                                                            target: room.scoreToWin
-                                                        })}
-                                                    </div>
-                                                </div>
-                                                <div className="mt-1 truncate text-[11px] tracking-[0.16em] text-[#d7c5a1]">{room.hostPeerId}</div>
-                                            </button>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div className="rounded-xl border border-[#8f6a38]/20 bg-black/25 px-4 py-3 text-center text-[11px] tracking-[0.18em] text-[#b9c7c8]">
-                                        {roomFilter === 'all'
-                                            ? (showUnavailableRooms ? t('lobby.noRooms') : t('lobby.noJoinableRooms'))
-                                            : t('lobby.noRoomsFiltered')}
-                                    </div>
-                                )}
-                                {!showUnavailableRooms && hiddenUnavailableCount > 0 ? (
-                                    <div className="text-center text-[11px] tracking-[0.12em] text-[#b9c7c8]">
-                                        {t('lobby.hiddenUnavailable', { count: hiddenUnavailableCount })}
-                                    </div>
-                                ) : null}
-                                <div className="text-center text-[11px] tracking-[0.12em] text-[#b9c7c8]">
-                                    {t('lobby.firebaseOptional')}
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="rounded-xl border border-[#8f6a38]/20 bg-black/25 px-4 py-3 text-center text-[11px] tracking-[0.18em] text-[#b9c7c8]">
-                                <div>{t('lobby.firebaseDisabled')}</div>
-                                {firebaseLobbyStatus.missingKeys.length > 0 ? (
-                                    <div className="mt-2 text-[10px] tracking-[0.12em] text-[#8fb8c2]">
-                                        {firebaseLobbyStatus.missingKeys.join(', ')}
-                                    </div>
-                                ) : null}
-                            </div>
-                        )}
-                    </div>
-                    </div>
-                </div>
+                <LobbyScreen
+                    locale={locale}
+                    localeLabel={localeLabel}
+                    t={t}
+                    selectedGameMode={selectedGameMode}
+                    onSelectGameMode={setSelectedGameMode}
+                    availableChassis={availableChassis}
+                    selectedChassisId={selectedChassisId}
+                    selectedChassis={selectedChassis}
+                    onSelectChassis={(chassisId) => {
+                        setSelectedChassisId(chassisId);
+                        setSelectedLoadoutId(getDefaultLoadoutForChassis(chassisId).id);
+                    }}
+                    availableLoadouts={availableLoadouts}
+                    selectedLoadoutId={selectedLoadoutId}
+                    selectedLoadout={selectedLoadout}
+                    onSelectLoadout={setSelectedLoadoutId}
+                    pilotAccount={pilotAccount}
+                    authEmail={pilot.authUpgradeEmail}
+                    authBusy={pilot.authUpgradeBusy}
+                    authMessage={pilot.authUpgradeMessage}
+                    onAuthEmailChange={pilot.setAuthUpgradeEmail}
+                    onLinkGoogle={() => {
+                        void pilot.startGoogleUpgrade();
+                    }}
+                    onSendMagicLink={() => {
+                        void pilot.sendMagicLinkUpgrade();
+                    }}
+                    roomName={roomName}
+                    onRoomNameChange={setRoomName}
+                    onStartSolo={() => {
+                        void startGame('solo');
+                    }}
+                    onStartHost={() => {
+                        void startGame('host');
+                    }}
+                    hostId={hostId}
+                    onHostIdChange={setHostId}
+                    onStartClient={(nextHostId, mode) => {
+                        setHostId(nextHostId);
+                        setSelectedGameMode(mode);
+                        void startGame('client', nextHostId, mode);
+                    }}
+                    firebaseEnabled={firebaseLobbyStatus.enabled}
+                    firebaseMissingKeys={firebaseLobbyStatus.missingKeys}
+                    firebaseRooms={firebaseRooms}
+                    roomFilter={roomFilter}
+                    onRoomFilterChange={setRoomFilter}
+                    showUnavailableRooms={showUnavailableRooms}
+                    onToggleUnavailableRooms={() => setShowUnavailableRooms((current) => !current)}
+                    onToggleLocale={() => setLocale((current) => current === 'ru' ? 'en' : 'ru')}
+                />
             ) : null}
 
             {loading && !inLobby ? (
