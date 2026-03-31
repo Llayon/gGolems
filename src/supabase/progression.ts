@@ -29,6 +29,8 @@ export type PilotAccountSnapshot = {
     userId: string;
     callsign: string;
     isAnonymous: boolean;
+    email: string | null;
+    linkedProviders: string[];
     profile: PlayerProfile;
     progress: PlayerProgress;
 };
@@ -56,6 +58,40 @@ function getAnonymousFlag(user: User) {
         (user as User & { is_anonymous?: boolean }).is_anonymous
         || user.app_metadata?.provider === 'anonymous'
     );
+}
+
+function getAuthRedirectUrl() {
+    if (typeof window === 'undefined') {
+        return undefined;
+    }
+    return `${window.location.origin}${window.location.pathname}`;
+}
+
+async function getLinkedProviders(user: User) {
+    const client = getSupabaseClient();
+    if (!client) {
+        return {
+            email: user.email ?? null,
+            linkedProviders: []
+        };
+    }
+
+    const { data } = await client.auth.getUserIdentities();
+    const identities = data?.identities ?? user.identities ?? [];
+    const emailIdentity = identities.find((identity) => identity.provider === 'email');
+    const email = typeof emailIdentity?.identity_data?.email === 'string'
+        ? emailIdentity.identity_data.email
+        : user.email ?? null;
+    const linkedProviders = Array.from(new Set(
+        identities
+            .map((identity) => identity.provider)
+            .filter((provider): provider is string => typeof provider === 'string' && provider !== 'anonymous')
+    ));
+
+    return {
+        email,
+        linkedProviders
+    };
 }
 
 async function ensureSessionUser() {
@@ -156,6 +192,7 @@ export async function bootstrapPilotAccount(locale: Locale): Promise<PilotAccoun
     }
 
     const user = await ensureSessionUser();
+    const identityState = await getLinkedProviders(user);
     const profile = await ensureProfile(user, locale);
     const progress = await ensureProgress(user.id);
 
@@ -163,6 +200,8 @@ export async function bootstrapPilotAccount(locale: Locale): Promise<PilotAccoun
         userId: user.id,
         callsign: profile.callsign,
         isAnonymous: getAnonymousFlag(user),
+        email: identityState.email,
+        linkedProviders: identityState.linkedProviders,
         profile,
         progress
     };
@@ -231,5 +270,63 @@ export async function recordPilotMatch(userId: string, result: MatchRecordInput)
         matchesWon,
         xp,
         credits
+    };
+}
+
+export async function linkPilotGoogleIdentity() {
+    const client = getSupabaseClient();
+    if (!client) {
+        throw new Error('Supabase client is not configured.');
+    }
+
+    const { error } = await client.auth.linkIdentity({
+        provider: 'google',
+        options: {
+            redirectTo: getAuthRedirectUrl()
+        }
+    });
+
+    if (error) {
+        throw new Error(describeError(error, 'Failed to start Google account linking.'));
+    }
+}
+
+export async function sendPilotMagicLinkUpgrade(email: string) {
+    const client = getSupabaseClient();
+    if (!client) {
+        throw new Error('Supabase client is not configured.');
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) {
+        throw new Error('Email is required.');
+    }
+
+    const { error } = await client.auth.updateUser({
+        email: normalizedEmail
+    }, {
+        emailRedirectTo: getAuthRedirectUrl()
+    });
+
+    if (error) {
+        throw new Error(describeError(error, 'Failed to send Magic Link upgrade email.'));
+    }
+}
+
+export function subscribePilotAuthChanges(onChange: () => void) {
+    const client = getSupabaseClient();
+    if (!client) {
+        return () => {};
+    }
+
+    const { data } = client.auth.onAuthStateChange((event) => {
+        if (event === 'TOKEN_REFRESHED') {
+            return;
+        }
+        onChange();
+    });
+
+    return () => {
+        data.subscription.unsubscribe();
     };
 }

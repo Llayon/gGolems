@@ -9,7 +9,7 @@ import type { NetworkStartupErrorCode } from './network/NetworkManager';
 import { getFirebaseLobbyStatus } from './firebase/client';
 import { registerFirebaseLobby, subscribeFirebaseLobbies, type FirebaseLobbyRegistration, type FirebaseLobbyRoom } from './firebase/lobbyRegistry';
 import { getSupabaseStatus } from './supabase/client';
-import { bootstrapPilotAccount, recordPilotMatch, syncPilotLocale } from './supabase/progression';
+import { bootstrapPilotAccount, linkPilotGoogleIdentity, recordPilotMatch, sendPilotMagicLinkUpgrade, subscribePilotAuthChanges, syncPilotLocale } from './supabase/progression';
 import { CombatOverlayCore } from './ui/mobile/CombatOverlayCore';
 import { MobileCombatLayout } from './ui/mobile/MobileCombatLayout';
 import { MobileSettingsOverlay } from './ui/mobile/MobileSettingsOverlay';
@@ -109,11 +109,18 @@ type PilotAccountState = {
     userId: string | null;
     callsign: string;
     isAnonymous: boolean;
+    email: string | null;
+    linkedProviders: string[];
     matchesPlayed: number;
     matchesWon: number;
     xp: number;
     credits: number;
     error: string;
+};
+
+type AuthUpgradeMessage = {
+    tone: 'info' | 'success' | 'error';
+    text: string;
 };
 
 const startupPhaseLabelKeys: Record<StartupPhase, TranslationKey> = {
@@ -177,6 +184,8 @@ function createInitialPilotAccountState(enabled: boolean): PilotAccountState {
         userId: null,
         callsign: '',
         isAnonymous: true,
+        email: null,
+        linkedProviders: [],
         matchesPlayed: 0,
         matchesWon: 0,
         xp: 0,
@@ -734,7 +743,16 @@ function releasePointerLock() {
     }
 }
 
-function PilotAccountCard(props: { account: PilotAccountState; t: Translator }) {
+function PilotAccountCard(props: {
+    account: PilotAccountState;
+    authEmail: string;
+    authBusy: 'idle' | 'google' | 'magic';
+    authMessage: AuthUpgradeMessage | null;
+    t: Translator;
+    onAuthEmailChange: (value: string) => void;
+    onLinkGoogle: () => void;
+    onSendMagicLink: () => void;
+}) {
     const statusKey: TranslationKey = props.account.status === 'ready'
         ? 'supabase.status.ready'
         : props.account.status === 'error'
@@ -768,6 +786,18 @@ function PilotAccountCard(props: { account: PilotAccountState; t: Translator }) 
                     <div className="mt-1 text-center text-[10px] tracking-[0.18em] text-[#8fb8c2]">
                         {props.t(props.account.isAnonymous ? 'supabase.guest' : 'supabase.linked')}
                     </div>
+                    {props.account.email ? (
+                        <div className="mt-1 text-center text-[10px] tracking-[0.14em] text-[#d7c5a1]">
+                            {props.account.email}
+                        </div>
+                    ) : null}
+                    {props.account.linkedProviders.length > 0 ? (
+                        <div className="mt-1 text-center text-[10px] tracking-[0.14em] text-[#8fb8c2]">
+                            {props.t('supabase.providers', {
+                                providers: props.account.linkedProviders.join(' | ').toUpperCase()
+                            })}
+                        </div>
+                    ) : null}
                     <div className="mt-2 text-center text-[10px] tracking-[0.18em] text-[#d7c5a1]">
                         {props.t('supabase.matches', {
                             played: props.account.matchesPlayed,
@@ -780,6 +810,51 @@ function PilotAccountCard(props: { account: PilotAccountState; t: Translator }) 
                             credits: props.account.credits
                         })}
                     </div>
+                    {props.account.isAnonymous ? (
+                        <div className="mt-3 border-t border-[#8f6a38]/25 pt-3">
+                            <div className="text-center text-[10px] tracking-[0.22em] text-[#8fb8c2]">
+                                {props.t('supabase.upgradeTitle')}
+                            </div>
+                            <div className="mt-1 text-center text-[10px] tracking-[0.14em] text-[#b9c7c8]">
+                                {props.t('supabase.upgradeHint')}
+                            </div>
+                            <button
+                                type="button"
+                                onClick={props.onLinkGoogle}
+                                disabled={props.authBusy !== 'idle'}
+                                className="mt-3 w-full rounded-full border border-[#5a7aa5]/60 bg-[#1c2a46]/45 px-4 py-2 text-[10px] font-bold tracking-[0.24em] text-[#d7e8ff] transition-colors hover:border-[#83b9ff]/80 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                                {props.authBusy === 'google' ? props.t('supabase.actions.googleBusy') : props.t('supabase.actions.google')}
+                            </button>
+                            <div className="mt-3 text-center text-[10px] tracking-[0.22em] text-[#8fb8c2]">
+                                {props.t('supabase.actions.magic')}
+                            </div>
+                            <input
+                                type="email"
+                                value={props.authEmail}
+                                onChange={(event) => props.onAuthEmailChange(event.target.value)}
+                                placeholder={props.t('supabase.actions.emailPlaceholder')}
+                                className="mt-2 w-full rounded border border-[#8f6a38]/40 bg-black/65 px-3 py-2 text-center text-[11px] tracking-[0.12em] text-[#f5dba8] outline-none focus:border-[#efb768]"
+                            />
+                            <button
+                                type="button"
+                                onClick={props.onSendMagicLink}
+                                disabled={props.authBusy !== 'idle'}
+                                className="mt-2 w-full rounded-full border border-[#8f6a38]/60 bg-black/40 px-4 py-2 text-[10px] font-bold tracking-[0.24em] text-[#f3deb5] transition-colors hover:border-[#efb768]/80 hover:text-[#fff1d4] disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                                {props.authBusy === 'magic' ? props.t('supabase.actions.magicBusy') : props.t('supabase.actions.magicSend')}
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="mt-3 border-t border-[#8f6a38]/25 pt-3 text-center text-[10px] tracking-[0.14em] text-[#9de5b0]">
+                            {props.t('supabase.permanentHint')}
+                        </div>
+                    )}
+                    {props.authMessage ? (
+                        <div className={`mt-3 text-center text-[10px] tracking-[0.14em] ${props.authMessage.tone === 'error' ? 'text-[#ffb09a]' : props.authMessage.tone === 'success' ? 'text-[#9de5b0]' : 'text-[#8fb8c2]'}`}>
+                            {props.authMessage.text}
+                        </div>
+                    ) : null}
                 </>
             ) : props.account.status === 'error' ? (
                 <div className="mt-2 text-center text-[10px] tracking-[0.14em] text-[#ffb09a]">
@@ -824,6 +899,9 @@ export default function App() {
     const [firebaseRooms, setFirebaseRooms] = useState<FirebaseLobbyRoom[]>([]);
     const supabaseStatus = getSupabaseStatus();
     const [pilotAccount, setPilotAccount] = useState<PilotAccountState>(() => createInitialPilotAccountState(supabaseStatus.enabled));
+    const [authUpgradeEmail, setAuthUpgradeEmail] = useState('');
+    const [authUpgradeBusy, setAuthUpgradeBusy] = useState<'idle' | 'google' | 'magic'>('idle');
+    const [authUpgradeMessage, setAuthUpgradeMessage] = useState<AuthUpgradeMessage | null>(null);
     const t = createTranslator(locale);
     const firebaseLobbyStatus = getFirebaseLobbyStatus();
 
@@ -863,6 +941,100 @@ export default function App() {
         setLoading(false);
         setCopyState('idle');
         setShowMobileSettings(false);
+    };
+
+    const refreshPilotAccount = async (mode: 'boot' | 'refresh' = 'refresh') => {
+        if (!supabaseStatus.enabled) {
+            setPilotAccount(createInitialPilotAccountState(false));
+            return;
+        }
+
+        if (mode === 'boot') {
+            setPilotAccount(createInitialPilotAccountState(true));
+        }
+
+        try {
+            const snapshot = await bootstrapPilotAccount(locale);
+
+            if (!snapshot) {
+                setPilotAccount(createInitialPilotAccountState(false));
+                return;
+            }
+
+            setAuthUpgradeBusy('idle');
+            if (!snapshot.isAnonymous) {
+                setAuthUpgradeEmail('');
+                setAuthUpgradeMessage({
+                    tone: 'success',
+                    text: t('supabase.permanentHint')
+                });
+            }
+
+            setPilotAccount({
+                status: 'ready',
+                userId: snapshot.userId,
+                callsign: snapshot.callsign,
+                isAnonymous: snapshot.isAnonymous,
+                email: snapshot.email,
+                linkedProviders: snapshot.linkedProviders,
+                matchesPlayed: snapshot.progress.matches_played,
+                matchesWon: snapshot.progress.matches_won,
+                xp: snapshot.progress.xp,
+                credits: snapshot.progress.credits,
+                error: ''
+            });
+        } catch (error) {
+            setPilotAccount({
+                ...createInitialPilotAccountState(true),
+                status: 'error',
+                error: describeError(error, 'Supabase bootstrap failed.')
+            });
+        }
+    };
+
+    const startGoogleUpgrade = async () => {
+        if (pilotAccount.status !== 'ready' || !pilotAccount.isAnonymous) return;
+
+        setAuthUpgradeBusy('google');
+        setAuthUpgradeMessage({
+            tone: 'info',
+            text: t('supabase.actions.googleRedirect')
+        });
+
+        try {
+            await linkPilotGoogleIdentity();
+        } catch (error) {
+            setAuthUpgradeBusy('idle');
+            setAuthUpgradeMessage({
+                tone: 'error',
+                text: describeError(error, t('supabase.actions.googleFailed'))
+            });
+        }
+    };
+
+    const sendMagicLinkUpgrade = async () => {
+        if (pilotAccount.status !== 'ready' || !pilotAccount.isAnonymous) return;
+
+        setAuthUpgradeBusy('magic');
+        setAuthUpgradeMessage({
+            tone: 'info',
+            text: t('supabase.actions.magicSending')
+        });
+
+        try {
+            await sendPilotMagicLinkUpgrade(authUpgradeEmail);
+            setAuthUpgradeMessage({
+                tone: 'success',
+                text: t('supabase.actions.magicSent')
+            });
+        } catch (error) {
+            setAuthUpgradeMessage({
+                tone: 'error',
+                text: describeError(error, t('supabase.actions.magicFailed'))
+            });
+        } finally {
+            setAuthUpgradeBusy('idle');
+        }
     };
 
     const startGame = async (mode: SessionMode, targetHostId?: string, requestedMode: GameMode = selectedGameMode) => {
@@ -982,43 +1154,26 @@ export default function App() {
         }
 
         let cancelled = false;
-        setPilotAccount(createInitialPilotAccountState(true));
 
         void (async () => {
-            try {
-                const snapshot = await bootstrapPilotAccount(locale);
-                if (cancelled) return;
-
-                if (!snapshot) {
-                    setPilotAccount(createInitialPilotAccountState(false));
-                    return;
-                }
-
-                setPilotAccount({
-                    status: 'ready',
-                    userId: snapshot.userId,
-                    callsign: snapshot.callsign,
-                    isAnonymous: snapshot.isAnonymous,
-                    matchesPlayed: snapshot.progress.matches_played,
-                    matchesWon: snapshot.progress.matches_won,
-                    xp: snapshot.progress.xp,
-                    credits: snapshot.progress.credits,
-                    error: ''
-                });
-            } catch (error) {
-                if (cancelled) return;
-                setPilotAccount({
-                    ...createInitialPilotAccountState(true),
-                    status: 'error',
-                    error: describeError(error, 'Supabase bootstrap failed.')
-                });
-            }
+            await refreshPilotAccount('boot');
+            if (cancelled) return;
         })();
 
         return () => {
             cancelled = true;
         };
     }, [supabaseStatus.enabled]);
+
+    useEffect(() => {
+        if (!supabaseStatus.enabled) {
+            return;
+        }
+
+        return subscribePilotAuthChanges(() => {
+            void refreshPilotAccount();
+        });
+    }, [supabaseStatus.enabled, locale]);
 
     useEffect(() => {
         if (!inLobby || !firebaseLobbyStatus.enabled) {
@@ -1347,7 +1502,20 @@ export default function App() {
                             </div>
                         </div>
 
-                        <PilotAccountCard account={pilotAccount} t={t} />
+                        <PilotAccountCard
+                            account={pilotAccount}
+                            authEmail={authUpgradeEmail}
+                            authBusy={authUpgradeBusy}
+                            authMessage={authUpgradeMessage}
+                            t={t}
+                            onAuthEmailChange={setAuthUpgradeEmail}
+                            onLinkGoogle={() => {
+                                void startGoogleUpgrade();
+                            }}
+                            onSendMagicLink={() => {
+                                void sendMagicLinkUpgrade();
+                            }}
+                        />
 
                         <button
                             onClick={() => startGame('solo')}

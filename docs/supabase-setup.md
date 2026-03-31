@@ -25,7 +25,36 @@ Open `Authentication -> Providers` and enable `Anonymous`.
 
 This integration uses anonymous auth for the MVP flow, so the game can create a durable guest account on first launch without blocking the user behind a full registration screen.
 
-## 3. Apply the SQL bootstrap
+## 3. Configure upgrade providers
+
+If you want guest pilots to upgrade into permanent accounts:
+
+1. Open `Authentication -> Sign In / Providers`.
+2. Enable `Google`.
+3. Fill the Google OAuth client ID / secret in Supabase.
+4. Enable `Manual Linking`.
+
+Manual linking is required because the game upgrades the current anonymous pilot by linking Google to the existing user instead of creating a second account.
+
+Email Magic Link is enabled by default in Supabase Auth, so no extra provider toggle is usually needed for that path.
+
+## 4. Configure redirect URLs
+
+Open `Authentication -> URL Configuration`.
+
+Set:
+
+- `Site URL` to your primary app URL
+- allowed redirect URLs for every environment that should complete auth flows
+
+For this repo that usually means:
+
+- local dev: `http://localhost:3000/**`
+- GitHub Pages: `https://llayon.github.io/gGolems/**`
+
+Both Google linking and Magic Link upgrades redirect the user back into the game after the auth step completes.
+
+## 5. Apply the SQL bootstrap
 
 Run the SQL from [supabase-bootstrap.sql](./supabase-bootstrap.sql) in the Supabase SQL editor.
 
@@ -35,7 +64,7 @@ It creates:
 - `public.player_progress`
 - basic RLS policies so each player can only read/write their own rows
 
-## 4. Fill the environment variables
+## 6. Fill the environment variables
 
 Add these values to `.env.local`:
 
@@ -46,13 +75,15 @@ VITE_SUPABASE_ANON_KEY="YOUR_SUPABASE_ANON_KEY"
 
 The app will silently fall back to `disabled` mode if these are missing.
 
-## 5. Runtime behavior
+## 7. Runtime behavior
 
 When Supabase is configured:
 
 - the lobby boots a guest session automatically
 - a `profiles` row is upserted
 - a `player_progress` row is upserted
+- guest pilots can be upgraded with Google linking
+- guest pilots can request an email Magic Link upgrade
 - locale preference is synced to Supabase
 - match completion writes a small stats/progression update
 
