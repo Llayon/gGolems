@@ -9,7 +9,11 @@ import type { NetworkStartupErrorCode } from './network/NetworkManager';
 import { getFirebaseLobbyStatus } from './firebase/client';
 import { registerFirebaseLobby, subscribeFirebaseLobbies, type FirebaseLobbyRegistration, type FirebaseLobbyRoom } from './firebase/lobbyRegistry';
 import { getSupabaseStatus } from './supabase/client';
-import { bootstrapPilotAccount, linkPilotGoogleIdentity, recordPilotMatch, sendPilotMagicLinkUpgrade, subscribePilotAuthChanges, syncPilotLocale, type PlayerMatchRecord } from './supabase/progression';
+import { subscribePilotAuthChanges, linkPilotGoogleIdentity, sendPilotMagicLinkUpgrade } from './supabase/auth';
+import { bootstrapPilotAccount } from './supabase/pilotAccount';
+import { syncPilotLocale } from './supabase/profile';
+import { recordPilotMatch } from './supabase/progression';
+import type { PlayerMatchRecord } from './supabase/types';
 import { CombatOverlayCore } from './ui/mobile/CombatOverlayCore';
 import { MobileCombatLayout } from './ui/mobile/MobileCombatLayout';
 import { MobileSettingsOverlay } from './ui/mobile/MobileSettingsOverlay';
@@ -104,20 +108,28 @@ type StartupFailure = {
     cause?: unknown;
 };
 
-type PilotAccountState = {
+type PilotAuthState = {
     status: 'disabled' | 'booting' | 'ready' | 'error';
     userId: string | null;
-    callsign: string;
     isAnonymous: boolean;
     email: string | null;
     linkedProviders: string[];
+    error: string;
+};
+
+type PilotProfileState = {
+    callsign: string;
+};
+
+type PilotProgressState = {
     matchesPlayed: number;
     matchesWon: number;
     xp: number;
     credits: number;
     recentMatches: PlayerMatchRecord[];
-    error: string;
 };
+
+type PilotAccountState = PilotAuthState & PilotProfileState & PilotProgressState;
 
 type AuthUpgradeMessage = {
     tone: 'info' | 'success' | 'error';
@@ -179,20 +191,38 @@ const initialGameState: GameHudState = {
     terrainColliderError: ''
 };
 
-function createInitialPilotAccountState(enabled: boolean): PilotAccountState {
+function createInitialPilotAuthState(enabled: boolean): PilotAuthState {
     return {
         status: enabled ? 'booting' : 'disabled',
         userId: null,
-        callsign: '',
         isAnonymous: true,
         email: null,
         linkedProviders: [],
+        error: ''
+    };
+}
+
+function createInitialPilotProfileState(): PilotProfileState {
+    return {
+        callsign: ''
+    };
+}
+
+function createInitialPilotProgressState(): PilotProgressState {
+    return {
         matchesPlayed: 0,
         matchesWon: 0,
         xp: 0,
         credits: 0,
-        recentMatches: [],
-        error: ''
+        recentMatches: []
+    };
+}
+
+function composePilotAccountState(auth: PilotAuthState, profile: PilotProfileState, progress: PilotProgressState): PilotAccountState {
+    return {
+        ...auth,
+        ...profile,
+        ...progress
     };
 }
 
@@ -954,12 +984,15 @@ export default function App() {
     const [gameState, setGameState] = useState<GameHudState>(initialGameState);
     const [firebaseRooms, setFirebaseRooms] = useState<FirebaseLobbyRoom[]>([]);
     const supabaseStatus = getSupabaseStatus();
-    const [pilotAccount, setPilotAccount] = useState<PilotAccountState>(() => createInitialPilotAccountState(supabaseStatus.enabled));
+    const [pilotAuth, setPilotAuth] = useState<PilotAuthState>(() => createInitialPilotAuthState(supabaseStatus.enabled));
+    const [pilotProfile, setPilotProfile] = useState<PilotProfileState>(() => createInitialPilotProfileState());
+    const [pilotProgress, setPilotProgress] = useState<PilotProgressState>(() => createInitialPilotProgressState());
     const [authUpgradeEmail, setAuthUpgradeEmail] = useState('');
     const [authUpgradeBusy, setAuthUpgradeBusy] = useState<'idle' | 'google' | 'magic'>('idle');
     const [authUpgradeMessage, setAuthUpgradeMessage] = useState<AuthUpgradeMessage | null>(null);
     const t = createTranslator(locale);
     const firebaseLobbyStatus = getFirebaseLobbyStatus();
+    const pilotAccount = composePilotAccountState(pilotAuth, pilotProfile, pilotProgress);
 
     const showCopyState = (nextState: 'copied' | 'error') => {
         setCopyState(nextState);
@@ -1001,53 +1034,65 @@ export default function App() {
 
     const refreshPilotAccount = async (mode: 'boot' | 'refresh' = 'refresh') => {
         if (!supabaseStatus.enabled) {
-            setPilotAccount(createInitialPilotAccountState(false));
+            setPilotAuth(createInitialPilotAuthState(false));
+            setPilotProfile(createInitialPilotProfileState());
+            setPilotProgress(createInitialPilotProgressState());
             return;
         }
 
         if (mode === 'boot') {
-            setPilotAccount(createInitialPilotAccountState(true));
+            setPilotAuth(createInitialPilotAuthState(true));
+            setPilotProfile(createInitialPilotProfileState());
+            setPilotProgress(createInitialPilotProgressState());
         }
 
         try {
             const snapshot = await bootstrapPilotAccount(locale);
 
             if (!snapshot) {
-                setPilotAccount(createInitialPilotAccountState(false));
+                setPilotAuth(createInitialPilotAuthState(false));
+                setPilotProfile(createInitialPilotProfileState());
+                setPilotProgress(createInitialPilotProgressState());
                 return;
             }
 
             setAuthUpgradeBusy('idle');
-            if (!snapshot.isAnonymous) {
+            if (!snapshot.auth.isAnonymous) {
                 setAuthUpgradeEmail('');
                 setAuthUpgradeMessage(null);
             }
 
-            setPilotAccount({
+            setPilotAuth({
                 status: 'ready',
-                userId: snapshot.userId,
-                callsign: snapshot.callsign,
-                isAnonymous: snapshot.isAnonymous,
-                email: snapshot.email,
-                linkedProviders: snapshot.linkedProviders,
+                userId: snapshot.auth.userId,
+                isAnonymous: snapshot.auth.isAnonymous,
+                email: snapshot.auth.email,
+                linkedProviders: snapshot.auth.linkedProviders,
+                error: ''
+            });
+            setPilotProfile({
+                callsign: snapshot.profile.callsign
+            });
+            setPilotProgress({
                 matchesPlayed: snapshot.progress.matches_played,
                 matchesWon: snapshot.progress.matches_won,
                 xp: snapshot.progress.xp,
                 credits: snapshot.progress.credits,
-                recentMatches: snapshot.recentMatches,
-                error: ''
+                recentMatches: snapshot.recentMatches
             });
         } catch (error) {
-            setPilotAccount({
-                ...createInitialPilotAccountState(true),
+            setPilotAuth({
+                ...createInitialPilotAuthState(true),
                 status: 'error',
                 error: describeError(error, 'Supabase bootstrap failed.')
             });
+            setPilotProfile(createInitialPilotProfileState());
+            setPilotProgress(createInitialPilotProgressState());
         }
     };
 
     const startGoogleUpgrade = async () => {
-        if (pilotAccount.status !== 'ready' || !pilotAccount.isAnonymous) return;
+        if (pilotAuth.status !== 'ready' || !pilotAuth.isAnonymous) return;
 
         setAuthUpgradeBusy('google');
         setAuthUpgradeMessage({
@@ -1067,7 +1112,7 @@ export default function App() {
     };
 
     const sendMagicLinkUpgrade = async () => {
-        if (pilotAccount.status !== 'ready' || !pilotAccount.isAnonymous) return;
+        if (pilotAuth.status !== 'ready' || !pilotAuth.isAnonymous) return;
 
         setAuthUpgradeBusy('magic');
         setAuthUpgradeMessage({
@@ -1203,7 +1248,9 @@ export default function App() {
 
     useEffect(() => {
         if (!supabaseStatus.enabled) {
-            setPilotAccount(createInitialPilotAccountState(false));
+            setPilotAuth(createInitialPilotAuthState(false));
+            setPilotProfile(createInitialPilotProfileState());
+            setPilotProgress(createInitialPilotProgressState());
             return;
         }
 
@@ -1260,17 +1307,17 @@ export default function App() {
     }, [gameState.teamScores.winner]);
 
     useEffect(() => {
-        if (pilotAccount.status !== 'ready' || !pilotAccount.userId) {
+        if (pilotAuth.status !== 'ready' || !pilotAuth.userId) {
             return;
         }
 
-        void syncPilotLocale(pilotAccount.userId, locale).catch((error) => {
+        void syncPilotLocale(pilotAuth.userId, locale).catch((error) => {
             console.warn('[supabase] Failed to sync locale:', error);
         });
-    }, [locale, pilotAccount.status, pilotAccount.userId]);
+    }, [locale, pilotAuth.status, pilotAuth.userId]);
 
     useEffect(() => {
-        if (pilotAccount.status !== 'ready' || !pilotAccount.userId || inLobby) {
+        if (pilotAuth.status !== 'ready' || !pilotAuth.userId || inLobby) {
             return;
         }
 
@@ -1286,29 +1333,27 @@ export default function App() {
         }
         recordedMatchRef.current = signature;
 
-        void recordPilotMatch(pilotAccount.userId, {
+        void recordPilotMatch(pilotAuth.userId, {
             mode: gameState.gameMode,
             won: winner === 'blue',
             blueScore: gameState.teamScores.blue,
             redScore: gameState.teamScores.red
         }).then((snapshot) => {
             if (!snapshot) return;
-            setPilotAccount((current) => current.status !== 'ready'
-                ? current
-                : {
-                    ...current,
-                    matchesPlayed: snapshot.matchesPlayed,
-                    matchesWon: snapshot.matchesWon,
-                    xp: snapshot.xp,
-                    credits: snapshot.credits,
-                    recentMatches: snapshot.recentMatch
-                        ? [snapshot.recentMatch, ...current.recentMatches.filter((match) => match.id !== snapshot.recentMatch?.id)].slice(0, 5)
-                        : current.recentMatches
-                });
+            setPilotProgress((current) => ({
+                ...current,
+                matchesPlayed: snapshot.matchesPlayed,
+                matchesWon: snapshot.matchesWon,
+                xp: snapshot.xp,
+                credits: snapshot.credits,
+                recentMatches: snapshot.recentMatch
+                    ? [snapshot.recentMatch, ...current.recentMatches.filter((match) => match.id !== snapshot.recentMatch?.id)].slice(0, 5)
+                    : current.recentMatches
+            }));
         }).catch((error) => {
             console.warn('[supabase] Failed to record match:', error);
         });
-    }, [gameState.gameMode, gameState.teamScores, inLobby, pilotAccount.status, pilotAccount.userId]);
+    }, [gameState.gameMode, gameState.teamScores, inLobby, pilotAuth.status, pilotAuth.userId]);
 
     useEffect(() => {
         if (!firebaseLobbyStatus.enabled || !firebaseLobbyRef.current || !isHost || inLobby) {
