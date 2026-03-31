@@ -62,7 +62,10 @@ It creates:
 
 - `public.profiles`
 - `public.player_progress`
+- `public.match_results`
 - basic RLS policies so each player can only read/write their own rows
+
+If your project was already bootstrapped before match history landed in the repo, rerun the SQL script once so `match_results` is added.
 
 ## 6. Fill the environment variables
 
@@ -82,6 +85,8 @@ When Supabase is configured:
 - the lobby boots a guest session automatically
 - a `profiles` row is upserted
 - a `player_progress` row is upserted
+- the latest match results are stored in `match_results`
+- the lobby shows a short recent battle history
 - guest pilots can be upgraded with Google linking
 - guest pilots can request an email Magic Link upgrade
 - locale preference is synced to Supabase

@@ -33,6 +33,19 @@ create table if not exists public.player_progress (
   updated_at timestamptz not null default timezone('utc', now())
 );
 
+create table if not exists public.match_results (
+  id uuid primary key default gen_random_uuid(),
+  player_id uuid not null references public.profiles (id) on delete cascade,
+  mode text not null,
+  result text not null check (result in ('win', 'loss')),
+  blue_score integer not null default 0 check (blue_score >= 0),
+  red_score integer not null default 0 check (red_score >= 0),
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create index if not exists match_results_player_created_idx
+on public.match_results (player_id, created_at desc);
+
 drop trigger if exists profiles_touch_updated_at on public.profiles;
 create trigger profiles_touch_updated_at
 before update on public.profiles
@@ -47,6 +60,7 @@ execute function public.touch_updated_at();
 
 alter table public.profiles enable row level security;
 alter table public.player_progress enable row level security;
+alter table public.match_results enable row level security;
 
 drop policy if exists "profiles_select_own" on public.profiles;
 create policy "profiles_select_own"
@@ -84,4 +98,16 @@ create policy "player_progress_update_own"
 on public.player_progress
 for update
 using (auth.uid() = player_id)
+with check (auth.uid() = player_id);
+
+drop policy if exists "match_results_select_own" on public.match_results;
+create policy "match_results_select_own"
+on public.match_results
+for select
+using (auth.uid() = player_id);
+
+drop policy if exists "match_results_insert_own" on public.match_results;
+create policy "match_results_insert_own"
+on public.match_results
+for insert
 with check (auth.uid() = player_id);

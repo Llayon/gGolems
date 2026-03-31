@@ -9,7 +9,7 @@ import type { NetworkStartupErrorCode } from './network/NetworkManager';
 import { getFirebaseLobbyStatus } from './firebase/client';
 import { registerFirebaseLobby, subscribeFirebaseLobbies, type FirebaseLobbyRegistration, type FirebaseLobbyRoom } from './firebase/lobbyRegistry';
 import { getSupabaseStatus } from './supabase/client';
-import { bootstrapPilotAccount, linkPilotGoogleIdentity, recordPilotMatch, sendPilotMagicLinkUpgrade, subscribePilotAuthChanges, syncPilotLocale } from './supabase/progression';
+import { bootstrapPilotAccount, linkPilotGoogleIdentity, recordPilotMatch, sendPilotMagicLinkUpgrade, subscribePilotAuthChanges, syncPilotLocale, type PlayerMatchRecord } from './supabase/progression';
 import { CombatOverlayCore } from './ui/mobile/CombatOverlayCore';
 import { MobileCombatLayout } from './ui/mobile/MobileCombatLayout';
 import { MobileSettingsOverlay } from './ui/mobile/MobileSettingsOverlay';
@@ -115,6 +115,7 @@ type PilotAccountState = {
     matchesWon: number;
     xp: number;
     credits: number;
+    recentMatches: PlayerMatchRecord[];
     error: string;
 };
 
@@ -190,6 +191,7 @@ function createInitialPilotAccountState(enabled: boolean): PilotAccountState {
         matchesWon: 0,
         xp: 0,
         credits: 0,
+        recentMatches: [],
         error: ''
     };
 }
@@ -743,8 +745,34 @@ function releasePointerLock() {
     }
 }
 
+function getPilotMatchModeLabel(t: Translator, mode: string) {
+    switch (mode) {
+        case 'control':
+            return t('lobby.mode.control');
+        case 'tdm':
+            return t('lobby.mode.tdm');
+        default:
+            return mode.toUpperCase();
+    }
+}
+
+function formatPilotMatchTime(locale: Locale, timestamp: string) {
+    const value = new Date(timestamp);
+    if (Number.isNaN(value.getTime())) {
+        return '--';
+    }
+
+    return new Intl.DateTimeFormat(locale === 'ru' ? 'ru-RU' : 'en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    }).format(value);
+}
+
 function PilotAccountCard(props: {
     account: PilotAccountState;
+    locale: Locale;
     authEmail: string;
     authBusy: 'idle' | 'google' | 'magic';
     authMessage: AuthUpgradeMessage | null;
@@ -809,6 +837,38 @@ function PilotAccountCard(props: {
                             xp: props.account.xp,
                             credits: props.account.credits
                         })}
+                    </div>
+                    <div className="mt-3 border-t border-[#8f6a38]/25 pt-3">
+                        <div className="text-center text-[10px] tracking-[0.22em] text-[#8fb8c2]">
+                            {props.t('supabase.historyTitle')}
+                        </div>
+                        {props.account.recentMatches.length > 0 ? (
+                            <div className="mt-2 space-y-2">
+                                {props.account.recentMatches.map((match) => (
+                                    <div
+                                        key={match.id}
+                                        className="rounded-lg border border-[#8f6a38]/25 bg-black/25 px-3 py-2 text-left"
+                                    >
+                                        <div className="flex items-center justify-between gap-3 text-[10px] tracking-[0.16em]">
+                                            <span className="text-[#f3deb5]">
+                                                {getPilotMatchModeLabel(props.t, match.mode)}
+                                            </span>
+                                            <span className={match.result === 'win' ? 'text-[#9de5b0]' : 'text-[#ffb09a]'}>
+                                                {props.t(match.result === 'win' ? 'supabase.result.win' : 'supabase.result.loss')}
+                                            </span>
+                                        </div>
+                                        <div className="mt-1 flex items-center justify-between gap-3 text-[10px] tracking-[0.14em] text-[#b9c7c8]">
+                                            <span>{match.blue_score} : {match.red_score}</span>
+                                            <span>{formatPilotMatchTime(props.locale, match.created_at)}</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="mt-2 text-center text-[10px] tracking-[0.14em] text-[#b9c7c8]">
+                                {props.t('supabase.historyEmpty')}
+                            </div>
+                        )}
                     </div>
                     {props.account.isAnonymous ? (
                         <div className="mt-3 border-t border-[#8f6a38]/25 pt-3">
@@ -981,6 +1041,7 @@ export default function App() {
                 matchesWon: snapshot.progress.matches_won,
                 xp: snapshot.progress.xp,
                 credits: snapshot.progress.credits,
+                recentMatches: snapshot.recentMatches,
                 error: ''
             });
         } catch (error) {
@@ -1246,7 +1307,10 @@ export default function App() {
                     matchesPlayed: snapshot.matchesPlayed,
                     matchesWon: snapshot.matchesWon,
                     xp: snapshot.xp,
-                    credits: snapshot.credits
+                    credits: snapshot.credits,
+                    recentMatches: snapshot.recentMatch
+                        ? [snapshot.recentMatch, ...current.recentMatches.filter((match) => match.id !== snapshot.recentMatch?.id)].slice(0, 5)
+                        : current.recentMatches
                 });
         }).catch((error) => {
             console.warn('[supabase] Failed to record match:', error);
@@ -1504,6 +1568,7 @@ export default function App() {
 
                         <PilotAccountCard
                             account={pilotAccount}
+                            locale={locale}
                             authEmail={authUpgradeEmail}
                             authBusy={authUpgradeBusy}
                             authMessage={authUpgradeMessage}

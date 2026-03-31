@@ -25,6 +25,16 @@ export type PlayerProgress = {
     updated_at: string;
 };
 
+export type PlayerMatchRecord = {
+    id: string;
+    player_id: string;
+    mode: string;
+    result: 'win' | 'loss';
+    blue_score: number;
+    red_score: number;
+    created_at: string;
+};
+
 export type PilotAccountSnapshot = {
     userId: string;
     callsign: string;
@@ -33,6 +43,7 @@ export type PilotAccountSnapshot = {
     linkedProviders: string[];
     profile: PlayerProfile;
     progress: PlayerProgress;
+    recentMatches: PlayerMatchRecord[];
 };
 
 export type MatchRecordInput = {
@@ -47,6 +58,19 @@ function describeError(error: unknown, fallback: string) {
         return error.message;
     }
     return typeof error === 'string' ? error : fallback;
+}
+
+function isMissingRelationError(error: unknown) {
+    if (!error || typeof error !== 'object') {
+        return false;
+    }
+
+    const code = 'code' in error ? (error as { code?: unknown }).code : undefined;
+    const message = 'message' in error ? (error as { message?: unknown }).message : undefined;
+    return code === '42P01'
+        || code === 'PGRST204'
+        || code === 'PGRST205'
+        || (typeof message === 'string' && message.toLowerCase().includes('match_results'));
 }
 
 function buildDefaultCallsign(userId: string) {
@@ -186,6 +210,29 @@ async function ensureProgress(userId: string) {
     return data as PlayerProgress;
 }
 
+async function loadRecentMatchResults(userId: string, limit = 5) {
+    const client = getSupabaseClient();
+    if (!client) {
+        return [];
+    }
+
+    const { data, error } = await client
+        .from('match_results')
+        .select('id, player_id, mode, result, blue_score, red_score, created_at')
+        .eq('player_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+    if (error) {
+        if (!isMissingRelationError(error)) {
+            console.warn('[supabase] Failed to load match history:', error);
+        }
+        return [];
+    }
+
+    return (data ?? []) as PlayerMatchRecord[];
+}
+
 export async function bootstrapPilotAccount(locale: Locale): Promise<PilotAccountSnapshot | null> {
     if (!getSupabaseStatus().enabled) {
         return null;
@@ -195,6 +242,7 @@ export async function bootstrapPilotAccount(locale: Locale): Promise<PilotAccoun
     const identityState = await getLinkedProviders(user);
     const profile = await ensureProfile(user, locale);
     const progress = await ensureProgress(user.id);
+    const recentMatches = await loadRecentMatchResults(user.id);
 
     return {
         userId: user.id,
@@ -203,7 +251,8 @@ export async function bootstrapPilotAccount(locale: Locale): Promise<PilotAccoun
         email: identityState.email,
         linkedProviders: identityState.linkedProviders,
         profile,
-        progress
+        progress,
+        recentMatches
     };
 }
 
@@ -265,11 +314,33 @@ export async function recordPilotMatch(userId: string, result: MatchRecordInput)
         throw new Error(describeError(error, 'Failed to record pilot match.'));
     }
 
+    let recentMatch: PlayerMatchRecord | null = null;
+    const { data: historyData, error: historyError } = await client
+        .from('match_results')
+        .insert({
+            player_id: userId,
+            mode: result.mode,
+            result: result.won ? 'win' : 'loss',
+            blue_score: result.blueScore,
+            red_score: result.redScore
+        })
+        .select('id, player_id, mode, result, blue_score, red_score, created_at')
+        .single();
+
+    if (historyError) {
+        if (!isMissingRelationError(historyError)) {
+            console.warn('[supabase] Failed to append match history:', historyError);
+        }
+    } else if (historyData) {
+        recentMatch = historyData as PlayerMatchRecord;
+    }
+
     return {
         matchesPlayed,
         matchesWon,
         xp,
-        credits
+        credits,
+        recentMatch
     };
 }
 
