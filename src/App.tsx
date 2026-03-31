@@ -23,67 +23,11 @@ import type { Locale } from './i18n/types';
 import type { WeaponStatusView } from './combat/weaponTypes';
 import type { ControlPointView, GameMode, TeamOverview, TeamScoreState } from './gameplay/types';
 import type { LobbyJoinability } from './firebase/lobbyRegistry';
+import { CHASSIS_DEFINITIONS, DEFAULT_CHASSIS_ID, LOADOUT_DEFINITIONS, getDefaultLoadoutForChassis } from './mechs/definitions';
+import type { ChassisId, LoadoutId } from './mechs/types';
+import { INITIAL_GAME_HUD_STATE, type GameHudState, type SectionName, type SectionState } from './core/gameHudState';
 
 type SessionMode = 'solo' | 'host' | 'client';
-type SectionName = 'head' | 'centerTorso' | 'leftTorso' | 'rightTorso' | 'leftArm' | 'rightArm' | 'leftLeg' | 'rightLeg';
-type SectionState = Record<SectionName, number>;
-type RadarContact = {
-    x: number;
-    y: number;
-    kind: 'enemy' | 'bot';
-    distance: number;
-    meters: number;
-};
-
-type GameHudState = {
-    hp: number;
-    maxHp: number;
-    steam: number;
-    maxSteam: number;
-    isOverheated: boolean;
-    overheatTimer: number;
-    legYaw: number;
-    torsoYaw: number;
-    throttle: number;
-    speed: number;
-    maxSpeed: number;
-    maxTwist: number;
-    cameraMode: 'cockpit' | 'thirdPerson';
-    aimOffsetX: number;
-    aimOffsetY: number;
-    cockpitKickX: number;
-    cockpitKickY: number;
-    cockpitKickRoll: number;
-    cockpitFrameKick: number;
-    cockpitFlash: number;
-    reticleKickX: number;
-    reticleKickY: number;
-    hitConfirm: number;
-    hitTargetHp: number;
-    hitTargetMaxHp: number;
-    sections: SectionState;
-    maxSections: SectionState;
-    weaponStatus: WeaponStatusView[];
-    radarContacts: RadarContact[];
-    gameMode: GameMode;
-    controlPoints: ControlPointView[];
-    teamScores: TeamScoreState;
-    teamOverview: TeamOverview;
-    respawnTimer: number;
-    terrainColliderMode: 'heightfield' | 'trimeshFallback';
-    terrainColliderError: string;
-};
-
-const defaultSections: SectionState = {
-    head: 18,
-    centerTorso: 48,
-    leftTorso: 34,
-    rightTorso: 34,
-    leftArm: 24,
-    rightArm: 24,
-    leftLeg: 36,
-    rightLeg: 36
-};
 
 const sectionLabelKeys: Record<SectionName, TranslationKey> = {
     head: 'hud.section.head',
@@ -149,47 +93,44 @@ const lobbyJoinabilityKeys: Record<LobbyJoinability, TranslationKey> = {
     ended: 'lobby.joinability.ended'
 };
 
-const initialGameState: GameHudState = {
-    hp: 100,
-    maxHp: 100,
-    steam: 100,
-    maxSteam: 100,
-    isOverheated: false,
-    overheatTimer: 0,
-    legYaw: 0,
-    torsoYaw: 0,
-    throttle: 0,
-    speed: 0,
-    maxSpeed: 10,
-    maxTwist: 1.75,
-    cameraMode: 'cockpit',
-    aimOffsetX: 0,
-    aimOffsetY: 0,
-    cockpitKickX: 0,
-    cockpitKickY: 0,
-    cockpitKickRoll: 0,
-    cockpitFrameKick: 0,
-    cockpitFlash: 0,
-    reticleKickX: 0,
-    reticleKickY: 0,
-    hitConfirm: 0,
-    hitTargetHp: 0,
-    hitTargetMaxHp: 100,
-    sections: { ...defaultSections },
-    maxSections: { ...defaultSections },
-    weaponStatus: [],
-    radarContacts: [],
-    gameMode: 'control',
-    controlPoints: [],
-    teamScores: { blue: 0, red: 0, scoreToWin: 200, winner: null },
-    teamOverview: {
-        blue: { alive: 5, total: 5, waveTimer: 0 },
-        red: { alive: 5, total: 5, waveTimer: 0 }
-    },
-    respawnTimer: 0,
-    terrainColliderMode: 'heightfield',
-    terrainColliderError: ''
-};
+function createInitialPilotAuthState(enabled: boolean): PilotAuthState {
+    return {
+        status: enabled ? 'booting' : 'disabled',
+        userId: null,
+        isAnonymous: true,
+        email: null,
+        linkedProviders: [],
+        error: ''
+    };
+}
+
+function createInitialPilotProfileState(): PilotProfileState {
+    return {
+        callsign: ''
+    };
+}
+
+function createInitialPilotProgressState(): PilotProgressState {
+    return {
+        matchesPlayed: 0,
+        matchesWon: 0,
+        xp: 0,
+        credits: 0,
+        recentMatches: []
+    };
+}
+
+function composePilotAccountState(
+    auth: PilotAuthState,
+    profile: PilotProfileState,
+    progress: PilotProgressState
+): PilotAccountState {
+    return {
+        ...auth,
+        ...profile,
+        ...progress
+    };
+}
 
 function createInitialPilotAuthState(enabled: boolean): PilotAuthState {
     return {
@@ -960,7 +901,7 @@ export default function App() {
     const copyResetRef = useRef<number | null>(null);
     const firebaseLobbyRef = useRef<FirebaseLobbyRegistration | null>(null);
     const latestGameRef = useRef<any>(null);
-    const latestHudStateRef = useRef<GameHudState>(initialGameState);
+    const latestHudStateRef = useRef<GameHudState>(INITIAL_GAME_HUD_STATE);
     const recordedMatchRef = useRef<string | null>(null);
     const [locale, setLocale] = useState<Locale>(() => getInitialLocale());
     const [loading, setLoading] = useState(false);
@@ -975,13 +916,15 @@ export default function App() {
     const [isHost, setIsHost] = useState(false);
     const [sessionMode, setSessionMode] = useState<SessionMode>('solo');
     const [selectedGameMode, setSelectedGameMode] = useState<GameMode>('control');
+    const [selectedChassisId, setSelectedChassisId] = useState<ChassisId>(DEFAULT_CHASSIS_ID);
+    const [selectedLoadoutId, setSelectedLoadoutId] = useState<LoadoutId>(getDefaultLoadoutForChassis(DEFAULT_CHASSIS_ID).id);
     const [roomFilter, setRoomFilter] = useState<'all' | GameMode>('all');
     const [showUnavailableRooms, setShowUnavailableRooms] = useState(false);
     const [showPilotPanel, setShowPilotPanel] = useState(true);
     const [showMobileSettings, setShowMobileSettings] = useState(false);
     const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
     const [gameInstance, setGameInstance] = useState<any>(null);
-    const [gameState, setGameState] = useState<GameHudState>(initialGameState);
+    const [gameState, setGameState] = useState<GameHudState>(INITIAL_GAME_HUD_STATE);
     const [firebaseRooms, setFirebaseRooms] = useState<FirebaseLobbyRoom[]>([]);
     const supabaseStatus = getSupabaseStatus();
     const [pilotAuth, setPilotAuth] = useState<PilotAuthState>(() => createInitialPilotAuthState(supabaseStatus.enabled));
@@ -992,6 +935,10 @@ export default function App() {
     const [authUpgradeMessage, setAuthUpgradeMessage] = useState<AuthUpgradeMessage | null>(null);
     const t = createTranslator(locale);
     const firebaseLobbyStatus = getFirebaseLobbyStatus();
+    const availableChassis = Object.values(CHASSIS_DEFINITIONS);
+    const availableLoadouts = Object.values(LOADOUT_DEFINITIONS).filter((loadout) => loadout.chassisId === selectedChassisId);
+    const selectedChassis = CHASSIS_DEFINITIONS[selectedChassisId];
+    const selectedLoadout = LOADOUT_DEFINITIONS[selectedLoadoutId];
     const pilotAccount = composePilotAccountState(pilotAuth, pilotProfile, pilotProgress);
 
     const showCopyState = (nextState: 'copied' | 'error') => {
@@ -1022,7 +969,7 @@ export default function App() {
         latestGameRef.current = null;
         recordedMatchRef.current = null;
         setGameInstance(null);
-        setGameState(initialGameState);
+        setGameState(INITIAL_GAME_HUD_STATE);
         setSessionMode('solo');
         setIsHost(false);
         setMyId('');
@@ -1158,7 +1105,10 @@ export default function App() {
                     try {
                         return await initGame(canvasRef.current!, (state: GameHudState) => {
                             setGameState({ ...state });
-                        }, mode, requestedMode);
+                        }, mode, requestedMode, {
+                            chassisId: selectedChassisId,
+                            loadoutId: selectedLoadoutId
+                        });
                     } catch (error) {
                         throw toStartupFailure(error, 'startWorld');
                     }
@@ -1276,6 +1226,40 @@ export default function App() {
         });
     }, [supabaseStatus.enabled, locale]);
 
+    useEffect(() => {
+        try {
+            const savedChassis = window.localStorage.getItem('golems_selected_chassis');
+            const savedLoadout = window.localStorage.getItem('golems_selected_loadout');
+            if (savedChassis && savedChassis in CHASSIS_DEFINITIONS) {
+                const chassisId = savedChassis as ChassisId;
+                setSelectedChassisId(chassisId);
+                const fallbackLoadout = getDefaultLoadoutForChassis(chassisId).id;
+                if (savedLoadout && savedLoadout in LOADOUT_DEFINITIONS && LOADOUT_DEFINITIONS[savedLoadout as LoadoutId].chassisId === chassisId) {
+                    setSelectedLoadoutId(savedLoadout as LoadoutId);
+                } else {
+                    setSelectedLoadoutId(fallbackLoadout);
+                }
+            }
+        } catch {
+            // Ignore storage issues.
+        }
+    }, []);
+
+    useEffect(() => {
+        try {
+            window.localStorage.setItem('golems_selected_chassis', selectedChassisId);
+            window.localStorage.setItem('golems_selected_loadout', selectedLoadoutId);
+        } catch {
+            // Ignore storage issues.
+        }
+    }, [selectedChassisId, selectedLoadoutId]);
+
+        useEffect(() => {
+            if (!availableLoadouts.some((loadout) => loadout.id === selectedLoadoutId)) {
+                setSelectedLoadoutId(getDefaultLoadoutForChassis(selectedChassisId).id);
+            }
+        }, [availableLoadouts, selectedChassisId, selectedLoadoutId]);
+ 
     useEffect(() => {
         if (!inLobby || !firebaseLobbyStatus.enabled) {
             setFirebaseRooms([]);
@@ -1589,6 +1573,94 @@ export default function App() {
                                 {t(selectedGameMode === 'control' ? 'lobby.modeHint.control' : 'lobby.modeHint.tdm')}
                             </div>
                         </div>
+
+                        <div className="flex flex-col gap-3">
+                            <div className="text-center text-xs tracking-[0.28em] text-[#8fb8c2]">{t('lobby.frameTitle')}</div>
+                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                                {availableChassis.map((chassis) => (
+                                    <button
+                                        key={chassis.id}
+                                        type="button"
+                                        onClick={() => {
+                                            setSelectedChassisId(chassis.id);
+                                            setSelectedLoadoutId(getDefaultLoadoutForChassis(chassis.id).id);
+                                        }}
+                                        className={`rounded-xl border px-3 py-3 text-left transition-colors ${
+                                            selectedChassisId === chassis.id
+                                                ? 'border-[#efb768]/80 bg-[#7d4f22]/40 text-[#fff1d4]'
+                                                : 'border-[#8f6a38]/30 bg-black/25 text-[#d3bc94] hover:border-[#efb768]/50'
+                                        }`}
+                                    >
+                                        <div className="text-[11px] font-bold tracking-[0.18em]">{chassis.name}</div>
+                                        <div className="mt-1 text-[9px] tracking-[0.18em] text-[#8fb8c2]">
+                                            {t(`lobby.weight.${chassis.weightClass}` as TranslationKey)} · {chassis.familyId.toUpperCase()}
+                                        </div>
+                                        <div className="mt-2 text-[10px] leading-4 tracking-[0.08em] text-[#cdbb97]">
+                                            {chassis.description}
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="rounded-xl border border-[#8f6a38]/25 bg-black/25 px-4 py-3 text-[11px] tracking-[0.12em] text-[#cdbb97]">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <span>{selectedChassis.name}</span>
+                                    <span className="text-[#8fb8c2]">
+                                        {t('lobby.chassisStats', {
+                                            speed: selectedChassis.topSpeed.toFixed(1),
+                                            steam: selectedChassis.maxSteam,
+                                            mass: selectedChassis.mass.toFixed(1)
+                                        })}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col gap-3">
+                            <div className="text-center text-xs tracking-[0.28em] text-[#8fb8c2]">{t('lobby.loadoutTitle')}</div>
+                            <div className="grid grid-cols-1 gap-2">
+                                {availableLoadouts.map((loadout) => (
+                                    <button
+                                        key={loadout.id}
+                                        type="button"
+                                        onClick={() => setSelectedLoadoutId(loadout.id)}
+                                        className={`rounded-xl border px-4 py-3 text-left transition-colors ${
+                                            selectedLoadoutId === loadout.id
+                                                ? 'border-[#efb768]/80 bg-[#7d4f22]/40 text-[#fff1d4]'
+                                                : 'border-[#8f6a38]/30 bg-black/25 text-[#d3bc94] hover:border-[#efb768]/50'
+                                        }`}
+                                    >
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div className="text-[11px] font-bold tracking-[0.18em]">{loadout.name}</div>
+                                            <div className="text-[9px] tracking-[0.18em] text-[#8fb8c2]">
+                                                {loadout.assignments.map((assignment) => assignment.weaponId.replace('_', ' ')).join(' / ')}
+                                            </div>
+                                        </div>
+                                        <div className="mt-2 text-[10px] leading-4 tracking-[0.08em] text-[#cdbb97]">
+                                            {loadout.description}
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="text-center text-[11px] tracking-[0.12em] text-[#b9c7c8]">
+                                {t('lobby.loadoutHint', { loadout: selectedLoadout.name })}
+                            </div>
+                        </div>
+
+                        <PilotAccountCard
+                            account={pilotAccount}
+                            locale={locale}
+                            authEmail={authUpgradeEmail}
+                            authBusy={authUpgradeBusy}
+                            authMessage={authUpgradeMessage}
+                            t={t}
+                            onAuthEmailChange={setAuthUpgradeEmail}
+                            onLinkGoogle={() => {
+                                void startGoogleUpgrade();
+                            }}
+                            onSendMagicLink={() => {
+                                void sendMagicLinkUpgrade();
+                            }}
+                        />
 
                         <div className="flex flex-col gap-2">
                             <div className="text-center text-xs tracking-[0.28em] text-[#8fb8c2]">{t('lobby.roomNameTitle')}</div>
