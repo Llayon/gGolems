@@ -1024,10 +1024,7 @@ export default function App() {
             setAuthUpgradeBusy('idle');
             if (!snapshot.isAnonymous) {
                 setAuthUpgradeEmail('');
-                setAuthUpgradeMessage({
-                    tone: 'success',
-                    text: t('supabase.permanentHint')
-                });
+                setAuthUpgradeMessage((current) => current?.text === t('supabase.permanentHint') ? null : current);
             }
 
             setPilotAccount({
@@ -1736,7 +1733,12 @@ export default function App() {
                             </div>
                         ) : (
                             <div className="rounded-xl border border-[#8f6a38]/20 bg-black/25 px-4 py-3 text-center text-[11px] tracking-[0.18em] text-[#b9c7c8]">
-                                {t('lobby.firebaseDisabled')}
+                                <div>{t('lobby.firebaseDisabled')}</div>
+                                {firebaseLobbyStatus.missingKeys.length > 0 ? (
+                                    <div className="mt-2 text-[10px] tracking-[0.12em] text-[#8fb8c2]">
+                                        {firebaseLobbyStatus.missingKeys.join(', ')}
+                                    </div>
+                                ) : null}
                             </div>
                         )}
                     </div>
