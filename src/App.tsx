@@ -132,41 +132,6 @@ function composePilotAccountState(
     };
 }
 
-function createInitialPilotAuthState(enabled: boolean): PilotAuthState {
-    return {
-        status: enabled ? 'booting' : 'disabled',
-        userId: null,
-        isAnonymous: true,
-        email: null,
-        linkedProviders: [],
-        error: ''
-    };
-}
-
-function createInitialPilotProfileState(): PilotProfileState {
-    return {
-        callsign: ''
-    };
-}
-
-function createInitialPilotProgressState(): PilotProgressState {
-    return {
-        matchesPlayed: 0,
-        matchesWon: 0,
-        xp: 0,
-        credits: 0,
-        recentMatches: []
-    };
-}
-
-function composePilotAccountState(auth: PilotAuthState, profile: PilotProfileState, progress: PilotProgressState): PilotAccountState {
-    return {
-        ...auth,
-        ...profile,
-        ...progress
-    };
-}
-
 function clamp(value: number, min: number, max: number) {
     return Math.max(min, Math.min(max, value));
 }
