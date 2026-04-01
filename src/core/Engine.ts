@@ -19,7 +19,7 @@ import { MechCamera } from '../camera/MechCamera';
 import { ControlPointManager } from '../gameplay/ControlPointManager';
 import { CAMERA, ROTATION } from '../utils/constants';
 import { QualityProfile, detectQualityProfile } from '../utils/quality';
-import type { BotStateView, GameMode, TeamId, TeamScoreState } from '../gameplay/types';
+import type { GameMode, TeamId, TeamScoreState } from '../gameplay/types';
 import { buildGameHudState } from './buildGameHudState';
 import type { GameHudState } from './gameHudState';
 import {
@@ -27,28 +27,26 @@ import {
 } from './gameHudTelemetry';
 import {
     fireWeaponRequests as fireWeaponRequestsRuntime,
-    spawnShot as spawnShotRuntime,
     updateProjectileCombat
 } from './combat/ProjectileCombatRuntime';
 import {
-    playProjectileImpactFx as playProjectileImpactFxRuntime,
-    playWeaponVolleyFx as playWeaponVolleyFxRuntime
+    playProjectileImpactFx as playProjectileImpactFxRuntime
 } from './combat/ProjectileCombatFxRuntime';
 import { playWorldPropFx as playWorldPropFxRuntime } from './world/WorldFxRuntime';
 import {
     createEngineRuntimeAdapters,
     type EngineRuntimeAdapters
 } from './EngineRuntimeContexts';
-import { buildClientInputPacket, readClientInputPacket } from './network/clientInputPacket';
 import {
-    type RemotePlayerLifecycleContext
-} from './network/RemotePlayerLifecycleRuntime';
+    createEngineSessionRuntimeAdapters,
+    type EngineSessionRuntimeAdapters
+} from './EngineSessionRuntimeAdapters';
+import { buildClientInputPacket, readClientInputPacket } from './network/clientInputPacket';
 import {
     buildAuthoritativeStateMessage,
     handlePeerConnect,
     handlePeerDisconnect,
     syncNetworkTick,
-    type NetworkPeerLifecycleContext,
     type NetworkSyncTickContext
 } from './network/NetworkSyncAdapter';
 import {
@@ -59,22 +57,15 @@ import {
     type NetworkPosition
 } from './network/playerSnapshots';
 import {
-    applyBotSnapshots as applyBotSnapshotsRuntime,
     buildBotSnapshots as buildBotSnapshotsRuntime,
     syncTeamBotRoster as syncTeamBotRosterRuntime,
-    updateBots as updateBotsRuntime,
-    type BotRuntimeContext,
-    type BotShotView
+    updateBots as updateBotsRuntime
 } from './bots/BotRuntime';
 import {
-    applyTeamWaveTimer as applyTeamWaveTimerRuntime,
     queueLocalRespawn as queueLocalRespawnRuntime,
     queueRemoteRespawn as queueRemoteRespawnRuntime,
-    resolveRespawnWave as resolveRespawnWaveRuntime,
     scheduleRespawnWave as scheduleRespawnWaveRuntime,
-    teamHasPendingRespawns as teamHasPendingRespawnsRuntime,
-    updateRespawns as updateRespawnsRuntime,
-    type RespawnRuntimeContext
+    updateRespawns as updateRespawnsRuntime
 } from './respawn/RespawnRuntime';
 import {
     applyGameModeSettings,
@@ -143,6 +134,7 @@ export class Game {
     networkTickTimer = 0;
     boilerParticleTimer = 0;
     runtimeAdapters!: EngineRuntimeAdapters;
+    sessionRuntimeAdapters!: EngineSessionRuntimeAdapters;
     onCanvasClick = () => {
         this.canvas.requestPointerLock();
         this.sounds.init();
@@ -189,8 +181,50 @@ export class Game {
 
         this.placeGolemAtSpawn(this.golem, this.getInitialLocalSpawn());
         this.syncLocalCameraMode();
+        this.sessionRuntimeAdapters = createEngineSessionRuntimeAdapters({
+            getSessionMode: () => this.sessionMode,
+            remotePlayers: this.remotePlayers,
+            remotePlayerStates: this.remotePlayerStates,
+            remoteSpawnSlots: this.remoteSpawnSlots,
+            localRespawnState: this.localRespawnState,
+            respawnWaves: this.respawnWaves,
+            bots: this.bots,
+            localPlayer: this.golem,
+            mechCamera: this.mechCamera,
+            projectiles: this.projectiles,
+            particles: this.particles,
+            sounds: this.sounds,
+            teamSize: TEAM_SIZE,
+            getLocalUnitId: () => this.getLocalUnitId(),
+            createRemoteGolem: (options = {}) => this.createRemoteGolem(options),
+            disposeRemoteGolem: (golem) => {
+                this.renderer.scene.remove(golem.model);
+                this.physics.removeRigidBody(golem.body);
+            },
+            placeGolemAtSpawn: (golem, spawn, yaw) => this.placeGolemAtSpawn(golem, spawn, yaw),
+            setGolemPresence: (golem, alive) => this.setGolemPresence(golem, alive),
+            allocateRemoteSpawnSlot: () => this.allocateRemoteSpawnSlot(),
+            setRemotePlayerState: (id, patch) => this.setRemotePlayerState(id, patch),
+            getTeamSpawn: (team, slot) => this.getTeamSpawn(team, slot),
+            getSpawnYaw: (spawn) => this.getSpawnYaw(spawn),
+            sendRemoteRespawn: (id, payload) => this.network.sendTo(id, { type: 'respawn', ...payload }),
+            setTeamScores: (scores) => {
+                this.teamScores = scores;
+            },
+            setGameMode: (mode) => this.setGameMode(mode),
+            propManager: this.world.propManager,
+            controlPoints: this.controlPoints,
+            getMovementTarget: (team, from, gameMode) => gameMode === 'control'
+                ? this.getBotMovementTarget(team, from)
+                : this.getNearestEnemyTarget(team, from),
+            getEngageTarget: (team, from, maxDistance) => this.getNearestEnemyTarget(team, from, maxDistance),
+            createBot: (id, team, slot) => this.createBot(id, team, slot),
+            destroyBot: (id) => this.destroyBot(id),
+            haltHorizontalMotion: (body) => this.haltHorizontalMotion(body)
+        });
+
         if (sessionMode !== 'client') {
-            this.syncTeamBotRoster();
+            syncTeamBotRosterRuntime(this.sessionRuntimeAdapters.bot());
         }
 
         this.runtimeAdapters = createEngineRuntimeAdapters({
@@ -206,9 +240,9 @@ export class Game {
             sendHitConfirm: (ownerId, payload) => {
                 this.network.sendTo(ownerId, payload);
             },
-            authoritativeStateContext: () => this.getAuthoritativeStateRuntimeContext(),
-            hostClientInputContext: () => this.getHostClientInputRuntimeContext(),
-            respawnMessageContext: () => this.getRespawnMessageRuntimeContext(),
+            authoritativeStateContext: () => this.sessionRuntimeAdapters.authoritativeState(),
+            hostClientInputContext: () => this.sessionRuntimeAdapters.hostClientInput(),
+            respawnMessageContext: () => this.sessionRuntimeAdapters.respawnMessage(),
             restartMatchRequest: () => this.restartMatch(),
             restartMatchContext: () => ({
                 setGameMode: (mode: GameMode) => this.setGameMode(mode),
@@ -240,9 +274,9 @@ export class Game {
             getGameMode: () => this.gameMode,
             getTeamScores: () => this.teamScores,
             getUnitTeam: (id) => this.getUnitTeam(id),
-            queueLocalRespawn: () => this.queueLocalRespawn(),
-            queueRemoteRespawn: (id) => this.queueRemoteRespawn(id),
-            scheduleRespawnWave: (team) => this.scheduleRespawnWave(team),
+            queueLocalRespawn: () => queueLocalRespawnRuntime(this.sessionRuntimeAdapters.respawn(), RESPAWN_WAVE_DELAY),
+            queueRemoteRespawn: (id) => queueRemoteRespawnRuntime(this.sessionRuntimeAdapters.respawn(), id, RESPAWN_WAVE_DELAY),
+            scheduleRespawnWave: (team) => scheduleRespawnWaveRuntime(this.sessionRuntimeAdapters.respawn(), team, RESPAWN_WAVE_DELAY),
             collisionMeshes: () => this.world.getCollisionMeshes(),
             propManager: this.world.propManager,
             decals: this.decals,
@@ -258,71 +292,6 @@ export class Game {
 
     createRemoteGolem(options: GolemControllerOptions = {}) {
         return new GolemController(this.renderer.scene, this.physics, false, options);
-    }
-
-    getRemotePlayerLifecycleContext(): RemotePlayerLifecycleContext {
-        return {
-            remotePlayers: this.remotePlayers,
-            createRemoteGolem: (options = {}) => this.createRemoteGolem(options),
-            disposeRemoteGolem: (golem) => {
-                this.renderer.scene.remove(golem.model);
-                this.physics.removeRigidBody(golem.body);
-            },
-            placeGolemAtSpawn: (golem, spawn, yaw) => this.placeGolemAtSpawn(golem, spawn, yaw),
-            setGolemPresence: (golem, alive) => this.setGolemPresence(golem, alive)
-        };
-    }
-
-    getNetworkPeerLifecycleContext(): NetworkPeerLifecycleContext {
-        return {
-            sessionMode: this.sessionMode,
-            lifecycle: this.getRemotePlayerLifecycleContext(),
-            remotePlayerStates: this.remotePlayerStates,
-            remoteSpawnSlots: this.remoteSpawnSlots,
-            allocateRemoteSpawnSlot: () => this.allocateRemoteSpawnSlot(),
-            setRemotePlayerState: (id, patch) => this.setRemotePlayerState(id, patch),
-            getTeamSpawn: (team, slot) => this.getTeamSpawn(team, slot),
-            getSpawnYaw: (spawn) => this.getSpawnYaw(spawn),
-            placeGolemAtSpawn: (golem, spawn, yaw) => this.placeGolemAtSpawn(golem, spawn, yaw),
-            sendRespawn: (id, payload) => this.network.sendTo(id, { type: 'respawn', ...payload }),
-            syncTeamBotRoster: () => this.syncTeamBotRoster()
-        };
-    }
-
-    getAuthoritativeStateRuntimeContext() {
-        return {
-            propManager: this.world.propManager,
-            controlPoints: this.controlPoints,
-            setTeamScores: (scores: TeamScoreState) => {
-                this.teamScores = scores;
-            },
-            setGameMode: (mode: GameMode) => this.setGameMode(mode),
-            applyBotSnapshots: (botStates: BotStateView[]) => this.applyBotSnapshots(botStates),
-            lifecycle: this.getRemotePlayerLifecycleContext(),
-            remotePlayerStates: this.remotePlayerStates,
-            setRemotePlayerState: (id: string, patch: Partial<RemotePlayerState>) => this.setRemotePlayerState(id, patch),
-            getLocalUnitId: () => this.getLocalUnitId(),
-            localPlayer: this.golem,
-            mechCamera: this.mechCamera,
-            localRespawnState: this.localRespawnState,
-            setGolemPresence: (golem: GolemController, alive: boolean) => this.setGolemPresence(golem, alive)
-        };
-    }
-
-    getHostClientInputRuntimeContext() {
-        return {
-            remotePlayerStates: this.remotePlayerStates,
-            lifecycle: this.getRemotePlayerLifecycleContext()
-        };
-    }
-
-    getRespawnMessageRuntimeContext() {
-        return {
-            localRespawnState: this.localRespawnState,
-            localPlayer: this.golem,
-            mechCamera: this.mechCamera,
-            setGolemPresence: (golem: GolemController, alive: boolean) => this.setGolemPresence(golem, alive)
-        };
     }
 
     getMatchRestartContext() {
@@ -442,45 +411,6 @@ export class Game {
         this.bots.delete(id);
     }
 
-    getBotRuntimeContext(): BotRuntimeContext {
-        return {
-            bots: this.bots,
-            sessionMode: this.sessionMode,
-            teamSize: TEAM_SIZE,
-            localRespawnSlot: this.localRespawnState.slot,
-            remoteSpawnSlots: this.remoteSpawnSlots,
-            createBot: (id, team, slot) => this.createBot(id, team, slot),
-            destroyBot: (id) => this.destroyBot(id),
-            getMovementTarget: (team, from, gameMode) => gameMode === 'control'
-                ? this.getBotMovementTarget(team, from)
-                : this.getNearestEnemyTarget(team, from),
-            getEngageTarget: (team, from, maxDistance) => this.getNearestEnemyTarget(team, from, maxDistance),
-            fireShot: (shot: BotShotView, ownerId: string) => spawnShotRuntime(this.projectiles, {
-                weaponId: shot.weaponId,
-                mountId: undefined,
-                profile: shot.profile,
-                ox: shot.origin.x,
-                oy: shot.origin.y,
-                oz: shot.origin.z,
-                dx: shot.dir.x,
-                dy: shot.dir.y,
-                dz: shot.dir.z,
-                damage: shot.damage,
-                speed: shot.speed,
-                range: shot.range
-            }, ownerId),
-            playWeaponVolleyFx: (shots) => playWeaponVolleyFxRuntime({
-                particles: this.particles,
-                sounds: this.sounds
-            }, shots),
-            haltHorizontalMotion: (body) => this.haltHorizontalMotion(body)
-        };
-    }
-
-    syncTeamBotRoster() {
-        syncTeamBotRosterRuntime(this.getBotRuntimeContext());
-    }
-
     setGolemPresence(golem: GolemController, alive: boolean) {
         if (golem.isLocal) {
             golem.model.visible = alive && this.mechCamera.mode === 'thirdPerson';
@@ -495,54 +425,6 @@ export class Game {
     setRemotePlayerState(id: string, patch: Partial<RemotePlayerState>) {
         const current = this.remotePlayerStates.get(id) ?? { alive: true, timer: 0, slot: 1, team: 'blue' as TeamId };
         this.remotePlayerStates.set(id, { ...current, ...patch });
-    }
-
-    getRespawnRuntimeContext(): RespawnRuntimeContext {
-        return {
-            sessionMode: this.sessionMode,
-            localRespawnState: this.localRespawnState,
-            remotePlayerStates: this.remotePlayerStates,
-            respawnWaves: this.respawnWaves,
-            remoteSpawnSlots: this.remoteSpawnSlots,
-            bots: this.bots,
-            remotePlayers: this.remotePlayers,
-            golem: this.golem,
-            mechCamera: this.mechCamera,
-            getTeamSpawn: (team, slot) => this.getTeamSpawn(team, slot),
-            getSpawnYaw: (spawn) => this.getSpawnYaw(spawn),
-            placeGolemAtSpawn: (golem, spawn, yaw) => this.placeGolemAtSpawn(golem, spawn, yaw),
-            setGolemPresence: (golem, alive) => this.setGolemPresence(golem, alive),
-            setRemotePlayerState: (id, patch) => this.setRemotePlayerState(id, patch),
-            sendRemoteRespawn: (id, payload) => this.network.sendTo(id, { type: 'respawn', ...payload })
-        };
-    }
-
-    applyTeamWaveTimer(team: TeamId, timer: number) {
-        applyTeamWaveTimerRuntime(this.getRespawnRuntimeContext(), team, timer);
-    }
-
-    teamHasPendingRespawns(team: TeamId) {
-        return teamHasPendingRespawnsRuntime(this.getRespawnRuntimeContext(), team);
-    }
-
-    scheduleRespawnWave(team: TeamId, delay = RESPAWN_WAVE_DELAY) {
-        scheduleRespawnWaveRuntime(this.getRespawnRuntimeContext(), team, delay);
-    }
-
-    queueLocalRespawn() {
-        queueLocalRespawnRuntime(this.getRespawnRuntimeContext(), RESPAWN_WAVE_DELAY);
-    }
-
-    queueRemoteRespawn(id: string) {
-        queueRemoteRespawnRuntime(this.getRespawnRuntimeContext(), id, RESPAWN_WAVE_DELAY);
-    }
-
-    resolveRespawnWave(team: TeamId) {
-        resolveRespawnWaveRuntime(this.getRespawnRuntimeContext(), team);
-    }
-
-    updateRespawns(dt: number) {
-        updateRespawnsRuntime(this.getRespawnRuntimeContext(), dt, RESPAWN_WAVE_DELAY);
     }
 
     getUnitTeam(id: string): TeamId | null {
@@ -643,23 +525,15 @@ export class Game {
         body.setLinvel({ x: 0, y: velocity.y, z: 0 }, true);
     }
 
-    buildBotSnapshots(): BotStateView[] {
-        return buildBotSnapshotsRuntime(this.bots);
-    }
-
-    applyBotSnapshots(botStates: BotStateView[]) {
-        applyBotSnapshotsRuntime(this.getBotRuntimeContext(), botStates);
-    }
-
     setupNetwork() {
         this.network.onConnect = (id) => {
             console.log("Player connected:", id);
-            handlePeerConnect(this.getNetworkPeerLifecycleContext(), id);
+            handlePeerConnect(this.sessionRuntimeAdapters.networkPeerLifecycle(), id);
         };
 
         this.network.onDisconnect = (id) => {
             console.log("Player disconnected:", id);
-            handlePeerDisconnect(this.getNetworkPeerLifecycleContext(), id);
+            handlePeerDisconnect(this.sessionRuntimeAdapters.networkPeerLifecycle(), id);
         };
 
         this.network.onData = (id, data) => {
@@ -806,7 +680,7 @@ export class Game {
         });
 
         const authorityMode = this.sessionMode !== 'client';
-        updateBotsRuntime(this.getBotRuntimeContext(), dt, this.gameMode, matchEnded);
+        updateBotsRuntime(this.sessionRuntimeAdapters.bot(), dt, this.gameMode, matchEnded);
 
         if (matchEnded) {
             this.haltHorizontalMotion(this.golem.body);
@@ -880,7 +754,7 @@ export class Game {
                 mechCamera: this.mechCamera,
                 listenerPosition: this.golem.body.translation()
             });
-            this.updateRespawns(dt);
+            updateRespawnsRuntime(this.sessionRuntimeAdapters.respawn(), dt, RESPAWN_WAVE_DELAY);
         }
         
         this.boilerParticleTimer += dt;
@@ -940,7 +814,7 @@ export class Game {
 
                 authoritativeStateMessage = buildAuthoritativeStateMessage({
                     players: playersState,
-                    bots: this.buildBotSnapshots(),
+                    bots: buildBotSnapshotsRuntime(this.bots),
                     mode: this.gameMode,
                     points: this.controlPoints.getSnapshot(),
                     scores: this.teamScores,
