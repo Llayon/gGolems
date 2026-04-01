@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import type { ControlOwner, ControlPointId, ControlPointView, TeamId } from './types';
 
-type UnitPresence = {
+export type ControlUnitPresence = {
     team: TeamId;
-    position: THREE.Vector3;
+    position: { x: number; y: number; z: number };
     alive: boolean;
 };
 
@@ -24,6 +24,7 @@ type ControlPointRecord = ControlPointView & {
 };
 
 const ARC_START = -Math.PI / 2;
+const _controlPointUnitPos = new THREE.Vector3();
 
 function createProgressGeometry(progress: number) {
     const clamped = Math.max(0.001, Math.min(1, progress));
@@ -275,7 +276,7 @@ export class ControlPointManager {
         }
     }
 
-    update(dt: number, units: UnitPresence[]) {
+    update(dt: number, units: ControlUnitPresence[]) {
         this.time += dt;
         for (const point of this.points) {
             let blueInside = 0;
@@ -283,7 +284,8 @@ export class ControlPointManager {
 
             for (const unit of units) {
                 if (!unit.alive) continue;
-                const distance = unit.position.distanceTo(point.position);
+                _controlPointUnitPos.set(unit.position.x, unit.position.y, unit.position.z);
+                const distance = _controlPointUnitPos.distanceTo(point.position);
                 if (distance > point.radius) continue;
                 if (unit.team === 'blue') blueInside++;
                 else redInside++;

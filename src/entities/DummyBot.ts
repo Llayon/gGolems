@@ -122,13 +122,13 @@ export class DummyBot {
         this.body.setTranslation({ x: 0, y: -120, z: 0 }, true);
     }
 
-    respawnAt(spawn: THREE.Vector3) {
+    respawnAt(spawn: { x: number; y: number; z: number }) {
         this.hp = this.maxHp;
         this.alive = true;
         this.respawnTimer = 0;
         this.mesh.visible = true;
-        this.targetPos.copy(spawn);
-        this.mesh.position.copy(spawn);
+        this.targetPos.set(spawn.x, spawn.y, spawn.z);
+        this.mesh.position.set(spawn.x, spawn.y, spawn.z);
         this.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
         this.body.setTranslation({ x: spawn.x, y: spawn.y, z: spawn.z }, true);
         this.fireCooldown = 1.2;

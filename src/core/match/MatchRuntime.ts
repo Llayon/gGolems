@@ -1,16 +1,9 @@
-import * as THREE from 'three';
 import type { DummyBot } from '../../entities/DummyBot';
 import type { GolemController } from '../../entities/GolemController';
-import type { ControlPointManager } from '../../gameplay/ControlPointManager';
+import type { ControlPointManager, ControlUnitPresence } from '../../gameplay/ControlPointManager';
 import type { GameMode, TeamId, TeamOverview, TeamScoreState } from '../../gameplay/types';
 import type { NetworkPosition } from '../network/playerSnapshots';
 import type { PlayerRespawnState, RemotePlayerState, RespawnSessionMode } from '../respawn/types';
-
-type ControlUnitPresence = {
-    team: TeamId;
-    position: THREE.Vector3;
-    alive: boolean;
-};
 
 export type MatchControlRuntimeContext = {
     controlPoints: ControlPointManager;
@@ -134,7 +127,7 @@ export function collectControlUnits(context: MatchControlRuntimeContext): Contro
     const localPos = context.localPlayer.body.translation();
     units.push({
         team: 'blue',
-        position: new THREE.Vector3(localPos.x, localPos.y, localPos.z),
+        position: { x: localPos.x, y: localPos.y, z: localPos.z },
         alive: context.localRespawnState.alive
     });
 
@@ -143,7 +136,7 @@ export function collectControlUnits(context: MatchControlRuntimeContext): Contro
         const pos = player.body.translation();
         units.push({
             team: 'blue',
-            position: new THREE.Vector3(pos.x, pos.y, pos.z),
+            position: { x: pos.x, y: pos.y, z: pos.z },
             alive: state ? state.alive : true
         });
     });
@@ -152,7 +145,7 @@ export function collectControlUnits(context: MatchControlRuntimeContext): Contro
         const pos = bot.body.translation();
         units.push({
             team: bot.team,
-            position: new THREE.Vector3(pos.x, pos.y, pos.z),
+            position: { x: pos.x, y: pos.y, z: pos.z },
             alive: bot.alive
         });
     }
@@ -218,7 +211,7 @@ export function restartMatchSession(context: MatchRestartContext) {
     for (const [id, bot] of context.bots) {
         const slot = Number(id.split('-').pop() ?? 0) || 0;
         const spawn = context.getTeamSpawn(bot.team, slot);
-        bot.respawnAt(new THREE.Vector3(spawn.x, spawn.y, spawn.z));
+        bot.respawnAt(spawn);
     }
 
     context.addCameraTrauma(0.8);

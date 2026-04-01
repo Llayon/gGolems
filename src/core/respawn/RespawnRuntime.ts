@@ -1,4 +1,3 @@
-import * as THREE from 'three';
 import type { MechCamera } from '../../camera/MechCamera';
 import type { GolemController } from '../../entities/GolemController';
 import type { DummyBot } from '../../entities/DummyBot';
@@ -148,7 +147,7 @@ export function resolveRespawnWave(context: RespawnRuntimeContext, team: TeamId)
         if (bot.team === team && !bot.alive) {
             const slot = Number(id.split('-').pop() ?? 0) || 0;
             const spawn = context.getTeamSpawn(bot.team, slot);
-            bot.respawnAt(new THREE.Vector3(spawn.x, spawn.y, spawn.z));
+            bot.respawnAt(spawn);
         }
     }
 
