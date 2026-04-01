@@ -41,6 +41,14 @@ import {
     canAnyWeaponFire,
     evaluateReadyWeaponMounts
 } from '../mechs/rules/weaponRules';
+import {
+    buildWeaponFireRequests,
+    createWeaponMountRuntimeState,
+    createWeaponRecoilState,
+    resetWeaponRuntimeState,
+    tickWeaponRecoilState,
+    type WeaponRecoilState
+} from '../mechs/runtime/MechWeaponRuntime';
 import type { ChassisDefinition, ChassisId, LoadoutDefinition, LoadoutId } from '../mechs/types';
 
 const _moveDir = new THREE.Vector3();
@@ -65,14 +73,6 @@ export { GOLEM_SECTION_ORDER } from '../mechs/sections';
 
 const DEFAULT_CHASSIS = getChassisDefinition(DEFAULT_CHASSIS_ID);
 const DEFAULT_LOADOUT = getDefaultLoadoutForChassis(DEFAULT_CHASSIS_ID);
-
-function createWeaponRecoilState(): Record<WeaponMountId, number> {
-    return {
-        rightArmMount: 0,
-        leftArmMount: 0,
-        torsoMount: 0
-    };
-}
 
 export interface GolemState {
     pos: THREE.Vector3;
@@ -127,7 +127,7 @@ export class GolemController {
     maxSections: GolemSectionState = cloneSectionState(DEFAULT_CHASSIS.sectionMax);
     weaponMountOrder: WeaponMountId[] = DEFAULT_CHASSIS.mountLayout.map((slot) => slot.mountId);
     weaponMounts: Record<WeaponMountId, WeaponMountRuntime>;
-    weaponRecoil: Record<WeaponMountId, number> = createWeaponRecoilState();
+    weaponRecoil: WeaponRecoilState = createWeaponRecoilState();
 
     legYaw = 0;
     torsoYaw = 0;
@@ -163,7 +163,8 @@ export class GolemController {
         this.loadout = loadout;
         this.sections = cloneSectionState(chassis.sectionMax);
         this.maxSections = cloneSectionState(chassis.sectionMax);
-        this.weaponMountOrder = chassis.mountLayout.map((slot) => slot.mountId);
+        const weaponRuntimeState = createWeaponMountRuntimeState(chassis, loadout);
+        this.weaponMountOrder = weaponRuntimeState.mountOrder;
         this.weaponRecoil = createWeaponRecoilState();
         this.mass = chassis.mass;
         this.maxSteam = chassis.maxSteam;
@@ -195,34 +196,12 @@ export class GolemController {
         const colliderDesc = RAPIER.ColliderDesc.capsule(0.75, 0.8);
         colliderDesc.setMass(this.mass);
         physics.createCollider(colliderDesc, this.body);
-        this.weaponMounts = this.createWeaponMounts();
+        this.weaponMounts = weaponRuntimeState.mounts;
         this.syncMountAvailabilityFromSections();
         this.syncAggregateHp();
         if (isLocal) {
             void this.initHeroVisual();
         }
-    }
-
-    createWeaponMounts(): Record<WeaponMountId, WeaponMountRuntime> {
-        const mounts = {} as Record<WeaponMountId, WeaponMountRuntime>;
-
-        for (const slot of this.chassis.mountLayout) {
-            const assignment = this.loadout.assignments.find((item) => item.mountId === slot.mountId);
-            if (!assignment) {
-                throw new Error(`Missing loadout assignment for mount "${slot.mountId}".`);
-            }
-
-            mounts[slot.mountId] = {
-                mountId: slot.mountId,
-                weaponId: assignment.weaponId,
-                group: slot.group,
-                section: slot.section,
-                cooldownRemaining: 0,
-                enabled: true
-            };
-        }
-
-        return mounts;
     }
 
     async initHeroVisual() {
@@ -309,10 +288,7 @@ export class GolemController {
 
     resetSections() {
         this.sections = resetSectionState(this.maxSections);
-        for (const mountId of this.weaponMountOrder) {
-            this.weaponMounts[mountId].cooldownRemaining = 0;
-            this.weaponRecoil[mountId] = 0;
-        }
+        resetWeaponRuntimeState(this.weaponMounts, this.weaponRecoil, this.weaponMountOrder);
         this.applySectionVisuals();
         this.syncMountAvailabilityFromSections();
         this.syncAggregateHp();
@@ -399,28 +375,6 @@ export class GolemController {
         }
     }
 
-    buildWeaponFireRequest(mount: WeaponMountRuntime): WeaponFireRequest {
-        const definition = getWeaponDefinition(mount.weaponId);
-        return {
-            mountId: mount.mountId,
-            weaponId: mount.weaponId,
-            group: mount.group,
-            section: mount.section,
-            nameKey: definition.nameKey,
-            shortKey: definition.shortKey,
-            damage: definition.damage,
-            heatCost: definition.heatCost,
-            spread: definition.spread,
-            projectileSpeed: definition.projectileSpeed,
-            effectiveRange: definition.effectiveRange,
-            projectileProfile: definition.projectileProfile,
-            projectileCount: definition.projectileCount,
-            fireTrauma: definition.fireTrauma,
-            cockpitRecoil: definition.cockpitRecoil,
-            muzzleOffset: definition.muzzleOffset
-        };
-    }
-
     gatherReadyMounts(groupId?: WeaponGroupId) {
         const evaluation = evaluateReadyWeaponMounts(
             this.weaponMounts,
@@ -444,7 +398,7 @@ export class GolemController {
 
         this.applyWeaponCooldownPatch(buildWeaponFireCooldownPatch(this.weaponMounts, evaluation.mountIds));
 
-        return evaluation.mountIds.map((mountId) => this.buildWeaponFireRequest(this.weaponMounts[mountId]));
+        return buildWeaponFireRequests(this.weaponMounts, evaluation.mountIds);
     }
 
     tryFireGroup(groupId: WeaponGroupId) {
@@ -701,9 +655,7 @@ export class GolemController {
             this.damageFlashTimer = Math.max(0, this.damageFlashTimer - dt);
         }
         this.updateWeaponCooldowns(dt);
-        for (const mountId of this.weaponMountOrder) {
-            this.weaponRecoil[mountId] = Math.max(0, this.weaponRecoil[mountId] - dt * 8.5);
-        }
+        tickWeaponRecoilState(this.weaponRecoil, this.weaponMountOrder, dt);
         const flashRatio = this.damageFlashTimer > 0 ? this.damageFlashTimer / 0.16 : 0;
         const flashIntensity = flashRatio * 1.6;
         this.bronzeMaterial.emissive.setRGB(0.55 * flashRatio, 0.42 * flashRatio, 0.18 * flashRatio);
