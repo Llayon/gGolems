@@ -51,19 +51,16 @@ import {
     applyLocalMechDash,
     updateLocalMechMovement
 } from '../mechs/runtime/LocalMechMovementRuntime';
+import { updateMechCameraAndFootsteps } from '../mechs/runtime/MechCameraFootstepRuntime';
 import {
     applyProceduralMechPose,
     applyProceduralSectionVisuals,
-    getThirdPersonAnchor as getThirdPersonAnchorRuntime,
-    getViewAnchor as getViewAnchorRuntime,
     syncHeroVisual as syncHeroVisualRuntime
 } from '../mechs/runtime/MechVisualDriver';
 import { applyRemoteMechReplication } from '../mechs/runtime/RemoteMechReplicationRuntime';
 import type { ChassisDefinition, ChassisId, LoadoutDefinition, LoadoutId } from '../mechs/types';
 
 const _currentVel = new THREE.Vector3();
-const _cameraAnchor = new THREE.Vector3();
-const _footOffset = new THREE.Vector3();
 const _muzzleOffset = new THREE.Vector3();
 
 export type { GolemSection, GolemSectionState } from '../mechs/sections';
@@ -450,14 +447,6 @@ export class GolemController {
         }
     }
 
-    getViewAnchor(out: THREE.Vector3, facingYaw = this.torsoYaw) {
-        return getViewAnchorRuntime(this.torso, out, facingYaw);
-    }
-
-    getThirdPersonAnchor(out: THREE.Vector3) {
-        return getThirdPersonAnchorRuntime(this.heroVisual, this.torso, out);
-    }
-
     syncHeroVisual(dt: number) {
         this.heroStrideCycle = syncHeroVisualRuntime({
             heroVisual: this.heroVisual,
@@ -557,51 +546,24 @@ export class GolemController {
         _currentVel.set(vel.x, 0, vel.z);
         this.currentSpeed = _currentVel.length();
 
-        if (!this.isLocal || !this.gameCamera) {
-            if (this.currentSpeed > 0.5) {
-                const freq = (1.2 / this.mass) * Math.min(this.currentSpeed / 10, 1);
-                this.walkCycle += dt * freq * Math.PI * 2;
-
-                const stepPhase = (this.walkCycle / Math.PI) % 2;
-                if ((stepPhase < 0.1 && this.lastStepPhase >= 1.9) || (stepPhase > 1.0 && this.lastStepPhase <= 1.0)) {
-                    sounds.playFootstep(this.mass);
-
-                    const isLeftStep = stepPhase < 0.1;
-                    _footOffset.set(isLeftStep ? -0.75 : 0.75, 0, 0);
-                    _footOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.legYaw);
-                    decals.addFootprint(this.model.position.clone().add(_footOffset), this.legYaw, this.mass);
-                }
-                this.lastStepPhase = stepPhase;
-            } else {
-                this.walkCycle = 0;
-                this.lastStepPhase = 0;
-            }
-        } else {
-            this.walkCycle = this.gameCamera.walkCycle * Math.PI * 2;
-            if (this.gameCamera.mode === 'thirdPerson') {
-                this.getThirdPersonAnchor(_cameraAnchor);
-            } else {
-                this.getViewAnchor(_cameraAnchor, this.legYaw);
-            }
-
-            this.gameCamera.update(
-                _cameraAnchor,
-                this.legYaw,
-                this.gameCamera.aimYaw,
-                this.currentSpeed,
-                this.mass,
-                dt
-            );
-
-            this.gameCamera.onFootstep = () => {
-                sounds.playFootstep(this.mass);
-
-                const isLeft = Math.sin(this.gameCamera!.walkCycle * Math.PI * 2) > 0;
-                _footOffset.set(isLeft ? -0.75 : 0.75, 0, 0);
-                _footOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.legYaw);
-                decals.addFootprint(this.model.position.clone().add(_footOffset), this.legYaw, this.mass);
-            };
-        }
+        const cameraAndFootsteps = updateMechCameraAndFootsteps({
+            isLocal: this.isLocal,
+            gameCamera: this.gameCamera ?? null,
+            heroVisual: this.heroVisual,
+            torso: this.torso,
+            modelPosition: this.model.position,
+            legYaw: this.legYaw,
+            currentSpeed: this.currentSpeed,
+            mass: this.mass,
+            walkCycle: this.walkCycle,
+            lastStepPhase: this.lastStepPhase,
+            dt,
+            sounds,
+            decals
+        });
+        this.walkCycle = cameraAndFootsteps.walkCycle;
+        this.lastStepPhase = cameraAndFootsteps.lastStepPhase;
+        events.footstep = cameraAndFootsteps.footstepTriggered;
 
         applyProceduralMechPose({
             walkCycle: this.walkCycle,
