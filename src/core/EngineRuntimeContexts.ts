@@ -1,19 +1,23 @@
+import type { Camera } from 'three';
 import type { GameMode } from '../gameplay/types';
+import type { GolemController } from '../entities/GolemController';
+import type { ProjectileManager } from '../combat/ProjectileManager';
+import type { ParticleManager } from '../fx/ParticleManager';
+import type { AudioManager } from './AudioManager';
 import {
     confirmHitForOwner as confirmHitForOwnerRuntime,
-    registerHitConfirmState
+    registerHitConfirmState,
+    type HitConfirmState,
+    type HitConfirmRuntimeContext
 } from './gameHudTelemetry';
 import {
     applyRemoteFire,
+    type FireShotPayload,
     type ProjectileCollisionRuntimeContext,
     type WeaponFireRuntimeContext
 } from './combat/ProjectileCombatRuntime';
 import { handlePlayerHit as handlePlayerHitRuntime, type PlayerHitRuntimeContext } from './combat/PlayerHitRuntime';
-import {
-    playProjectileImpactFx as playProjectileImpactFxRuntime,
-    playWeaponVolleyFx as playWeaponVolleyFxRuntime,
-    type ProjectileImpactFxContext
-} from './combat/ProjectileCombatFxRuntime';
+import type { ProjectileImpactFxContext } from './combat/ProjectileCombatFxRuntime';
 import {
     applyAuthoritativeStateMessage,
     applyClientInputToRemotePlayer,
@@ -21,119 +25,157 @@ import {
     applyRemoteFireMessage,
     applyRespawnMessage,
     applyRestartMatchMessage,
+    type AuthoritativeStateRuntimeContext,
+    type HostClientInputRuntimeContext,
     type NetworkDataDispatchContext,
-    type RemoteFireRuntimeContext
+    type RemoteFireMessageLike,
+    type RemoteFireRuntimeContext,
+    type RespawnMessageRuntimeContext,
+    type RestartMatchRuntimeContext
 } from './network/NetworkMessageRuntime';
-import type { Game } from './Engine';
 
-export function createHitConfirmRuntimeContext(game: Game) {
+export type HitConfirmRuntimeContextDeps = {
+    sessionMode: HitConfirmRuntimeContext['sessionMode'];
+    myId: string;
+    getLocalUnitId: () => string;
+    setHitConfirmState: (next: HitConfirmState) => void;
+    sendHitConfirm: HitConfirmRuntimeContext['sendHitConfirm'];
+};
+
+export function createHitConfirmRuntimeContext(
+    deps: HitConfirmRuntimeContextDeps
+): HitConfirmRuntimeContext {
     return {
-        sessionMode: game.sessionMode,
-        myId: game.network.myId,
-        getLocalUnitId: () => game.getLocalUnitId(),
+        sessionMode: deps.sessionMode,
+        myId: deps.myId,
+        getLocalUnitId: deps.getLocalUnitId,
         registerHitConfirm: (targetHp: number, targetMaxHp: number) => {
-            registerHitConfirmState((next) => {
-                game.hitConfirmTimer = next.hitConfirmTimer;
-                game.hitTargetHp = next.hitTargetHp;
-                game.hitTargetMaxHp = next.hitTargetMaxHp;
-            }, targetHp, targetMaxHp);
+            registerHitConfirmState(
+                (next) => deps.setHitConfirmState(next),
+                targetHp,
+                targetMaxHp
+            );
         },
-        sendHitConfirm: (ownerId: string, payload: { type: 'hitConfirm'; hp: number; maxHp: number }) => {
-            game.network.sendTo(ownerId, payload);
-        }
+        sendHitConfirm: deps.sendHitConfirm
     };
 }
 
-export function createRemoteFireRuntimeContext(game: Game): RemoteFireRuntimeContext {
+export type RemoteFireRuntimeContextDeps = {
+    myId: string;
+    isHost: boolean;
+    projectiles: ProjectileManager;
+    remotePlayers: Map<string, GolemController>;
+    playWeaponVolleyFx: (shots: FireShotPayload[]) => void;
+    forwardFireMessage: (senderId: string, data: RemoteFireMessageLike) => void;
+};
+
+export function createRemoteFireRuntimeContext(
+    deps: RemoteFireRuntimeContextDeps
+): RemoteFireRuntimeContext {
     return {
-        myId: game.network.myId,
-        isHost: game.network.isHost,
+        myId: deps.myId,
+        isHost: deps.isHost,
         applyRemoteFire: (ownerId, shots) => applyRemoteFire({
-            projectiles: game.projectiles,
-            remotePlayers: game.remotePlayers,
-            playWeaponVolleyFx: (payloads) => playWeaponVolleyFxRuntime({
-                particles: game.particles,
-                sounds: game.sounds
-            }, payloads)
+            projectiles: deps.projectiles,
+            remotePlayers: deps.remotePlayers,
+            playWeaponVolleyFx: deps.playWeaponVolleyFx
         }, ownerId, shots),
-        forwardFireMessage: (senderId, message) => {
-            game.network.connections.forEach((conn, peerId) => {
-                if (peerId !== senderId) conn.send(message);
-            });
-        }
+        forwardFireMessage: deps.forwardFireMessage
     };
 }
 
-export function createNetworkDataDispatchContext(game: Game): NetworkDataDispatchContext {
+export type NetworkDataDispatchContextDeps = {
+    isHost: boolean;
+    authoritativeStateContext: AuthoritativeStateRuntimeContext;
+    hostClientInputContext: HostClientInputRuntimeContext;
+    restartMatchRequest: () => void;
+    respawnMessageContext: RespawnMessageRuntimeContext;
+    restartMatchContext: RestartMatchRuntimeContext;
+    remoteFireContext: RemoteFireRuntimeContext;
+    registerHitConfirm: (targetHp: number, targetMaxHp: number) => void;
+};
+
+export function createNetworkDataDispatchContext(
+    deps: NetworkDataDispatchContextDeps
+): NetworkDataDispatchContext {
     return {
-        isHost: game.network.isHost,
+        isHost: deps.isHost,
         onStateMessage: (message) => {
-            applyAuthoritativeStateMessage(game.getAuthoritativeStateRuntimeContext(), message);
+            applyAuthoritativeStateMessage(deps.authoritativeStateContext, message);
         },
         onClientInputPacket: (senderId, packet) => {
-            applyClientInputToRemotePlayer(game.getHostClientInputRuntimeContext(), senderId, packet);
+            applyClientInputToRemotePlayer(deps.hostClientInputContext, senderId, packet);
         },
-        onRestartRequest: () => {
-            game.restartMatch();
-        },
+        onRestartRequest: deps.restartMatchRequest,
         onRespawnMessage: (message) => {
-            applyRespawnMessage(game.getRespawnMessageRuntimeContext(), message);
+            applyRespawnMessage(deps.respawnMessageContext, message);
         },
         onRestartMatchMessage: (message) => {
-            applyRestartMatchMessage({
-                setGameMode: (mode: GameMode) => game.setGameMode(mode),
-                restartMatch: (fromNetwork = false) => game.restartMatch(fromNetwork)
-            }, message);
+            applyRestartMatchMessage(deps.restartMatchContext, message);
         },
         onRemoteFireMessage: (senderId, message) => {
-            applyRemoteFireMessage(createRemoteFireRuntimeContext(game), senderId, message);
+            applyRemoteFireMessage(deps.remoteFireContext, senderId, message);
         },
         onHitConfirmMessage: (message) => {
-            applyHitConfirmMessage(
-                (targetHp, targetMaxHp) => createHitConfirmRuntimeContext(game).registerHitConfirm(targetHp, targetMaxHp),
-                message
-            );
+            applyHitConfirmMessage(deps.registerHitConfirm, message);
         }
     };
 }
 
-export function createWeaponFireRuntimeContext(game: Game): WeaponFireRuntimeContext {
+export type WeaponFireRuntimeContextDeps = {
+    golem: WeaponFireRuntimeContext['golem'];
+    mechCamera: WeaponFireRuntimeContext['mechCamera'];
+    camera: Camera;
+    projectiles: ProjectileManager;
+    playWeaponVolleyFx: (shots: FireShotPayload[]) => void;
+    broadcastFire?: WeaponFireRuntimeContext['broadcastFire'];
+};
+
+export function createWeaponFireRuntimeContext(
+    deps: WeaponFireRuntimeContextDeps
+): WeaponFireRuntimeContext {
     return {
-        golem: game.golem,
-        mechCamera: game.mechCamera,
-        camera: game.renderer.camera,
-        projectiles: game.projectiles,
-        playWeaponVolleyFx: (shots) => playWeaponVolleyFxRuntime({
-            particles: game.particles,
-            sounds: game.sounds
-        }, shots),
-        broadcastFire: game.sessionMode === 'solo'
-            ? undefined
-            : (ownerId, shots) => {
-                game.network.broadcast({
-                    type: 'fire',
-                    ownerId,
-                    shots
-                });
-            }
+        golem: deps.golem,
+        mechCamera: deps.mechCamera,
+        camera: deps.camera,
+        projectiles: deps.projectiles,
+        playWeaponVolleyFx: deps.playWeaponVolleyFx,
+        broadcastFire: deps.broadcastFire
     };
 }
 
-export function createPlayerHitRuntimeContext(game: Game, localPlayerId: string): PlayerHitRuntimeContext {
+export type PlayerHitRuntimeContextDeps = {
+    bots: PlayerHitRuntimeContext['bots'];
+    remotePlayers: PlayerHitRuntimeContext['remotePlayers'];
+    localPlayer: PlayerHitRuntimeContext['localPlayer'];
+    mechCamera: PlayerHitRuntimeContext['mechCamera'];
+    gameMode: GameMode;
+    teamScores: PlayerHitRuntimeContext['teamScores'];
+    localPlayerId: string;
+    getUnitTeam: PlayerHitRuntimeContext['getUnitTeam'];
+    queueLocalRespawn: PlayerHitRuntimeContext['queueLocalRespawn'];
+    queueRemoteRespawn: PlayerHitRuntimeContext['queueRemoteRespawn'];
+    scheduleRespawnWave: PlayerHitRuntimeContext['scheduleRespawnWave'];
+    hitConfirmContext: HitConfirmRuntimeContext;
+};
+
+export function createPlayerHitRuntimeContext(
+    deps: PlayerHitRuntimeContextDeps
+): PlayerHitRuntimeContext {
     return {
-        bots: game.bots,
-        remotePlayers: game.remotePlayers,
-        localPlayer: game.golem,
-        mechCamera: game.mechCamera,
-        gameMode: game.gameMode,
-        teamScores: game.teamScores,
-        localPlayerId,
-        getUnitTeam: (id) => game.getUnitTeam(id),
-        queueLocalRespawn: () => game.queueLocalRespawn(),
-        queueRemoteRespawn: (id) => game.queueRemoteRespawn(id),
-        scheduleRespawnWave: (team) => game.scheduleRespawnWave(team),
+        bots: deps.bots,
+        remotePlayers: deps.remotePlayers,
+        localPlayer: deps.localPlayer,
+        mechCamera: deps.mechCamera,
+        gameMode: deps.gameMode,
+        teamScores: deps.teamScores,
+        localPlayerId: deps.localPlayerId,
+        getUnitTeam: deps.getUnitTeam,
+        queueLocalRespawn: deps.queueLocalRespawn,
+        queueRemoteRespawn: deps.queueRemoteRespawn,
+        scheduleRespawnWave: deps.scheduleRespawnWave,
         confirmHitForOwner: (ownerId, targetHp, targetMaxHp) => confirmHitForOwnerRuntime(
-            createHitConfirmRuntimeContext(game),
+            deps.hitConfirmContext,
             ownerId,
             targetHp,
             targetMaxHp
@@ -141,27 +183,38 @@ export function createPlayerHitRuntimeContext(game: Game, localPlayerId: string)
     };
 }
 
+export type ProjectileCollisionRuntimeContextDeps = {
+    projectiles: ProjectileCollisionRuntimeContext['projectiles'];
+    bots: ProjectileCollisionRuntimeContext['bots'];
+    remotePlayers: ProjectileCollisionRuntimeContext['remotePlayers'];
+    localPlayer: ProjectileCollisionRuntimeContext['localPlayer'];
+    localPlayerId: string;
+    authorityMode: boolean;
+    collisionMeshes: ProjectileCollisionRuntimeContext['collisionMeshes'];
+    propManager: ProjectileCollisionRuntimeContext['propManager'];
+    decals: ProjectileCollisionRuntimeContext['decals'];
+    getUnitTeam: ProjectileCollisionRuntimeContext['getUnitTeam'];
+    isTargetAlive: ProjectileCollisionRuntimeContext['isTargetAlive'];
+    playerHitContext: PlayerHitRuntimeContext;
+};
+
 export function createProjectileCollisionRuntimeContext(
-    game: Game,
-    authorityMode: boolean,
-    localPlayerId: string
+    deps: ProjectileCollisionRuntimeContextDeps
 ): ProjectileCollisionRuntimeContext {
     return {
-        projectiles: game.projectiles,
-        bots: game.bots,
-        remotePlayers: game.remotePlayers,
-        localPlayer: game.golem,
-        localPlayerId,
-        authorityMode,
-        collisionMeshes: game.world.getCollisionMeshes(),
-        propManager: game.world.propManager,
-        decals: game.decals,
-        getUnitTeam: (unitId) => game.getUnitTeam(unitId),
-        isTargetAlive: (targetId) => targetId === localPlayerId
-            ? game.localRespawnState.alive
-            : (game.remotePlayerStates.get(targetId)?.alive ?? true),
+        projectiles: deps.projectiles,
+        bots: deps.bots,
+        remotePlayers: deps.remotePlayers,
+        localPlayer: deps.localPlayer,
+        localPlayerId: deps.localPlayerId,
+        authorityMode: deps.authorityMode,
+        collisionMeshes: deps.collisionMeshes,
+        propManager: deps.propManager,
+        decals: deps.decals,
+        getUnitTeam: deps.getUnitTeam,
+        isTargetAlive: deps.isTargetAlive,
         onPlayerHit: (ownerId, targetId, damage, section) => handlePlayerHitRuntime(
-            createPlayerHitRuntimeContext(game, localPlayerId),
+            deps.playerHitContext,
             ownerId,
             targetId,
             damage,
@@ -170,12 +223,22 @@ export function createProjectileCollisionRuntimeContext(
     };
 }
 
-export function createProjectileImpactFxContext(game: Game): ProjectileImpactFxContext {
+export type ProjectileImpactFxContextDeps = {
+    particles: ParticleManager;
+    sounds: AudioManager;
+    mechCamera: ProjectileImpactFxContext['mechCamera'];
+    projectiles: ProjectileImpactFxContext['projectiles'];
+    listenerPosition: ProjectileImpactFxContext['listenerPosition'];
+};
+
+export function createProjectileImpactFxContext(
+    deps: ProjectileImpactFxContextDeps
+): ProjectileImpactFxContext {
     return {
-        particles: game.particles,
-        sounds: game.sounds,
-        mechCamera: game.mechCamera,
-        projectiles: game.projectiles,
-        listenerPosition: game.golem.body.translation()
+        particles: deps.particles,
+        sounds: deps.sounds,
+        mechCamera: deps.mechCamera,
+        projectiles: deps.projectiles,
+        listenerPosition: deps.listenerPosition
     };
 }
