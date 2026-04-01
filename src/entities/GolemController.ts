@@ -49,24 +49,24 @@ import {
     tickWeaponRecoilState,
     type WeaponRecoilState
 } from '../mechs/runtime/MechWeaponRuntime';
+import {
+    applyProceduralMechPose,
+    applyProceduralSectionVisuals,
+    getThirdPersonAnchor as getThirdPersonAnchorRuntime,
+    getViewAnchor as getViewAnchorRuntime,
+    syncHeroVisual as syncHeroVisualRuntime
+} from '../mechs/runtime/MechVisualDriver';
 import type { ChassisDefinition, ChassisId, LoadoutDefinition, LoadoutId } from '../mechs/types';
 
 const _moveDir = new THREE.Vector3();
 const _currentVel = new THREE.Vector3();
 const _netPos = new THREE.Vector3();
 const _cameraAnchor = new THREE.Vector3();
-const _viewForward = new THREE.Vector3();
 const _footOffset = new THREE.Vector3();
 const _bodyForward = new THREE.Vector3();
 const _desiredVel = new THREE.Vector3();
 const _sideVel = new THREE.Vector3();
 const _muzzleOffset = new THREE.Vector3();
-const _heroTwistQuat = new THREE.Quaternion();
-const _heroArmQuat = new THREE.Quaternion();
-const _heroLegQuat = new THREE.Quaternion();
-const _heroUpAxis = new THREE.Vector3(0, 1, 0);
-const _heroPitchAxis = new THREE.Vector3(1, 0, 0);
-const _heroRigOffset = new THREE.Vector3();
 
 export type { GolemSection, GolemSectionState } from '../mechs/sections';
 export { GOLEM_SECTION_ORDER } from '../mechs/sections';
@@ -295,12 +295,15 @@ export class GolemController {
     }
 
     applySectionVisuals() {
-        const showProcedural = !this.heroVisual;
-        this.head.visible = showProcedural && this.sections.head > 0;
-        this.leftArm.visible = showProcedural && this.sections.leftArm > 0;
-        this.rightArm.visible = showProcedural && this.sections.rightArm > 0;
-        this.leftLeg.visible = showProcedural && this.sections.leftLeg > 0;
-        this.rightLeg.visible = showProcedural && this.sections.rightLeg > 0;
+        applyProceduralSectionVisuals({
+            heroVisual: this.heroVisual,
+            head: this.head,
+            leftArm: this.leftArm,
+            rightArm: this.rightArm,
+            leftLeg: this.leftLeg,
+            rightLeg: this.rightLeg,
+            sections: this.sections
+        });
     }
 
     applySectionDamage(section: GolemSection, damage: number) {
@@ -432,203 +435,24 @@ export class GolemController {
     }
 
     getViewAnchor(out: THREE.Vector3, facingYaw = this.torsoYaw) {
-        this.torso.getWorldPosition(out);
-        _viewForward.set(Math.sin(facingYaw), 0, -Math.cos(facingYaw));
-        out.addScaledVector(_viewForward, 0.35);
-        out.y += 1.45;
-        return out;
+        return getViewAnchorRuntime(this.torso, out, facingYaw);
     }
 
     getThirdPersonAnchor(out: THREE.Vector3) {
-        const heroViewAnchor = this.heroVisual?.viewAnchor;
-        if (heroViewAnchor) {
-            heroViewAnchor.getWorldPosition(out);
-            out.y += 0.18;
-            return out;
-        }
-
-        this.torso.getWorldPosition(out);
-        out.y += 1.35;
-        return out;
+        return getThirdPersonAnchorRuntime(this.heroVisual, this.torso, out);
     }
 
     syncHeroVisual(dt: number) {
-        if (!this.heroVisual) return;
-
-        const idleAction = this.heroVisual.actions.idle;
-        const walkAction = this.heroVisual.actions.walk;
-        const locomotionAmount = clamp(Math.max(Math.abs(this.throttle), this.currentSpeed / this.chassis.topSpeed), 0, 1);
-        const desiredLocomotion = locomotionAmount > 0.06 ? 'walk' : 'idle';
-
-        const resetNode = (node: THREE.Object3D | null, rest: { position: THREE.Vector3; quaternion: THREE.Quaternion } | null) => {
-            if (!node || !rest) return;
-            node.position.copy(rest.position);
-            node.quaternion.copy(rest.quaternion);
-        };
-        const offsetRigNodes = (nodes: THREE.Object3D[], offset: THREE.Vector3) => {
-            if (nodes.length === 0) return;
-            for (const node of nodes) {
-                node.position.add(offset);
-            }
-        };
-        const rotateRigNodesAroundPivot = (
-            nodes: THREE.Object3D[],
-            pivot: THREE.Vector3 | null,
-            axis: THREE.Vector3,
-            angle: number
-        ) => {
-            if (!pivot || nodes.length === 0 || Math.abs(angle) <= 0.0001) return;
-            _heroTwistQuat.setFromAxisAngle(axis, angle);
-            for (const node of nodes) {
-                _heroRigOffset.copy(node.position).sub(pivot).applyQuaternion(_heroTwistQuat);
-                node.position.copy(pivot).add(_heroRigOffset);
-                node.quaternion.premultiply(_heroTwistQuat);
-            }
-        };
-
-        resetNode(this.heroVisual.bones.pelvis, this.heroVisual.restPose.pelvis);
-        resetNode(this.heroVisual.bones.waist, this.heroVisual.restPose.waist);
-        resetNode(this.heroVisual.bones.torso, this.heroVisual.restPose.torso);
-        resetNode(this.heroVisual.bones.head, this.heroVisual.restPose.head);
-        resetNode(this.heroVisual.bones.leftArm, this.heroVisual.restPose.leftArm);
-        resetNode(this.heroVisual.bones.rightArm, this.heroVisual.restPose.rightArm);
-        resetNode(this.heroVisual.bones.leftThigh, this.heroVisual.restPose.leftThigh);
-        resetNode(this.heroVisual.bones.rightThigh, this.heroVisual.restPose.rightThigh);
-        resetNode(this.heroVisual.bones.leftShin, this.heroVisual.restPose.leftShin);
-        resetNode(this.heroVisual.bones.rightShin, this.heroVisual.restPose.rightShin);
-        resetNode(this.heroVisual.bones.leftFoot, this.heroVisual.restPose.leftFoot);
-        resetNode(this.heroVisual.bones.rightFoot, this.heroVisual.restPose.rightFoot);
-        this.heroVisual.torsoRigNodes.forEach((node, index) => {
-            resetNode(node, this.heroVisual!.torsoRigRestPose[index] ?? null);
-        });
-
-        if (idleAction) {
-            if (desiredLocomotion === 'idle') {
-                if (!idleAction.isRunning()) {
-                    idleAction.reset();
-                    idleAction.play();
-                }
-                idleAction.enabled = true;
-                idleAction.setEffectiveWeight(1);
-                idleAction.timeScale = 1;
-            } else {
-                idleAction.setEffectiveWeight(0);
-                idleAction.stop();
-                idleAction.enabled = false;
-            }
-        }
-
-        if (walkAction) {
-            if (desiredLocomotion === 'walk') {
-                if (!walkAction.isRunning()) {
-                    walkAction.reset();
-                    walkAction.play();
-                }
-                walkAction.enabled = true;
-                walkAction.setEffectiveWeight(Math.max(0.72, locomotionAmount));
-                walkAction.timeScale = THREE.MathUtils.lerp(0.82, 1.25, locomotionAmount);
-            } else {
-                walkAction.setEffectiveWeight(0);
-                walkAction.stop();
-                walkAction.enabled = false;
-                walkAction.timeScale = 1;
-            }
-        }
-
-        this.heroVisual.locomotionState = desiredLocomotion;
-
-        this.heroVisual.mixer.update(dt);
-
-        const strideDirection = this.throttle < -0.05 ? -1 : 1;
-        if (locomotionAmount > 0.05) {
-            this.heroStrideCycle += dt * (3.1 + locomotionAmount * 5.2) * strideDirection;
-        }
-
-        const torsoTwist = angleDiff(this.legYaw, this.torsoYaw);
-        const gaitPhase = this.heroStrideCycle;
-        const bob = Math.abs(Math.sin(gaitPhase * 2)) * 0.08 * (0.35 + locomotionAmount * 0.65);
-        this.heroVisual.root.rotation.set(0, Math.PI - this.legYaw, 0);
-        this.heroVisual.root.position.set(0, 0, 0);
-        const torsoRigNodes = this.heroVisual.torsoRigNodes;
-
-        const pelvis = this.heroVisual.bones.pelvis;
-        const pelvisRest = this.heroVisual.restPose.pelvis;
-        if (pelvis && pelvisRest) {
-            pelvis.position.y += bob;
-        }
-
-        const torso = this.heroVisual.bones.torso;
-        const torsoRest = this.heroVisual.restPose.torso;
-        if (torsoRigNodes.length > 0) {
-            offsetRigNodes(torsoRigNodes, _heroRigOffset.set(0, bob * 0.65, 0));
-            rotateRigNodesAroundPivot(torsoRigNodes, this.heroVisual.torsoPivot, _heroUpAxis, -torsoTwist);
-        } else if (torso && torsoRest) {
-            torso.position.y += bob * 0.65;
-            _heroTwistQuat.setFromAxisAngle(_heroUpAxis, -torsoTwist);
-            torso.quaternion.multiply(_heroTwistQuat);
-        }
-
-        if (torso && torsoRest) {
-            torso.position.z += this.weaponRecoil.torsoMount * 0.18;
-            _heroArmQuat.setFromAxisAngle(_heroPitchAxis, -this.weaponRecoil.torsoMount * 0.08);
-            torso.quaternion.multiply(_heroArmQuat);
-        }
-
-        const leftArm = this.heroVisual.bones.leftArm;
-        const leftArmRest = this.heroVisual.restPose.leftArm;
-        if (leftArm && leftArmRest) {
-            _heroArmQuat.setFromAxisAngle(_heroPitchAxis, -this.weaponRecoil.leftArmMount * 0.55);
-            leftArm.quaternion.multiply(_heroArmQuat);
-        }
-
-        const rightArm = this.heroVisual.bones.rightArm;
-        const rightArmRest = this.heroVisual.restPose.rightArm;
-        if (rightArm && rightArmRest) {
-            _heroArmQuat.setFromAxisAngle(_heroPitchAxis, -this.weaponRecoil.rightArmMount * 0.55);
-            rightArm.quaternion.multiply(_heroArmQuat);
-        }
-
-        const applyLegGait = (
-            thigh: THREE.Object3D | null,
-            shin: THREE.Object3D | null,
-            foot: THREE.Object3D | null,
-            footRest: { position: THREE.Vector3; quaternion: THREE.Quaternion } | null,
-            phase: number
-        ) => {
-            if (!thigh || !shin || !foot || !footRest) return;
-
-            const swing = Math.sin(phase) * locomotionAmount;
-            const kneeBend = Math.max(0, -Math.sin(phase)) * locomotionAmount;
-            const footLift = Math.max(0, Math.cos(phase)) * locomotionAmount;
-
-            _heroLegQuat.setFromAxisAngle(_heroPitchAxis, swing * 0.58);
-            thigh.quaternion.multiply(_heroLegQuat);
-
-            _heroLegQuat.setFromAxisAngle(_heroPitchAxis, kneeBend * 0.82);
-            shin.quaternion.multiply(_heroLegQuat);
-
-            _heroLegQuat.setFromAxisAngle(_heroPitchAxis, -swing * 0.26 - footLift * 0.18);
-            foot.quaternion.multiply(_heroLegQuat);
-            foot.position.y += footLift * 0.085;
-            foot.position.z += Math.max(0, swing) * 0.04;
-        };
-
-        applyLegGait(
-            this.heroVisual.bones.leftThigh,
-            this.heroVisual.bones.leftShin,
-            this.heroVisual.bones.leftFoot,
-            this.heroVisual.restPose.leftFoot,
-            gaitPhase
-        );
-        applyLegGait(
-            this.heroVisual.bones.rightThigh,
-            this.heroVisual.bones.rightShin,
-            this.heroVisual.bones.rightFoot,
-            this.heroVisual.restPose.rightFoot,
-            gaitPhase + Math.PI
-        );
-
-        this.heroVisual.root.updateMatrixWorld(true);
+        this.heroStrideCycle = syncHeroVisualRuntime({
+            heroVisual: this.heroVisual,
+            throttle: this.throttle,
+            currentSpeed: this.currentSpeed,
+            topSpeed: this.chassis.topSpeed,
+            legYaw: this.legYaw,
+            torsoYaw: this.torsoYaw,
+            weaponRecoil: this.weaponRecoil,
+            heroStrideCycle: this.heroStrideCycle
+        }, dt);
     }
 
     vent(particles: ParticleManager) {
@@ -829,24 +653,18 @@ export class GolemController {
             };
         }
 
-        this.leftLeg.position.z = Math.sin(this.walkCycle) * 1.5;
-        this.leftLeg.position.y = 1.5 + Math.max(0, Math.sin(this.walkCycle + Math.PI / 2)) * 0.5;
-
-        this.rightLeg.position.z = Math.sin(this.walkCycle + Math.PI) * 1.5;
-        this.rightLeg.position.y = 1.5 + Math.max(0, Math.sin(this.walkCycle - Math.PI / 2)) * 0.5;
-
-        this.leftArm.position.z = Math.sin(this.walkCycle + Math.PI) * 1.0 + this.weaponRecoil.leftArmMount * 0.62;
-        this.rightArm.position.z = Math.sin(this.walkCycle) * 1.0 + this.weaponRecoil.rightArmMount * 0.62;
-        this.leftArm.rotation.x = -this.weaponRecoil.leftArmMount * 0.24;
-        this.rightArm.rotation.x = -this.weaponRecoil.rightArmMount * 0.24;
-
-        this.torso.position.y = 5.5 + Math.abs(Math.sin(this.walkCycle * 2)) * 0.2;
-        this.torso.position.z = this.weaponRecoil.torsoMount * 0.46;
-        this.torso.rotation.x = -this.weaponRecoil.torsoMount * 0.14;
-        this.pelvis.position.y = 2.0 + Math.abs(Math.sin(this.walkCycle * 2)) * 0.2;
+        applyProceduralMechPose({
+            walkCycle: this.walkCycle,
+            weaponRecoil: this.weaponRecoil,
+            leftLeg: this.leftLeg,
+            rightLeg: this.rightLeg,
+            leftArm: this.leftArm,
+            rightArm: this.rightArm,
+            torso: this.torso,
+            pelvis: this.pelvis,
+            boiler: this.boiler
+        });
         this.syncHeroVisual(dt);
-
-        this.boiler.scale.set(1 + Math.sin(Date.now() * 0.002) * 0.02, 1, 1 + Math.sin(Date.now() * 0.002) * 0.02);
 
         return events;
     }
