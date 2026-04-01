@@ -56,11 +56,11 @@ import {
     getViewAnchor as getViewAnchorRuntime,
     syncHeroVisual as syncHeroVisualRuntime
 } from '../mechs/runtime/MechVisualDriver';
+import { applyRemoteMechReplication } from '../mechs/runtime/RemoteMechReplicationRuntime';
 import type { ChassisDefinition, ChassisId, LoadoutDefinition, LoadoutId } from '../mechs/types';
 
 const _moveDir = new THREE.Vector3();
 const _currentVel = new THREE.Vector3();
-const _netPos = new THREE.Vector3();
 const _cameraAnchor = new THREE.Vector3();
 const _footOffset = new THREE.Vector3();
 const _bodyForward = new THREE.Vector3();
@@ -581,21 +581,18 @@ export class GolemController {
                 z: _moveDir.z * this.mass * finalResponse * dt
             }, true);
         } else {
-            const pos = this.body.translation();
-            _netPos.set(pos.x, pos.y, pos.z);
-            const dist = this.targetPos.distanceTo(_netPos);
-            if (dist > 5) {
-                this.body.setNextKinematicTranslation(this.targetPos);
-            } else {
-                this.body.setNextKinematicTranslation({
-                    x: THREE.MathUtils.lerp(pos.x, this.targetPos.x, 10 * dt),
-                    y: THREE.MathUtils.lerp(pos.y, this.targetPos.y, 10 * dt),
-                    z: THREE.MathUtils.lerp(pos.z, this.targetPos.z, 10 * dt)
-                });
-            }
+            const replicatedState = applyRemoteMechReplication({
+                body: this.body,
+                targetPos: this.targetPos,
+                targetLegYaw: this.targetLegYaw,
+                targetTorsoYaw: this.targetTorsoYaw,
+                legYaw: this.legYaw,
+                torsoYaw: this.torsoYaw,
+                weightClass: this.chassis.weightClass
+            }, dt);
 
-            this.legYaw = moveTowardsAngle(this.legYaw, this.targetLegYaw, ROTATION.legsTurnRate[this.chassis.weightClass] * dt * 4);
-            this.torsoYaw = moveTowardsAngle(this.torsoYaw, this.targetTorsoYaw, ROTATION.torsoTurnRate[this.chassis.weightClass] * dt * 5);
+            this.legYaw = replicatedState.legYaw;
+            this.torsoYaw = replicatedState.torsoYaw;
         }
 
         const pos = this.body.translation();
