@@ -189,7 +189,7 @@ function getMountIds(chassisId: ChassisId): WeaponMountId[] {
     return CHASSIS_DEFINITIONS[chassisId].mountLayout.map((slot) => slot.mountId);
 }
 
-function validateLoadout(loadout: LoadoutDefinition) {
+export function validateLoadoutDefinition(loadout: LoadoutDefinition) {
     const chassis = CHASSIS_DEFINITIONS[loadout.chassisId];
     if (!chassis) {
         throw new Error(`Unknown chassis "${loadout.chassisId}" for loadout "${loadout.id}".`);
@@ -220,7 +220,7 @@ function validateLoadout(loadout: LoadoutDefinition) {
 }
 
 for (const loadout of Object.values(LOADOUT_DEFINITIONS)) {
-    validateLoadout(loadout);
+    validateLoadoutDefinition(loadout);
 }
 
 export function getChassisDefinition(chassisId: ChassisId) {

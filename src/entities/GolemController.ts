@@ -18,10 +18,29 @@ import {
 } from '../mechs/definitions';
 import {
     cloneSectionState,
-    GOLEM_SECTION_ORDER,
     type GolemSection,
     type GolemSectionState
 } from '../mechs/sections';
+import type { MechHeatState } from '../mechs/runtimeTypes';
+import {
+    applySectionDamageState,
+    applySectionStatePatch,
+    computeSectionTotals,
+    resetSectionState
+} from '../mechs/rules/sectionRules';
+import {
+    spendSteamState,
+    tickSteamState,
+    triggerOverheatState
+} from '../mechs/rules/steamRules';
+import {
+    buildMountAvailabilityPatch,
+    buildWeaponCooldownPatch,
+    buildWeaponFireCooldownPatch,
+    buildWeaponStatusViews,
+    canAnyWeaponFire,
+    evaluateReadyWeaponMounts
+} from '../mechs/rules/weaponRules';
 import type { ChassisDefinition, ChassisId, LoadoutDefinition, LoadoutId } from '../mechs/types';
 
 const _moveDir = new THREE.Vector3();
@@ -219,36 +238,56 @@ export class GolemController {
         this.applySectionVisuals();
     }
 
+    getHeatState(): MechHeatState {
+        return {
+            steam: this.steam,
+            maxSteam: this.maxSteam,
+            isOverheated: this.isOverheated,
+            overheatTimer: this.overheatTimer
+        };
+    }
+
+    applyHeatState(nextState: MechHeatState) {
+        this.steam = nextState.steam;
+        this.maxSteam = nextState.maxSteam;
+        this.isOverheated = nextState.isOverheated;
+        this.overheatTimer = nextState.overheatTimer;
+    }
+
+    applyWeaponCooldownPatch(patch: Partial<Record<WeaponMountId, number>>) {
+        for (const mountId of this.weaponMountOrder) {
+            const nextCooldown = patch[mountId];
+            if (typeof nextCooldown === 'number') {
+                this.weaponMounts[mountId].cooldownRemaining = nextCooldown;
+            }
+        }
+    }
+
+    applyWeaponEnabledPatch(patch: Partial<Record<WeaponMountId, boolean>>) {
+        for (const mountId of this.weaponMountOrder) {
+            const nextEnabled = patch[mountId];
+            if (typeof nextEnabled === 'boolean') {
+                this.weaponMounts[mountId].enabled = nextEnabled;
+            }
+        }
+    }
+
     triggerOverheat(duration = GOLEM.overheatDuration) {
-        this.isOverheated = true;
-        this.overheatTimer = Math.max(this.overheatTimer, duration);
+        this.applyHeatState(triggerOverheatState(this.getHeatState(), duration));
     }
 
     spendSteam(cost: number) {
-        if (this.isOverheated) return false;
-        if (cost <= 0) return true;
-        if (this.steam < cost) {
-            this.triggerOverheat();
-            return false;
-        }
-        this.steam -= cost;
-        if (this.steam <= GOLEM.overheatThreshold) {
-            this.triggerOverheat();
-        }
-        return true;
+        const result = spendSteamState(this.getHeatState(), cost);
+        this.applyHeatState(result.nextState);
+        return result.success;
     }
 
     updateWeaponCooldowns(dt: number) {
-        for (const mountId of this.weaponMountOrder) {
-            this.weaponMounts[mountId].cooldownRemaining = Math.max(0, this.weaponMounts[mountId].cooldownRemaining - dt);
-        }
+        this.applyWeaponCooldownPatch(buildWeaponCooldownPatch(this.weaponMounts, this.weaponMountOrder, dt));
     }
 
     syncMountAvailabilityFromSections() {
-        for (const mountId of this.weaponMountOrder) {
-            const mount = this.weaponMounts[mountId];
-            mount.enabled = this.sections[mount.section] > 0;
-        }
+        this.applyWeaponEnabledPatch(buildMountAvailabilityPatch(this.weaponMounts, this.weaponMountOrder, this.sections));
     }
 
     flashDamage(duration = 0.16) {
@@ -256,24 +295,20 @@ export class GolemController {
     }
 
     syncAggregateHp() {
-        this.maxHp = GOLEM_SECTION_ORDER.reduce((sum, section) => sum + this.maxSections[section], 0);
-        this.hp = GOLEM_SECTION_ORDER.reduce((sum, section) => sum + this.sections[section], 0);
+        const totals = computeSectionTotals(this.sections, this.maxSections);
+        this.hp = totals.hp;
+        this.maxHp = totals.maxHp;
     }
 
     setSectionState(nextSections: Partial<GolemSectionState>) {
-        for (const section of GOLEM_SECTION_ORDER) {
-            const nextValue = nextSections[section];
-            if (typeof nextValue === 'number') {
-                this.sections[section] = nextValue;
-            }
-        }
+        this.sections = applySectionStatePatch(this.sections, nextSections);
         this.applySectionVisuals();
         this.syncMountAvailabilityFromSections();
         this.syncAggregateHp();
     }
 
     resetSections() {
-        this.sections = cloneSectionState(this.maxSections);
+        this.sections = resetSectionState(this.maxSections);
         for (const mountId of this.weaponMountOrder) {
             this.weaponMounts[mountId].cooldownRemaining = 0;
             this.weaponRecoil[mountId] = 0;
@@ -293,28 +328,24 @@ export class GolemController {
     }
 
     applySectionDamage(section: GolemSection, damage: number) {
-        const current = this.sections[section];
-        const remaining = Math.max(0, current - damage);
-        this.sections[section] = remaining;
+        const result = applySectionDamageState(this.sections, this.maxSections, section, damage);
+        this.sections = result.nextSections;
+        this.hp = result.hp;
+        this.maxHp = result.maxHp;
         this.flashDamage();
         this.applySectionVisuals();
         this.syncMountAvailabilityFromSections();
-        this.syncAggregateHp();
         return {
-            section,
-            remaining,
-            destroyed: current > 0 && remaining <= 0,
-            lethal: (section === 'head' || section === 'centerTorso') && remaining <= 0,
-            totalHp: this.hp
+            section: result.section,
+            remaining: result.remaining,
+            destroyed: result.destroyed,
+            lethal: result.lethal,
+            totalHp: result.hp
         };
     }
 
     canFire() {
-        return this.weaponMountOrder.some((mountId) => {
-            const mount = this.weaponMounts[mountId];
-            const definition = getWeaponDefinition(mount.weaponId);
-            return mount.enabled && mount.cooldownRemaining <= 0 && !this.isOverheated && this.steam >= definition.heatCost;
-        });
+        return canAnyWeaponFire(this.weaponMounts, this.weaponMountOrder, this.getHeatState());
     }
 
     tryAction(cost: number) {
@@ -322,31 +353,7 @@ export class GolemController {
     }
 
     getWeaponStatus(): WeaponStatusView[] {
-        return this.weaponMountOrder.map((mountId) => {
-            const mount = this.weaponMounts[mountId];
-            const definition = getWeaponDefinition(mount.weaponId);
-
-            let state: WeaponStatusView['state'] = 'ready';
-            if (!mount.enabled) {
-                state = 'offline';
-            } else if (mount.cooldownRemaining > 0) {
-                state = 'recycle';
-            } else if (this.isOverheated || this.steam < definition.heatCost) {
-                state = 'heat';
-            }
-
-            return {
-                mountId: mount.mountId,
-                weaponId: mount.weaponId,
-                group: mount.group,
-                section: mount.section,
-                nameKey: definition.nameKey,
-                shortKey: definition.shortKey,
-                state,
-                cooldownRemaining: mount.cooldownRemaining,
-                heatCost: definition.heatCost
-            };
-        });
+        return buildWeaponStatusViews(this.weaponMounts, this.weaponMountOrder, this.getHeatState());
     }
 
     getMountRoot(mountId: WeaponMountId) {
@@ -415,30 +422,29 @@ export class GolemController {
     }
 
     gatherReadyMounts(groupId?: WeaponGroupId) {
-        const mounts = this.weaponMountOrder
-            .map((mountId) => this.weaponMounts[mountId])
-            .filter((mount) => groupId === undefined || mount.group === groupId)
-            .filter((mount) => mount.enabled && mount.cooldownRemaining <= 0);
+        const evaluation = evaluateReadyWeaponMounts(
+            this.weaponMounts,
+            this.weaponMountOrder,
+            this.getHeatState(),
+            groupId
+        );
 
-        if (mounts.length === 0 || this.isOverheated) {
+        if (evaluation.blockedReason === 'noReadyMounts' || evaluation.blockedReason === 'overheated') {
             return [];
         }
 
-        const totalHeat = mounts.reduce((sum, mount) => sum + getWeaponDefinition(mount.weaponId).heatCost, 0);
-        if (this.steam < totalHeat) {
+        if (evaluation.blockedReason === 'insufficientSteam') {
             this.triggerOverheat();
             return [];
         }
 
-        if (!this.spendSteam(totalHeat)) {
+        if (!this.spendSteam(evaluation.totalHeat)) {
             return [];
         }
 
-        for (const mount of mounts) {
-            mount.cooldownRemaining = getWeaponDefinition(mount.weaponId).cooldown;
-        }
+        this.applyWeaponCooldownPatch(buildWeaponFireCooldownPatch(this.weaponMounts, evaluation.mountIds));
 
-        return mounts.map((mount) => this.buildWeaponFireRequest(mount));
+        return evaluation.mountIds.map((mountId) => this.buildWeaponFireRequest(this.weaponMounts[mountId]));
     }
 
     tryFireGroup(groupId: WeaponGroupId) {
@@ -705,15 +711,7 @@ export class GolemController {
         this.runeMaterial.emissiveIntensity = 2 + flashIntensity * 0.6;
         this.boilerMaterial.emissiveIntensity = 1.5 + flashIntensity * 0.35;
 
-        if (this.isOverheated) {
-            this.overheatTimer -= dt;
-            if (this.overheatTimer <= 0) {
-                this.isOverheated = false;
-                this.steam = 20;
-            }
-        } else {
-            this.steam = Math.min(this.maxSteam, this.steam + GOLEM.steamRegen * dt);
-        }
+        this.applyHeatState(tickSteamState(this.getHeatState(), dt));
 
         if (this.isLocal) {
             const torsoStep = ROTATION.torsoTurnRate[this.chassis.weightClass] * dt;

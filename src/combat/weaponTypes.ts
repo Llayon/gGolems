@@ -1,4 +1,4 @@
-import type { TranslationKey } from '../i18n';
+import type { TranslationKey } from '../i18n/types';
 import type { GolemSection } from '../mechs/sections';
 
 export type WeaponId = 'rune_bolt' | 'arc_emitter' | 'steam_cannon';

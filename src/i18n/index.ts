@@ -1,10 +1,10 @@
 import en from './en';
 import ru from './ru';
-import type { Locale, MessageDescriptor, TranslationDict, TranslationParams } from './types';
+import type { Locale, MessageDescriptor, TranslationDict, TranslationKey, TranslationParams } from './types';
 
 export const LOCALE_STORAGE_KEY = 'gGolems.locale';
 
-export type TranslationKey = keyof typeof en;
+export type { TranslationKey } from './types';
 export type Translator = (key: TranslationKey, params?: TranslationParams) => string;
 export type TranslationDescriptor = MessageDescriptor<TranslationKey>;
 

@@ -1,0 +1,29 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "./.rule-fixtures",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "allowImportingTsExtensions": false,
+    "declaration": false,
+    "sourceMap": false,
+    "jsx": "react-jsx"
+  },
+  "include": [
+    "src/mechs/rules/runRuleFixtures.ts",
+    "src/mechs/rules/ruleFixtures.ts",
+    "src/mechs/rules/sectionRules.ts",
+    "src/mechs/rules/steamRules.ts",
+    "src/mechs/rules/weaponRules.ts",
+    "src/mechs/runtimeTypes.ts",
+    "src/mechs/definitions.ts",
+    "src/mechs/sections.ts",
+    "src/mechs/types.ts",
+    "src/combat/weapons.ts",
+    "src/combat/weaponTypes.ts",
+    "src/i18n/types.ts",
+    "src/utils/constants.ts"
+  ],
+  "exclude": []
+}
