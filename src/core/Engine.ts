@@ -36,13 +36,8 @@ import {
 } from './combat/ProjectileCombatFxRuntime';
 import { playWorldPropFx as playWorldPropFxRuntime } from './world/WorldFxRuntime';
 import {
-    createHitConfirmRuntimeContext,
-    createNetworkDataDispatchContext,
-    createPlayerHitRuntimeContext,
-    createProjectileCollisionRuntimeContext,
-    createProjectileImpactFxContext,
-    createRemoteFireRuntimeContext,
-    createWeaponFireRuntimeContext
+    createEngineRuntimeAdapters,
+    type EngineRuntimeAdapters
 } from './EngineRuntimeContexts';
 import { buildClientInputPacket, readClientInputPacket } from './network/clientInputPacket';
 import {
@@ -147,6 +142,7 @@ export class Game {
     animationFrameId = 0;
     networkTickTimer = 0;
     boilerParticleTimer = 0;
+    runtimeAdapters!: EngineRuntimeAdapters;
     onCanvasClick = () => {
         this.canvas.requestPointerLock();
         this.sounds.init();
@@ -196,6 +192,64 @@ export class Game {
         if (sessionMode !== 'client') {
             this.syncTeamBotRoster();
         }
+
+        this.runtimeAdapters = createEngineRuntimeAdapters({
+            getSessionMode: () => this.sessionMode,
+            getMyId: () => this.network.myId,
+            isHost: () => this.network.isHost,
+            getLocalUnitId: () => this.getLocalUnitId(),
+            setHitConfirmState: (next) => {
+                this.hitConfirmTimer = next.hitConfirmTimer;
+                this.hitTargetHp = next.hitTargetHp;
+                this.hitTargetMaxHp = next.hitTargetMaxHp;
+            },
+            sendHitConfirm: (ownerId, payload) => {
+                this.network.sendTo(ownerId, payload);
+            },
+            authoritativeStateContext: () => this.getAuthoritativeStateRuntimeContext(),
+            hostClientInputContext: () => this.getHostClientInputRuntimeContext(),
+            respawnMessageContext: () => this.getRespawnMessageRuntimeContext(),
+            restartMatchRequest: () => this.restartMatch(),
+            restartMatchContext: () => ({
+                setGameMode: (mode: GameMode) => this.setGameMode(mode),
+                restartMatch: (fromNetwork = false) => this.restartMatch(fromNetwork)
+            }),
+            forwardFireMessage: (senderId, message) => {
+                this.network.connections.forEach((conn, peerId) => {
+                    if (peerId !== senderId) conn.send(message);
+                });
+            },
+            projectiles: this.projectiles,
+            remotePlayers: this.remotePlayers,
+            particles: this.particles,
+            sounds: this.sounds,
+            golem: this.golem,
+            mechCamera: this.mechCamera,
+            camera: this.renderer.camera,
+            broadcastFire: this.sessionMode === 'solo'
+                ? undefined
+                : (ownerId, shots) => {
+                    this.network.broadcast({
+                        type: 'fire',
+                        ownerId,
+                        shots
+                    });
+                },
+            bots: this.bots,
+            localPlayer: this.golem,
+            getGameMode: () => this.gameMode,
+            getTeamScores: () => this.teamScores,
+            getUnitTeam: (id) => this.getUnitTeam(id),
+            queueLocalRespawn: () => this.queueLocalRespawn(),
+            queueRemoteRespawn: (id) => this.queueRemoteRespawn(id),
+            scheduleRespawnWave: (team) => this.scheduleRespawnWave(team),
+            collisionMeshes: () => this.world.getCollisionMeshes(),
+            propManager: this.world.propManager,
+            decals: this.decals,
+            getLocalRespawnAlive: () => this.localRespawnState.alive,
+            getRemotePlayerStates: () => this.remotePlayerStates,
+            getListenerPosition: () => this.golem.body.translation()
+        });
 
         this.canvas.addEventListener('click', this.onCanvasClick);
 
@@ -269,124 +323,6 @@ export class Game {
             mechCamera: this.mechCamera,
             setGolemPresence: (golem: GolemController, alive: boolean) => this.setGolemPresence(golem, alive)
         };
-    }
-
-    getHitConfirmRuntimeContext() {
-        return createHitConfirmRuntimeContext({
-            sessionMode: this.sessionMode,
-            myId: this.network.myId,
-            getLocalUnitId: () => this.getLocalUnitId(),
-            setHitConfirmState: (next) => {
-                this.hitConfirmTimer = next.hitConfirmTimer;
-                this.hitTargetHp = next.hitTargetHp;
-                this.hitTargetMaxHp = next.hitTargetMaxHp;
-            },
-            sendHitConfirm: (ownerId, payload) => {
-                this.network.sendTo(ownerId, payload);
-            }
-        });
-    }
-
-    getRemoteFireRuntimeContext() {
-        return createRemoteFireRuntimeContext({
-            myId: this.network.myId,
-            isHost: this.network.isHost,
-            projectiles: this.projectiles,
-            remotePlayers: this.remotePlayers,
-            playWeaponVolleyFx: (shots) => playWeaponVolleyFxRuntime({
-                particles: this.particles,
-                sounds: this.sounds
-            }, shots),
-            forwardFireMessage: (senderId, message) => {
-                this.network.connections.forEach((conn, peerId) => {
-                    if (peerId !== senderId) conn.send(message);
-                });
-            }
-        });
-    }
-
-    getNetworkDataDispatchRuntimeContext() {
-        return createNetworkDataDispatchContext({
-            isHost: this.network.isHost,
-            authoritativeStateContext: this.getAuthoritativeStateRuntimeContext(),
-            hostClientInputContext: this.getHostClientInputRuntimeContext(),
-            restartMatchRequest: () => this.restartMatch(),
-            respawnMessageContext: this.getRespawnMessageRuntimeContext(),
-            restartMatchContext: {
-                setGameMode: (mode: GameMode) => this.setGameMode(mode),
-                restartMatch: (fromNetwork = false) => this.restartMatch(fromNetwork)
-            },
-            remoteFireContext: this.getRemoteFireRuntimeContext(),
-            registerHitConfirm: (targetHp, targetMaxHp) => this.getHitConfirmRuntimeContext().registerHitConfirm(targetHp, targetMaxHp)
-        });
-    }
-
-    getWeaponFireRuntimeContext() {
-        return createWeaponFireRuntimeContext({
-            golem: this.golem,
-            mechCamera: this.mechCamera,
-            camera: this.renderer.camera,
-            projectiles: this.projectiles,
-            playWeaponVolleyFx: (shots) => playWeaponVolleyFxRuntime({
-                particles: this.particles,
-                sounds: this.sounds
-            }, shots),
-            broadcastFire: this.sessionMode === 'solo'
-                ? undefined
-                : (ownerId, shots) => {
-                    this.network.broadcast({
-                        type: 'fire',
-                        ownerId,
-                        shots
-                    });
-                }
-        });
-    }
-
-    getPlayerHitRuntimeContext(localPlayerId: string) {
-        return createPlayerHitRuntimeContext({
-            bots: this.bots,
-            remotePlayers: this.remotePlayers,
-            localPlayer: this.golem,
-            mechCamera: this.mechCamera,
-            gameMode: this.gameMode,
-            teamScores: this.teamScores,
-            localPlayerId,
-            getUnitTeam: (id) => this.getUnitTeam(id),
-            queueLocalRespawn: () => this.queueLocalRespawn(),
-            queueRemoteRespawn: (id) => this.queueRemoteRespawn(id),
-            scheduleRespawnWave: (team) => this.scheduleRespawnWave(team),
-            hitConfirmContext: this.getHitConfirmRuntimeContext()
-        });
-    }
-
-    getProjectileCollisionRuntimeContext(authorityMode: boolean, localPlayerId: string) {
-        return createProjectileCollisionRuntimeContext({
-            projectiles: this.projectiles,
-            bots: this.bots,
-            remotePlayers: this.remotePlayers,
-            localPlayer: this.golem,
-            localPlayerId,
-            authorityMode,
-            collisionMeshes: this.world.getCollisionMeshes(),
-            propManager: this.world.propManager,
-            decals: this.decals,
-            getUnitTeam: (unitId) => this.getUnitTeam(unitId),
-            isTargetAlive: (targetId) => targetId === localPlayerId
-                ? this.localRespawnState.alive
-                : (this.remotePlayerStates.get(targetId)?.alive ?? true),
-            playerHitContext: this.getPlayerHitRuntimeContext(localPlayerId)
-        });
-    }
-
-    getProjectileImpactFxRuntimeContext() {
-        return createProjectileImpactFxContext({
-            particles: this.particles,
-            sounds: this.sounds,
-            mechCamera: this.mechCamera,
-            projectiles: this.projectiles,
-            listenerPosition: this.golem.body.translation()
-        });
     }
 
     getMatchRestartContext() {
@@ -728,7 +664,7 @@ export class Game {
 
         this.network.onData = (id, data) => {
             const inputPacket = this.network.isHost ? readClientInputPacket(data) : null;
-            dispatchNetworkDataMessage(this.getNetworkDataDispatchRuntimeContext(), id, data, inputPacket);
+            dispatchNetworkDataMessage(this.runtimeAdapters.networkDataDispatch(), id, data, inputPacket);
         };
     }
 
@@ -889,7 +825,7 @@ export class Game {
 
         if (canControlLocal) {
             const localOwnerId = this.getLocalUnitId();
-            const weaponFireContext = this.getWeaponFireRuntimeContext();
+            const weaponFireContext = this.runtimeAdapters.weaponFire();
             if (fireGroup1) {
                 fireWeaponRequestsRuntime(weaponFireContext, localOwnerId, this.golem.tryFireGroup(1), _aimPoint);
             }
@@ -932,8 +868,8 @@ export class Game {
 
         if (!matchEnded) {
             const localPlayerId = this.getLocalUnitId();
-            updateProjectileCombat(this.getProjectileCollisionRuntimeContext(authorityMode, localPlayerId));
-            playProjectileImpactFxRuntime(this.getProjectileImpactFxRuntimeContext());
+            updateProjectileCombat(this.runtimeAdapters.projectileCollision(authorityMode, localPlayerId));
+            playProjectileImpactFxRuntime(this.runtimeAdapters.projectileImpactFx());
 
             playWorldPropFxRuntime({
                 propManager: this.world.propManager,

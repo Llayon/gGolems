@@ -18,6 +18,7 @@ import {
 } from './combat/ProjectileCombatRuntime';
 import { handlePlayerHit as handlePlayerHitRuntime, type PlayerHitRuntimeContext } from './combat/PlayerHitRuntime';
 import type { ProjectileImpactFxContext } from './combat/ProjectileCombatFxRuntime';
+import { playWeaponVolleyFx as playWeaponVolleyFxRuntime } from './combat/ProjectileCombatFxRuntime';
 import {
     applyAuthoritativeStateMessage,
     applyClientInputToRemotePlayer,
@@ -33,6 +34,8 @@ import {
     type RespawnMessageRuntimeContext,
     type RestartMatchRuntimeContext
 } from './network/NetworkMessageRuntime';
+import type { TeamScoreState } from '../gameplay/types';
+import type { PlayerRespawnState, RemotePlayerState, RespawnSessionMode } from './respawn/types';
 
 export type HitConfirmRuntimeContextDeps = {
     sessionMode: HitConfirmRuntimeContext['sessionMode'];
@@ -240,5 +243,133 @@ export function createProjectileImpactFxContext(
         mechCamera: deps.mechCamera,
         projectiles: deps.projectiles,
         listenerPosition: deps.listenerPosition
+    };
+}
+
+export type EngineRuntimeAdapters = {
+    networkDataDispatch(): NetworkDataDispatchContext;
+    weaponFire(): WeaponFireRuntimeContext;
+    projectileCollision(authorityMode: boolean, localPlayerId: string): ProjectileCollisionRuntimeContext;
+    projectileImpactFx(): ProjectileImpactFxContext;
+};
+
+export type EngineRuntimeAdaptersDeps = {
+    getSessionMode: () => RespawnSessionMode;
+    getMyId: () => string;
+    isHost: () => boolean;
+    getLocalUnitId: () => string;
+    setHitConfirmState: (next: HitConfirmState) => void;
+    sendHitConfirm: HitConfirmRuntimeContext['sendHitConfirm'];
+    authoritativeStateContext: () => AuthoritativeStateRuntimeContext;
+    hostClientInputContext: () => HostClientInputRuntimeContext;
+    respawnMessageContext: () => RespawnMessageRuntimeContext;
+    restartMatchRequest: () => void;
+    restartMatchContext: () => RestartMatchRuntimeContext;
+    forwardFireMessage: (senderId: string, data: RemoteFireMessageLike) => void;
+    projectiles: ProjectileManager;
+    remotePlayers: Map<string, GolemController>;
+    particles: ParticleManager;
+    sounds: AudioManager;
+    golem: WeaponFireRuntimeContext['golem'];
+    mechCamera: WeaponFireRuntimeContext['mechCamera'];
+    camera: Camera;
+    broadcastFire?: WeaponFireRuntimeContext['broadcastFire'];
+    bots: PlayerHitRuntimeContext['bots'];
+    localPlayer: PlayerHitRuntimeContext['localPlayer'];
+    getGameMode: () => GameMode;
+    getTeamScores: () => TeamScoreState;
+    getUnitTeam: PlayerHitRuntimeContext['getUnitTeam'];
+    queueLocalRespawn: PlayerHitRuntimeContext['queueLocalRespawn'];
+    queueRemoteRespawn: PlayerHitRuntimeContext['queueRemoteRespawn'];
+    scheduleRespawnWave: PlayerHitRuntimeContext['scheduleRespawnWave'];
+    collisionMeshes: () => ProjectileCollisionRuntimeContext['collisionMeshes'];
+    propManager: ProjectileCollisionRuntimeContext['propManager'];
+    decals: ProjectileCollisionRuntimeContext['decals'];
+    getLocalRespawnAlive: () => PlayerRespawnState['alive'];
+    getRemotePlayerStates: () => Map<string, RemotePlayerState>;
+    getListenerPosition: () => ProjectileImpactFxContext['listenerPosition'];
+};
+
+export function createEngineRuntimeAdapters(
+    deps: EngineRuntimeAdaptersDeps
+): EngineRuntimeAdapters {
+    const getHitConfirmContext = () => createHitConfirmRuntimeContext({
+        sessionMode: deps.getSessionMode(),
+        myId: deps.getMyId(),
+        getLocalUnitId: deps.getLocalUnitId,
+        setHitConfirmState: deps.setHitConfirmState,
+        sendHitConfirm: deps.sendHitConfirm
+    });
+
+    const getRemoteFireContext = () => createRemoteFireRuntimeContext({
+        myId: deps.getMyId(),
+        isHost: deps.isHost(),
+        projectiles: deps.projectiles,
+        remotePlayers: deps.remotePlayers,
+        playWeaponVolleyFx: (shots) => playWeaponVolleyFxRuntime({
+            particles: deps.particles,
+            sounds: deps.sounds
+        }, shots),
+        forwardFireMessage: deps.forwardFireMessage
+    });
+
+    return {
+        networkDataDispatch: () => createNetworkDataDispatchContext({
+            isHost: deps.isHost(),
+            authoritativeStateContext: deps.authoritativeStateContext(),
+            hostClientInputContext: deps.hostClientInputContext(),
+            restartMatchRequest: deps.restartMatchRequest,
+            respawnMessageContext: deps.respawnMessageContext(),
+            restartMatchContext: deps.restartMatchContext(),
+            remoteFireContext: getRemoteFireContext(),
+            registerHitConfirm: (targetHp, targetMaxHp) => getHitConfirmContext().registerHitConfirm(targetHp, targetMaxHp)
+        }),
+        weaponFire: () => createWeaponFireRuntimeContext({
+            golem: deps.golem,
+            mechCamera: deps.mechCamera,
+            camera: deps.camera,
+            projectiles: deps.projectiles,
+            playWeaponVolleyFx: (shots) => playWeaponVolleyFxRuntime({
+                particles: deps.particles,
+                sounds: deps.sounds
+            }, shots),
+            broadcastFire: deps.broadcastFire
+        }),
+        projectileCollision: (authorityMode, localPlayerId) => createProjectileCollisionRuntimeContext({
+            projectiles: deps.projectiles,
+            bots: deps.bots,
+            remotePlayers: deps.remotePlayers,
+            localPlayer: deps.localPlayer,
+            localPlayerId,
+            authorityMode,
+            collisionMeshes: deps.collisionMeshes(),
+            propManager: deps.propManager,
+            decals: deps.decals,
+            getUnitTeam: deps.getUnitTeam,
+            isTargetAlive: (targetId) => targetId === localPlayerId
+                ? deps.getLocalRespawnAlive()
+                : (deps.getRemotePlayerStates().get(targetId)?.alive ?? true),
+            playerHitContext: createPlayerHitRuntimeContext({
+                bots: deps.bots,
+                remotePlayers: deps.remotePlayers,
+                localPlayer: deps.localPlayer,
+                mechCamera: deps.mechCamera,
+                gameMode: deps.getGameMode(),
+                teamScores: deps.getTeamScores(),
+                localPlayerId,
+                getUnitTeam: deps.getUnitTeam,
+                queueLocalRespawn: deps.queueLocalRespawn,
+                queueRemoteRespawn: deps.queueRemoteRespawn,
+                scheduleRespawnWave: deps.scheduleRespawnWave,
+                hitConfirmContext: getHitConfirmContext()
+            })
+        }),
+        projectileImpactFx: () => createProjectileImpactFxContext({
+            particles: deps.particles,
+            sounds: deps.sounds,
+            mechCamera: deps.mechCamera,
+            projectiles: deps.projectiles,
+            listenerPosition: deps.getListenerPosition()
+        })
     };
 }
