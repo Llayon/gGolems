@@ -20,20 +20,13 @@ import {
     type GolemSection,
     type GolemSectionState
 } from '../mechs/sections';
-import type { MechHeatState } from '../mechs/runtimeTypes';
-import {
-    applySectionDamageState,
-    applySectionStatePatch,
-    computeSectionTotals,
-    resetSectionState
-} from '../mechs/rules/sectionRules';
+import type { MechDamageState, MechHeatState, MechWeaponState } from '../mechs/runtimeTypes';
 import {
     spendSteamState,
     tickSteamState,
     triggerOverheatState
 } from '../mechs/rules/steamRules';
 import {
-    buildMountAvailabilityPatch,
     buildWeaponCooldownPatch,
     buildWeaponFireCooldownPatch,
     buildWeaponStatusViews,
@@ -48,6 +41,12 @@ import {
     tickWeaponRecoilState,
     type WeaponRecoilState
 } from '../mechs/runtime/MechWeaponRuntime';
+import {
+    applyMechSectionDamage,
+    applyMechSectionStatePatch,
+    resetMechDamageState,
+    syncMechDamageState
+} from '../mechs/runtime/MechDamageRuntime';
 import {
     applyLocalMechDash,
     updateLocalMechMovement
@@ -196,8 +195,7 @@ export class GolemController {
         colliderDesc.setMass(this.mass);
         physics.createCollider(colliderDesc, this.body);
         this.weaponMounts = weaponRuntimeState.mounts;
-        this.syncMountAvailabilityFromSections();
-        this.syncAggregateHp();
+        this.syncDamageState();
         if (isLocal) {
             void this.initHeroVisual();
         }
@@ -225,6 +223,22 @@ export class GolemController {
         };
     }
 
+    getDamageState(): MechDamageState {
+        return {
+            sections: this.sections,
+            maxSections: this.maxSections,
+            hp: this.hp,
+            maxHp: this.maxHp
+        };
+    }
+
+    applyDamageState(nextState: MechDamageState) {
+        this.sections = nextState.sections;
+        this.maxSections = nextState.maxSections;
+        this.hp = nextState.hp;
+        this.maxHp = nextState.maxHp;
+    }
+
     applyHeatState(nextState: MechHeatState) {
         this.steam = nextState.steam;
         this.maxSteam = nextState.maxSteam;
@@ -239,6 +253,13 @@ export class GolemController {
                 this.weaponMounts[mountId].cooldownRemaining = nextCooldown;
             }
         }
+    }
+
+    getWeaponState(): MechWeaponState {
+        return {
+            weaponMountOrder: this.weaponMountOrder,
+            weaponMounts: this.weaponMounts
+        };
     }
 
     applyWeaponEnabledPatch(patch: Partial<Record<WeaponMountId, boolean>>) {
@@ -264,33 +285,8 @@ export class GolemController {
         this.applyWeaponCooldownPatch(buildWeaponCooldownPatch(this.weaponMounts, this.weaponMountOrder, dt));
     }
 
-    syncMountAvailabilityFromSections() {
-        this.applyWeaponEnabledPatch(buildMountAvailabilityPatch(this.weaponMounts, this.weaponMountOrder, this.sections));
-    }
-
     flashDamage(duration = 0.16) {
         this.damageFlashTimer = Math.max(this.damageFlashTimer, duration);
-    }
-
-    syncAggregateHp() {
-        const totals = computeSectionTotals(this.sections, this.maxSections);
-        this.hp = totals.hp;
-        this.maxHp = totals.maxHp;
-    }
-
-    setSectionState(nextSections: Partial<GolemSectionState>) {
-        this.sections = applySectionStatePatch(this.sections, nextSections);
-        this.applySectionVisuals();
-        this.syncMountAvailabilityFromSections();
-        this.syncAggregateHp();
-    }
-
-    resetSections() {
-        this.sections = resetSectionState(this.maxSections);
-        resetWeaponRuntimeState(this.weaponMounts, this.weaponRecoil, this.weaponMountOrder);
-        this.applySectionVisuals();
-        this.syncMountAvailabilityFromSections();
-        this.syncAggregateHp();
     }
 
     applySectionVisuals() {
@@ -305,14 +301,45 @@ export class GolemController {
         });
     }
 
+    syncDamageState() {
+        const result = syncMechDamageState({
+            damageState: this.getDamageState(),
+            weaponState: this.getWeaponState()
+        });
+        this.applyDamageState(result.nextState);
+        this.applyWeaponEnabledPatch(result.enabledPatch);
+    }
+
+    setSectionState(nextSections: Partial<GolemSectionState>) {
+        const result = applyMechSectionStatePatch({
+            damageState: this.getDamageState(),
+            weaponState: this.getWeaponState()
+        }, nextSections);
+        this.applyDamageState(result.nextState);
+        this.applyWeaponEnabledPatch(result.enabledPatch);
+        this.applySectionVisuals();
+    }
+
+    resetSections() {
+        const result = resetMechDamageState({
+            damageState: this.getDamageState(),
+            weaponState: this.getWeaponState()
+        });
+        this.applyDamageState(result.nextState);
+        resetWeaponRuntimeState(this.weaponMounts, this.weaponRecoil, this.weaponMountOrder);
+        this.applyWeaponEnabledPatch(result.enabledPatch);
+        this.applySectionVisuals();
+    }
+
     applySectionDamage(section: GolemSection, damage: number) {
-        const result = applySectionDamageState(this.sections, this.maxSections, section, damage);
-        this.sections = result.nextSections;
-        this.hp = result.hp;
-        this.maxHp = result.maxHp;
+        const result = applyMechSectionDamage({
+            damageState: this.getDamageState(),
+            weaponState: this.getWeaponState()
+        }, section, damage);
+        this.applyDamageState(result.nextState);
         this.flashDamage();
         this.applySectionVisuals();
-        this.syncMountAvailabilityFromSections();
+        this.applyWeaponEnabledPatch(result.enabledPatch);
         return {
             section: result.section,
             remaining: result.remaining,
