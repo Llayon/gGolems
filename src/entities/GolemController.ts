@@ -6,9 +6,9 @@ import { ParticleManager } from '../fx/ParticleManager';
 import { AudioManager } from '../core/AudioManager';
 import { DecalManager } from '../fx/DecalManager';
 import { MechCamera } from '../camera/MechCamera';
-import { getWeaponDefinition } from '../combat/weapons';
 import type { WeaponFireRequest, WeaponGroupId, WeaponId, WeaponMountId, WeaponMountRuntime, WeaponStatusView } from '../combat/weaponTypes';
 import { createKWIIRuntimeVisual, type KWIIRuntimeVisual } from './KWIIRuntimeAsset';
+import type { GolemControllerOptions, GolemEvents, GolemState } from './GolemControllerTypes';
 import {
     DEFAULT_CHASSIS_ID,
     getChassisDefinition,
@@ -20,33 +20,15 @@ import {
     type GolemSection,
     type GolemSectionState
 } from '../mechs/sections';
-import type { MechDamageState, MechHeatState, MechWeaponState } from '../mechs/runtimeTypes';
 import {
-    spendSteamState,
-    tickSteamState,
-    triggerOverheatState
-} from '../mechs/rules/steamRules';
-import {
-    buildWeaponCooldownPatch,
-    buildWeaponFireCooldownPatch,
-    buildWeaponStatusViews,
-    canAnyWeaponFire,
-    evaluateReadyWeaponMounts
-} from '../mechs/rules/weaponRules';
-import {
-    buildWeaponFireRequests,
     createWeaponMountRuntimeState,
     createWeaponRecoilState,
-    resetWeaponRuntimeState,
+    findWeaponMountId,
+    resolveWeaponMuzzleOrigin,
     tickWeaponRecoilState,
+    triggerWeaponRecoilRuntime,
     type WeaponRecoilState
 } from '../mechs/runtime/MechWeaponRuntime';
-import {
-    applyMechSectionDamage,
-    applyMechSectionStatePatch,
-    resetMechDamageState,
-    syncMechDamageState
-} from '../mechs/runtime/MechDamageRuntime';
 import {
     applyLocalMechDash,
     updateLocalMechMovement
@@ -54,49 +36,33 @@ import {
 import { updateMechCameraAndFootsteps } from '../mechs/runtime/MechCameraFootstepRuntime';
 import {
     applyProceduralMechPose,
-    applyProceduralSectionVisuals,
     syncHeroVisual as syncHeroVisualRuntime
 } from '../mechs/runtime/MechVisualDriver';
 import { applyRemoteMechReplication } from '../mechs/runtime/RemoteMechReplicationRuntime';
-import type { ChassisDefinition, ChassisId, LoadoutDefinition, LoadoutId } from '../mechs/types';
+import type { ChassisDefinition, LoadoutDefinition } from '../mechs/types';
+import {
+    applyMechSectionDamageRuntime,
+    applyMechSectionStateRuntime,
+    buildMechStateSnapshot,
+    buildMechWeaponStatusRuntime,
+    canMechFireRuntime,
+    gatherReadyWeaponMountsRuntime,
+    resetMechDamageAndWeaponsRuntime,
+    spendMechSteamRuntime,
+    syncMechDamageRuntime,
+    syncMechSectionVisualsRuntime,
+    tickMechHeatStateRuntime,
+    tickMechWeaponCooldownsRuntime,
+    triggerMechOverheatRuntime
+} from '../mechs/runtime/MechStateRuntime';
 
 const _currentVel = new THREE.Vector3();
-const _muzzleOffset = new THREE.Vector3();
-
 export type { GolemSection, GolemSectionState } from '../mechs/sections';
 export { GOLEM_SECTION_ORDER } from '../mechs/sections';
+export type { GolemControllerOptions, GolemEvents, GolemState } from './GolemControllerTypes';
 
 const DEFAULT_CHASSIS = getChassisDefinition(DEFAULT_CHASSIS_ID);
 const DEFAULT_LOADOUT = getDefaultLoadoutForChassis(DEFAULT_CHASSIS_ID);
-
-export interface GolemState {
-    pos: THREE.Vector3;
-    legYaw: number;
-    torsoYaw: number;
-    throttle: number;
-    hp: number;
-    maxHp: number;
-    steam: number;
-    maxSteam: number;
-    isOverheated: boolean;
-    overheatTimer: number;
-    currentSpeed: number;
-    mass: number;
-    sections: GolemSectionState;
-    maxSections: GolemSectionState;
-    weaponStatus: WeaponStatusView[];
-}
-
-export interface GolemEvents {
-    dashed: boolean;
-    vented: boolean;
-    footstep: boolean;
-}
-
-export interface GolemControllerOptions {
-    chassisId?: ChassisId;
-    loadoutId?: LoadoutId;
-}
 
 export class GolemController {
     model: THREE.Group;
@@ -211,75 +177,16 @@ export class GolemController {
         this.applySectionVisuals();
     }
 
-    getHeatState(): MechHeatState {
-        return {
-            steam: this.steam,
-            maxSteam: this.maxSteam,
-            isOverheated: this.isOverheated,
-            overheatTimer: this.overheatTimer
-        };
-    }
-
-    getDamageState(): MechDamageState {
-        return {
-            sections: this.sections,
-            maxSections: this.maxSections,
-            hp: this.hp,
-            maxHp: this.maxHp
-        };
-    }
-
-    applyDamageState(nextState: MechDamageState) {
-        this.sections = nextState.sections;
-        this.maxSections = nextState.maxSections;
-        this.hp = nextState.hp;
-        this.maxHp = nextState.maxHp;
-    }
-
-    applyHeatState(nextState: MechHeatState) {
-        this.steam = nextState.steam;
-        this.maxSteam = nextState.maxSteam;
-        this.isOverheated = nextState.isOverheated;
-        this.overheatTimer = nextState.overheatTimer;
-    }
-
-    applyWeaponCooldownPatch(patch: Partial<Record<WeaponMountId, number>>) {
-        for (const mountId of this.weaponMountOrder) {
-            const nextCooldown = patch[mountId];
-            if (typeof nextCooldown === 'number') {
-                this.weaponMounts[mountId].cooldownRemaining = nextCooldown;
-            }
-        }
-    }
-
-    getWeaponState(): MechWeaponState {
-        return {
-            weaponMountOrder: this.weaponMountOrder,
-            weaponMounts: this.weaponMounts
-        };
-    }
-
-    applyWeaponEnabledPatch(patch: Partial<Record<WeaponMountId, boolean>>) {
-        for (const mountId of this.weaponMountOrder) {
-            const nextEnabled = patch[mountId];
-            if (typeof nextEnabled === 'boolean') {
-                this.weaponMounts[mountId].enabled = nextEnabled;
-            }
-        }
-    }
-
     triggerOverheat(duration = GOLEM.overheatDuration) {
-        this.applyHeatState(triggerOverheatState(this.getHeatState(), duration));
+        triggerMechOverheatRuntime(this, duration);
     }
 
     spendSteam(cost: number) {
-        const result = spendSteamState(this.getHeatState(), cost);
-        this.applyHeatState(result.nextState);
-        return result.success;
+        return spendMechSteamRuntime(this, cost);
     }
 
     updateWeaponCooldowns(dt: number) {
-        this.applyWeaponCooldownPatch(buildWeaponCooldownPatch(this.weaponMounts, this.weaponMountOrder, dt));
+        tickMechWeaponCooldownsRuntime(this, dt);
     }
 
     flashDamage(duration = 0.16) {
@@ -287,67 +194,27 @@ export class GolemController {
     }
 
     applySectionVisuals() {
-        applyProceduralSectionVisuals({
-            heroVisual: this.heroVisual,
-            head: this.head,
-            leftArm: this.leftArm,
-            rightArm: this.rightArm,
-            leftLeg: this.leftLeg,
-            rightLeg: this.rightLeg,
-            sections: this.sections
-        });
+        syncMechSectionVisualsRuntime(this);
     }
 
     syncDamageState() {
-        const result = syncMechDamageState({
-            damageState: this.getDamageState(),
-            weaponState: this.getWeaponState()
-        });
-        this.applyDamageState(result.nextState);
-        this.applyWeaponEnabledPatch(result.enabledPatch);
+        syncMechDamageRuntime(this);
     }
 
     setSectionState(nextSections: Partial<GolemSectionState>) {
-        const result = applyMechSectionStatePatch({
-            damageState: this.getDamageState(),
-            weaponState: this.getWeaponState()
-        }, nextSections);
-        this.applyDamageState(result.nextState);
-        this.applyWeaponEnabledPatch(result.enabledPatch);
-        this.applySectionVisuals();
+        applyMechSectionStateRuntime(this, nextSections);
     }
 
     resetSections() {
-        const result = resetMechDamageState({
-            damageState: this.getDamageState(),
-            weaponState: this.getWeaponState()
-        });
-        this.applyDamageState(result.nextState);
-        resetWeaponRuntimeState(this.weaponMounts, this.weaponRecoil, this.weaponMountOrder);
-        this.applyWeaponEnabledPatch(result.enabledPatch);
-        this.applySectionVisuals();
+        resetMechDamageAndWeaponsRuntime(this);
     }
 
     applySectionDamage(section: GolemSection, damage: number) {
-        const result = applyMechSectionDamage({
-            damageState: this.getDamageState(),
-            weaponState: this.getWeaponState()
-        }, section, damage);
-        this.applyDamageState(result.nextState);
-        this.flashDamage();
-        this.applySectionVisuals();
-        this.applyWeaponEnabledPatch(result.enabledPatch);
-        return {
-            section: result.section,
-            remaining: result.remaining,
-            destroyed: result.destroyed,
-            lethal: result.lethal,
-            totalHp: result.hp
-        };
+        return applyMechSectionDamageRuntime(this, section, damage, () => this.flashDamage());
     }
 
     canFire() {
-        return canAnyWeaponFire(this.weaponMounts, this.weaponMountOrder, this.getHeatState());
+        return canMechFireRuntime(this);
     }
 
     tryAction(cost: number) {
@@ -355,76 +222,23 @@ export class GolemController {
     }
 
     getWeaponStatus(): WeaponStatusView[] {
-        return buildWeaponStatusViews(this.weaponMounts, this.weaponMountOrder, this.getHeatState());
-    }
-
-    getMountRoot(mountId: WeaponMountId) {
-        switch (mountId) {
-            case 'leftArmMount':
-                return this.leftArm;
-            case 'rightArmMount':
-                return this.rightArm;
-            case 'torsoMount':
-            default:
-                return this.torso;
-        }
-    }
-
-    getHeroMountSocket(mountId: WeaponMountId) {
-        return this.heroVisual?.sockets[mountId] ?? null;
+        return buildMechWeaponStatusRuntime(this);
     }
 
     getWeaponMuzzleOrigin(mountId: WeaponMountId, out: THREE.Vector3) {
-        const heroSocket = this.getHeroMountSocket(mountId);
-        if (heroSocket) {
-            return heroSocket.getWorldPosition(out);
-        }
-
-        const mount = this.weaponMounts[mountId];
-        const definition = getWeaponDefinition(mount.weaponId);
-        _muzzleOffset.set(definition.muzzleOffset.x, definition.muzzleOffset.y, definition.muzzleOffset.z);
-        this.getMountRoot(mountId).localToWorld(out.copy(_muzzleOffset));
-        return out;
+        return resolveWeaponMuzzleOrigin(this, mountId, out);
     }
 
     getMountIdForWeapon(weaponId: WeaponId): WeaponMountId {
-        return this.weaponMountOrder.find((mountId) => this.weaponMounts[mountId].weaponId === weaponId) ?? 'torsoMount';
+        return findWeaponMountId(this, weaponId);
     }
 
     triggerWeaponRecoil(mountId: WeaponMountId) {
-        this.weaponRecoil[mountId] = 1;
-        const fireAction = this.heroVisual?.actions.fire;
-        if (fireAction) {
-            fireAction.stop();
-            fireAction.reset();
-            fireAction.play();
-        }
+        triggerWeaponRecoilRuntime(this, mountId);
     }
 
     gatherReadyMounts(groupId?: WeaponGroupId) {
-        const evaluation = evaluateReadyWeaponMounts(
-            this.weaponMounts,
-            this.weaponMountOrder,
-            this.getHeatState(),
-            groupId
-        );
-
-        if (evaluation.blockedReason === 'noReadyMounts' || evaluation.blockedReason === 'overheated') {
-            return [];
-        }
-
-        if (evaluation.blockedReason === 'insufficientSteam') {
-            this.triggerOverheat();
-            return [];
-        }
-
-        if (!this.spendSteam(evaluation.totalHeat)) {
-            return [];
-        }
-
-        this.applyWeaponCooldownPatch(buildWeaponFireCooldownPatch(this.weaponMounts, evaluation.mountIds));
-
-        return buildWeaponFireRequests(this.weaponMounts, evaluation.mountIds);
+        return gatherReadyWeaponMountsRuntime(this, groupId, GOLEM.overheatDuration);
     }
 
     tryFireGroup(groupId: WeaponGroupId) {
@@ -492,7 +306,7 @@ export class GolemController {
         this.runeMaterial.emissiveIntensity = 2 + flashIntensity * 0.6;
         this.boilerMaterial.emissiveIntensity = 1.5 + flashIntensity * 0.35;
 
-        this.applyHeatState(tickSteamState(this.getHeatState(), dt));
+        tickMechHeatStateRuntime(this, dt);
 
         if (this.isLocal) {
             const localMovement = updateLocalMechMovement({
@@ -583,23 +397,7 @@ export class GolemController {
 
     getState(): GolemState {
         const pos = this.body.translation();
-        return {
-            pos: new THREE.Vector3(pos.x, pos.y, pos.z),
-            legYaw: this.legYaw,
-            torsoYaw: this.torsoYaw,
-            throttle: this.throttle,
-            hp: this.hp,
-            maxHp: this.maxHp,
-            steam: this.steam,
-            maxSteam: this.maxSteam,
-            isOverheated: this.isOverheated,
-            overheatTimer: this.overheatTimer,
-            currentSpeed: this.currentSpeed,
-            mass: this.mass,
-            sections: { ...this.sections },
-            maxSections: { ...this.maxSections },
-            weaponStatus: this.getWeaponStatus()
-        };
+        return buildMechStateSnapshot(this, pos);
     }
 
     getMaxSpeed() {
