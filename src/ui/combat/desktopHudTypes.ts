@@ -12,9 +12,12 @@ export type DesktopCombatHudProps = {
     myId: string;
     copyState: DesktopHudCopyState;
     showPilotPanel: boolean;
+    showSettingsOverlay: boolean;
     atmosphereEnabled: boolean;
     t: Translator;
     onCopyHostId: () => void;
+    onCloseSettingsOverlay: () => void;
+    onToggleCameraMode: () => void;
     onTogglePilotPanel: () => void;
     onToggleAtmosphere: () => void;
     onToggleLocale: () => void;

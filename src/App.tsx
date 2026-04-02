@@ -128,6 +128,7 @@ export default function App() {
     const [roomFilter, setRoomFilter] = useState<'all' | GameMode>('all');
     const [showUnavailableRooms, setShowUnavailableRooms] = useState(false);
     const [showPilotPanel, setShowPilotPanel] = useState(true);
+    const [showDesktopSettings, setShowDesktopSettings] = useState(false);
     const [showMobileSettings, setShowMobileSettings] = useState(false);
     const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
     const t = createTranslator(locale);
@@ -185,11 +186,13 @@ export default function App() {
     const leaveGame = (gameOverride?: any) => {
         session.leaveGame(gameOverride);
         setCopyState('idle');
+        setShowDesktopSettings(false);
         setShowMobileSettings(false);
     };
 
     const startGame = async (mode: SessionMode, targetHostId?: string, requestedMode: GameMode = selectedGameMode) => {
         setShowPilotPanel(!isTouchDevice);
+        setShowDesktopSettings(false);
         setShowMobileSettings(false);
         setCopyState('idle');
         await session.startGame(mode, targetHostId, requestedMode);
@@ -288,19 +291,48 @@ export default function App() {
     }, [ambientAtmosphereEnabled, gameInstance]);
 
     useEffect(() => {
+        if (inLobby || isTouchDevice || loading || gameState.teamScores.winner) {
+            setShowDesktopSettings(false);
+        }
+    }, [gameState.teamScores.winner, inLobby, isTouchDevice, loading]);
+
+    useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {
-            if (isTouchDevice || inLobby || loading || event.repeat || event.code !== 'KeyH') return;
+            if (isTouchDevice || inLobby || loading || event.repeat) return;
 
             const target = event.target;
             if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
 
+            if (event.code === 'KeyH') {
+                event.preventDefault();
+                setShowPilotPanel((current) => !current);
+                return;
+            }
+
+            if (event.code !== 'Escape' || gameState.teamScores.winner) return;
+
             event.preventDefault();
-            setShowPilotPanel((current) => !current);
+            if (document.pointerLockElement) {
+                releasePointerLock();
+                setShowDesktopSettings(true);
+                return;
+            }
+            setShowDesktopSettings((current) => !current);
+        };
+
+        const onPointerLockChange = () => {
+            if (isTouchDevice || inLobby || loading || gameState.teamScores.winner) return;
+            if (document.pointerLockElement) return;
+            setShowDesktopSettings(true);
         };
 
         window.addEventListener('keydown', onKeyDown);
-        return () => window.removeEventListener('keydown', onKeyDown);
-    }, [inLobby, isTouchDevice, loading]);
+        document.addEventListener('pointerlockchange', onPointerLockChange);
+        return () => {
+            window.removeEventListener('keydown', onKeyDown);
+            document.removeEventListener('pointerlockchange', onPointerLockChange);
+        };
+    }, [gameState.teamScores.winner, inLobby, isTouchDevice, loading]);
 
     const torsoOffset = Math.atan2(
         Math.sin(gameState.torsoYaw - gameState.legYaw),
@@ -462,9 +494,12 @@ export default function App() {
                             myId={myId}
                             copyState={copyState}
                             showPilotPanel={showPilotPanel}
+                            showSettingsOverlay={showDesktopSettings}
                             atmosphereEnabled={ambientAtmosphereEnabled}
                             t={t}
                             onCopyHostId={copyHostId}
+                            onCloseSettingsOverlay={() => setShowDesktopSettings(false)}
+                            onToggleCameraMode={() => gameInstance?.toggleCameraMode?.()}
                             onTogglePilotPanel={() => setShowPilotPanel((current) => !current)}
                             onToggleAtmosphere={() => setAmbientAtmosphereEnabled((current) => !current)}
                             onToggleLocale={() => setLocale((current) => current === 'ru' ? 'en' : 'ru')}

@@ -4,6 +4,7 @@ import { buildDesktopHudViewModel } from './buildDesktopHudViewModel';
 import { DesktopBottomHud } from './DesktopBottomHud';
 import { DesktopHostBadge } from './DesktopHostBadge';
 import { DesktopPilotPanel } from './DesktopPilotPanel';
+import { DesktopSettingsOverlay } from './DesktopSettingsOverlay';
 import type { DesktopCombatHudProps } from './desktopHudTypes';
 
 export function DesktopCombatHud(props: DesktopCombatHudProps) {
@@ -34,6 +35,22 @@ export function DesktopCombatHud(props: DesktopCombatHudProps) {
                 viewModel={viewModel.pilotPanel}
                 onCopyHostId={props.onCopyHostId}
                 onTogglePilotPanel={props.onTogglePilotPanel}
+                onToggleAtmosphere={props.onToggleAtmosphere}
+                onToggleLocale={props.onToggleLocale}
+            />
+
+            <DesktopSettingsOverlay
+                open={props.showSettingsOverlay}
+                sessionMode={props.sessionMode}
+                cameraMode={props.gameState.cameraMode}
+                myId={props.myId}
+                copyState={props.copyState}
+                atmosphereEnabled={props.atmosphereEnabled}
+                locale={props.locale}
+                t={props.t}
+                onClose={props.onCloseSettingsOverlay}
+                onCopyHostId={props.onCopyHostId}
+                onToggleCameraMode={props.onToggleCameraMode}
                 onToggleAtmosphere={props.onToggleAtmosphere}
                 onToggleLocale={props.onToggleLocale}
             />
