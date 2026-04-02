@@ -1,5 +1,8 @@
 # Lobby Layout Plan
 
+> Status: Implementation plan  
+> Current relevance: Implemented. Keep this file as layout migration history; use `architecture-overview.md` for the live lobby split and shell boundaries.
+
 ## Summary
 The current lobby is structurally correct but overloaded because one vertical layout serves desktop, mobile portrait, and mobile landscape. The next UI pass should separate `content`, `view model`, and `layout`, then provide three device-specific lobby experiences without duplicating session logic.
 

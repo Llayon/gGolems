@@ -1,5 +1,8 @@
 # Runtime Architecture Plan v5
 
+> Status: Implementation plan  
+> Current relevance: Implemented. Keep this file as migration history for mech/runtime layering; use `mech-system-reference.md`, `runtime-reference.md`, and `architecture-overview.md` for live behavior.
+
 ## Goal
 Move the project from a "better organized monolith" to a layered runtime that scales to more mechs, loadouts, and networked gameplay without turning `Engine` or `GolemController` into new god-objects.
 

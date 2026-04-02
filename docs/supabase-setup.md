@@ -1,5 +1,8 @@
 # Supabase bootstrap
 
+> Status: Operational guide  
+> Scope: Setup for the optional Supabase pilot account and progression layer.
+
 This repo now contains a minimal Supabase integration for:
 
 - anonymous guest sign-in

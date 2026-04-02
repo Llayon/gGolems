@@ -2,56 +2,67 @@
 <img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
 </div>
 
-# Run and deploy your AI Studio app
+# gGolems
 
-This contains everything you need to run your app locally.
+Stylized networked mech combat prototype built with `React`, `Vite`, `Three.js`, and `Rapier`. The project mixes a desktop/mobile cockpit UI, peer-to-peer matches over `PeerJS`, optional Firebase public room discovery, and optional Supabase-backed pilot/progression features.
 
-View your app in AI Studio: https://ai.studio/apps/f5a11595-7575-42f3-8c21-db1357e04e2f
+This repository is maintained as an `LLM-first` codebase: documentation is part of the implementation surface, not an afterthought. Start with the docs map before changing subsystems.
 
-## Run Locally
-
-**Prerequisites:**  Node.js
-
+## Quickstart
 
 1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
 
-## Firebase Lobby
+   ```bash
+   npm install
+   ```
 
-The game can use Firebase Realtime Database as a lightweight lobby registry while gameplay remains peer-to-peer via PeerJS.
+2. Create `.env.local` from `.env.example`.
+3. Fill optional integrations as needed:
+   - `VITE_FIREBASE_*` for the public room browser
+   - `VITE_SUPABASE_*` for pilot accounts, progression, and match history
+   - `GEMINI_API_KEY` only if you still use legacy template-era Gemini helpers; core gameplay does not require it
+4. Start the dev server:
 
-Firebase is optional:
-- manual join by `HOST ID` still works exactly as before
-- actual gameplay still runs over PeerJS
-- Firebase only powers the public lobby list in the main menu
+   ```bash
+   npm run dev
+   ```
 
-To enable Firebase-backed lobbies, fill these values in [.env.local](.env.local):
+## Core Commands
 
-- `VITE_FIREBASE_API_KEY`
-- `VITE_FIREBASE_AUTH_DOMAIN`
-- `VITE_FIREBASE_DATABASE_URL`
-- `VITE_FIREBASE_PROJECT_ID`
-- `VITE_FIREBASE_APP_ID`
+- `npm run dev` starts the local Vite server on port `3000`.
+- `npm run lint` runs `tsc --noEmit`.
+- `npm run build` creates the production bundle in `dist/`.
+- `npm run preview` serves the production build locally.
+- `npm run test:rules` runs deterministic mech-rule fixtures.
+- `npm run test:runtime-smoke` runs runtime-level smoke coverage for networking, respawn, bots, and combat paths.
 
-If these variables are left empty, the game still works, but the public lobby list in the main menu stays disabled.
+## Documentation Map
 
-Hosted rooms publish a small heartbeat and expire from the visible public list automatically if they stop updating.
+- [docs/README.md](docs/README.md) is the main index for project documentation.
+- [docs/architecture-overview.md](docs/architecture-overview.md) explains how `App`, `ui`, `core`, `mechs`, `world`, and service layers fit together.
+- [docs/runtime-reference.md](docs/runtime-reference.md) covers the current runtime/session architecture.
+- [docs/mech-system-reference.md](docs/mech-system-reference.md) covers chassis, loadouts, mech rules, and runtime mech modules.
+- [docs/networking-reference.md](docs/networking-reference.md) covers PeerJS, Firebase lobby behavior, authoritative state flow, and Supabase boundaries.
+- [docs/content-pipeline.md](docs/content-pipeline.md) covers tracked assets, Blender/export scripts, and local-only source packs.
+- [docs/testing-and-validation.md](docs/testing-and-validation.md) lists the expected validation commands and manual smoke checks.
+- [docs/llm-development-guide.md](docs/llm-development-guide.md) explains how LLM contributors should navigate and update the repo.
 
-Full setup guide:
+## Stack and Runtime Notes
+
+- `React 19` powers the lobby, combat HUD, and mobile overlays.
+- `Three.js` and `Rapier` power the render/physics runtime.
+- `PeerJS` handles live gameplay transport.
+- `Firebase Realtime Database` is optional and only provides a public lobby list.
+- `Supabase` is optional and powers pilot account/progression features.
+- GitHub Pages deployment is handled from `main` by GitHub Actions.
+
+## Setup Guides
+
 - [docs/firebase-lobby-setup.md](docs/firebase-lobby-setup.md)
+- [docs/supabase-setup.md](docs/supabase-setup.md)
 
-To enable Firebase on GitHub Pages too, add the same `VITE_FIREBASE_*` values in GitHub repository `Settings -> Secrets and variables -> Actions`.
-The workflow prefers repository `Variables` and falls back to `Secrets`.
+## Contributing
 
-## GitHub Pages
-
-This repo is configured to deploy to GitHub Pages from the `main` branch using GitHub Actions.
-
-1. In GitHub repository settings, open `Settings -> Pages`.
-2. Set `Source` to `GitHub Actions`.
-3. Push to `main` or run the `Deploy to GitHub Pages` workflow manually.
-
-The site will be published under `https://llayon.github.io/gGolems/`.
+- [AGENTS.md](AGENTS.md) is the contributor guide.
+- For architecture and subsystem truth, prefer the canonical docs in [`docs/`](docs/README.md) over older plan documents.
+- When code changes, update the relevant canonical reference doc in the same change series.

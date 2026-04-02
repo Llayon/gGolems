@@ -1,5 +1,8 @@
 # Engine Refactor Plan v5
 
+> Status: Implementation plan  
+> Current relevance: Implemented. Keep this file as migration history; use `runtime-reference.md` and `architecture-overview.md` for current behavior.
+
 ## Goal
 Reduce [Engine.ts](/D:/Programms/Max/GODOT/Golem/gGolems/src/core/Engine.ts) from a god-class into a thin orchestration layer without changing gameplay behavior, network authority, or frame order.
 

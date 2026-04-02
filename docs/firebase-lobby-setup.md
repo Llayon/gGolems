@@ -1,5 +1,8 @@
 # Firebase Lobby Setup
 
+> Status: Operational guide  
+> Scope: Setup for the optional Firebase public lobby registry.
+
 This project uses Firebase Realtime Database only as a public lobby registry.
 
 Actual gameplay remains peer-to-peer over `PeerJS`.

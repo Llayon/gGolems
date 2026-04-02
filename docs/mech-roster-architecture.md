@@ -1,9 +1,14 @@
 # Mech Roster Architecture
 
+> Status: Implementation plan  
+> Current relevance: Active roadmap for long-term mech content. Use `mech-system-reference.md` for currently implemented chassis, loadouts, and runtime contracts.
+
 ## Goal
+
 Build toward a long-term roster of roughly 30 mechs without creating 30 unrelated rulesets. The game should feel like a hybrid of `BattleTech` and `Lancer`: readable PvP fundamentals first, stronger chassis flavor second.
 
 ## Core Model
+
 The roster is split into four layers:
 
 1. `FrameFamilyDefinition`
@@ -18,6 +23,7 @@ The roster is split into four layers:
 This keeps the content goal large while the mechanical surface stays manageable.
 
 ## V1 Scope
+
 The first production milestone should target:
 
 - `6-8` chassis
@@ -34,6 +40,7 @@ The current codebase implements the first foundation step:
 - runtime selection of section HP, mass, speed, dash speed, and mount assignments from definitions
 
 ## Asset Contract
+
 All mechs should keep the same minimum runtime contract:
 
 - `viewAnchor`
@@ -44,6 +51,7 @@ All mechs should keep the same minimum runtime contract:
 This lets visual variants swap in without rewriting the controller, camera, or projectile logic.
 
 ## Balance Rules
+
 The project should avoid unrestricted weapon mixing. Instead:
 
 - each slot has a class, such as `arm` or `torso`
@@ -60,7 +68,8 @@ Balance should be tuned through four budgets:
 Different mechs can share a family while feeling distinct through budget shifts, section armor redistribution, and loadout changes.
 
 ## Content Strategy
-Long-term “30 mechs” should mean:
+
+Long-term `30 mechs` should mean:
 
 - `6-8` mechanical families or chassis skeletons
 - many visual, statistical, and loadout variants inside those families
@@ -68,6 +77,7 @@ Long-term “30 mechs” should mean:
 That is cheaper to balance, easier to animate, and more resilient for PvP than treating every mech as a bespoke combat system.
 
 ## Near-Term Roadmap
+
 1. Add more chassis definitions before adding more art.
 2. Add weapon compatibility and loadout UI.
 3. Add utility modules and passive chassis perks.

@@ -1,5 +1,8 @@
 # Copilot 3D Prompt: Steam-Magic Golem
 
+> Status: Historical/reference only  
+> Current relevance: Art-direction prompt archive. This file is not a source of truth for runtime architecture, live assets, or the current visual roadmap.
+
 ## Main Prompt
 
 Create a game-ready 3D model of a heavy steam-magic golem for a mech combat game.

@@ -1,5 +1,8 @@
 # KW-II Hero Mech Adaptation Plan
 
+> Status: Historical/reference only  
+> Current relevance: Source-asset adaptation notes for the KW-II mech. Use `content-pipeline.md` and `mech-system-reference.md` for the live runtime asset contract.
+
 ## Goal
 Turn `mech-robot-kw-ii` into a web-ready hero mech for the local player while preserving silhouette and gameplay readability.
 
