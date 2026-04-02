@@ -785,7 +785,23 @@ export class Game {
         this.particles.update(dt);
         this.debris.update(dt);
         this.atmosphere.update(dt);
-        this.world.propManager.update(dt);
+        const propObservers: THREE.Vector3[] = [];
+        if (this.localRespawnState.alive) {
+            const localPos = this.golem.body.translation();
+            propObservers.push(new THREE.Vector3(localPos.x, localPos.y, localPos.z));
+        }
+        this.remotePlayers.forEach((player, id) => {
+            const state = this.remotePlayerStates.get(id);
+            if (state && !state.alive) return;
+            const pos = player.body.translation();
+            propObservers.push(new THREE.Vector3(pos.x, pos.y, pos.z));
+        });
+        for (const bot of this.bots.values()) {
+            if (!bot.alive) continue;
+            const pos = bot.body.translation();
+            propObservers.push(new THREE.Vector3(pos.x, pos.y, pos.z));
+        }
+        this.world.propManager.update(dt, propObservers);
 
         // Network synchronization (20 Hz)
         this.networkTickTimer += dt;

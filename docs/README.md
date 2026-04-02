@@ -43,6 +43,7 @@
 
 - [engine-refactor-plan.md](engine-refactor-plan.md)
 - [runtime-architecture-plan.md](runtime-architecture-plan.md)
+- [arena-village-architecture-plan.md](arena-village-architecture-plan.md)
 - [lobby-layout-plan.md](lobby-layout-plan.md)
 - [mech-roster-architecture.md](mech-roster-architecture.md)
 - [kwii-hero-adaptation-plan.md](kwii-hero-adaptation-plan.md)

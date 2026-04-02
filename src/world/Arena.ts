@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { PropManager } from './PropManager';
+import { WorldPropSystem } from './WorldPropSystem';
 import { TerrainBuilder } from './TerrainBuilder';
 
 type BoxConfig = {
@@ -16,7 +16,7 @@ type BoxConfig = {
 
 export class Arena {
     meshes: THREE.Mesh[] = [];
-    propManager: PropManager;
+    propManager: WorldPropSystem;
     terrain: TerrainBuilder;
     readonly halfSize = 132;
     readonly spawnRadius = 104;
@@ -57,9 +57,9 @@ export class Arena {
             this.createSpawnPoint(30, 92)
         ];
         this.controlPointPositions = {
-            A: this.createGroundPoint(-74, 34),
-            B: this.createGroundPoint(0, -18),
-            C: this.createGroundPoint(76, 38)
+            A: this.createGroundPoint(80, 38),
+            B: this.createGroundPoint(0, -6),
+            C: this.createGroundPoint(-84, 38)
         };
 
         this.createTeamBase(scene, 'blue', this.blueSpawns);
@@ -79,7 +79,7 @@ export class Arena {
         this.createRockArch(scene, physics, 94, -86, -0.18, 1.12);
         this.createRouteLandmarks(scene, physics);
 
-        this.propManager = new PropManager(scene, physics, this.surfaceY.bind(this));
+        this.propManager = new WorldPropSystem(scene, physics, this.surfaceY.bind(this));
     }
 
     getCollisionMeshes() {
@@ -194,31 +194,30 @@ export class Arena {
             { x: 108, z: 20, w: 10, h: 4.0, d: 12, color: 0x646167, yOffset: 2.0, rotationY: 0.06 },
             { x: 108, z: 72, w: 10, h: 4.0, d: 12, color: 0x646167, yOffset: 2.0, rotationY: -0.08 },
 
-            // Outer flank anchors.
+            // West steam lane
             { x: -102, z: -18, w: 10, h: 3.8, d: 18, color: 0x5c595f, yOffset: 1.9, rotationY: -0.08 },
             { x: -98, z: 46, w: 10, h: 3.8, d: 18, color: 0x5c595f, yOffset: 1.9, rotationY: 0.08 },
-            { x: 102, z: -8, w: 10, h: 3.8, d: 18, color: 0x646167, yOffset: 1.9, rotationY: 0.08 },
-            { x: 98, z: 54, w: 10, h: 3.8, d: 18, color: 0x646167, yOffset: 1.9, rotationY: -0.08 },
-
-            // A lane: boost the industrial side to better match the ruin quarter.
+            { x: -92, z: 24, w: 12, h: 4.6, d: 16, color: 0x54535d, yOffset: 2.3, rotationY: 0.14 },
+            { x: -92, z: 50, w: 10, h: 4.2, d: 14, color: 0x5a5860, yOffset: 2.1, rotationY: -0.18 },
             { x: -74, z: 12, w: 8, h: 3.8, d: 12, color: 0x5c595f, yOffset: 1.9, rotationY: -0.12 },
             { x: -50, z: 36, w: 8, h: 3.8, d: 12, color: 0x66636a, yOffset: 1.9, rotationY: 0.08 },
             { x: -56, z: 54, w: 12, h: 4.4, d: 10, color: 0x595760, yOffset: 2.2, rotationY: 0.08 },
             { x: -58, z: 20, w: 10, h: 3.8, d: 8, color: 0x5b585f, yOffset: 1.9, rotationY: -0.14 },
 
-            // B lane: shift from a kill bowl into a contestable mid.
-            { x: -24, z: -4, w: 8, h: 3.6, d: 12, color: 0x66626a, yOffset: 1.8, rotationY: -0.08 },
-            { x: -14, z: -14, w: 8, h: 4.0, d: 10, color: 0x605d63, yOffset: 2.0, rotationY: 0.16 },
-            { x: -10, z: -30, w: 10, h: 3.6, d: 8, color: 0x6b666c, yOffset: 1.8, rotationY: 0.10 },
-            { x: 0, z: -20, w: 8, h: 4.2, d: 8, color: 0x6a666d, yOffset: 2.1, rotationY: 0.06 },
-            { x: 10, z: -30, w: 10, h: 3.6, d: 8, color: 0x6b666c, yOffset: 1.8, rotationY: -0.10 },
-            { x: 14, z: -14, w: 8, h: 4.0, d: 10, color: 0x605d63, yOffset: 2.0, rotationY: -0.16 },
-            { x: 24, z: -4, w: 8, h: 3.6, d: 12, color: 0x66626a, yOffset: 1.8, rotationY: 0.08 },
+            // Central square
+            { x: -32, z: -34, w: 14, h: 4.2, d: 8, color: 0x5d5a61, yOffset: 2.1, rotationY: 0.18 },
+            { x: -18, z: 0, w: 10, h: 3.4, d: 12, color: 0x66626a, yOffset: 1.7, rotationY: -0.08 },
+            { x: 0, z: -40, w: 12, h: 3.0, d: 6, color: 0x706b71, yOffset: 1.5, rotationY: 0.04 },
+            { x: 18, z: 0, w: 10, h: 3.8, d: 12, color: 0x5f5c64, yOffset: 1.9, rotationY: -0.12 },
+            { x: 34, z: -32, w: 12, h: 4.0, d: 8, color: 0x65626a, yOffset: 2.0, rotationY: 0.16 },
+            { x: -6, z: 14, w: 8, h: 3.2, d: 8, color: 0x6a666d, yOffset: 1.6, rotationY: 0.1 },
+            { x: 24, z: 20, w: 8, h: 3.4, d: 8, color: 0x625f67, yOffset: 1.7, rotationY: -0.08 },
 
-            // C lane: keep its identity but reduce redundant static cover.
-            { x: 56, z: 24, w: 8, h: 3.8, d: 12, color: 0x635d61, yOffset: 1.9, rotationY: -0.12 },
-            { x: 58, z: 54, w: 10, h: 4.4, d: 14, color: 0x6b6468, yOffset: 2.2, rotationY: 0.14 },
-            { x: 74, z: 66, w: 12, h: 3.4, d: 8, color: 0x786f73, yOffset: 1.7, rotationY: 0.06 }
+            // Village lane
+            { x: 68, z: 10, w: 12, h: 3.2, d: 8, color: 0x635d61, yOffset: 1.6, rotationY: -0.12 },
+            { x: 78, z: 34, w: 8, h: 2.8, d: 6, color: 0x6b6468, yOffset: 1.4, rotationY: 0.08 },
+            { x: 110, z: 34, w: 8, h: 3.4, d: 12, color: 0x665f64, yOffset: 1.7, rotationY: -0.08 },
+            { x: 84, z: 70, w: 12, h: 3.2, d: 8, color: 0x736b70, yOffset: 1.6, rotationY: -0.14 }
         ];
 
         configs.forEach((config) => this.createBox(scene, physics, config));
