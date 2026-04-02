@@ -26,16 +26,16 @@ REMOVED_NAME_PARTS = (
 REPLACED_OBJECTS = {
     'Front_Door',
     'Front_Door_Frame',
-    'Main_Roof',
     'Chimney'
 }
 
 SIMPLE_MATERIALS = {
-    'plaster': (0.80, 0.74, 0.67, 1.0),
-    'wood': (0.43, 0.31, 0.22, 1.0),
-    'roof': (0.68, 0.33, 0.23, 1.0),
-    'stone': (0.53, 0.50, 0.48, 1.0),
-    'brick': (0.49, 0.36, 0.31, 1.0)
+    'plaster': (0.73, 0.67, 0.58, 1.0),
+    'wood': (0.49, 0.33, 0.22, 1.0),
+    'roof': (0.72, 0.34, 0.22, 1.0),
+    'stone': (0.57, 0.54, 0.50, 1.0),
+    'brick': (0.54, 0.39, 0.33, 1.0),
+    'window': (0.10, 0.13, 0.18, 1.0)
 }
 
 
@@ -77,12 +77,12 @@ def get_material(name, rgba):
 
 
 def choose_material_key(name):
-    if name.startswith('LowpolyRoof'):
-        return 'roof'
     if name.startswith('LowpolyDoor'):
         return 'wood' if name == 'LowpolyDoor' else 'stone'
     if name.startswith('LowpolyChimney'):
         return 'brick'
+    if name.startswith('LowpolyWindow'):
+        return 'window'
     if name == 'Main_Roof':
         return 'roof'
     if name == 'Chimney':
@@ -144,6 +144,8 @@ def simplify_geometry(objects):
     for obj in objects:
         if obj.name.startswith('Floor_'):
             add_decimate(obj, 0.72)
+        elif obj.name == 'Main_Roof':
+            add_decimate(obj, 0.68)
 
 
 def create_box(collection, name, location, size):
@@ -167,17 +169,27 @@ def create_lowpoly_replacements(collection):
     replacements.append(create_box(collection, 'LowpolyDoorFrame_Top', (0.0, -4.0, 2.33), (1.68, 0.22, 0.2)))
     replacements.append(create_box(collection, 'LowpolyDoor', (0.0, -3.94, 1.07), (1.18, 0.12, 2.08)))
 
-    left_roof = create_box(collection, 'LowpolyRoof_Left', (-2.08, 0.0, 7.18), (4.35, 10.05, 0.22))
-    left_roof.rotation_euler.y = -0.58
-    bpy.ops.object.transform_apply(location=False, rotation=True, scale=False)
-    replacements.append(left_roof)
-
-    right_roof = create_box(collection, 'LowpolyRoof_Right', (2.08, 0.0, 7.18), (4.35, 10.05, 0.22))
-    right_roof.rotation_euler.y = 0.58
-    bpy.ops.object.transform_apply(location=False, rotation=True, scale=False)
-    replacements.append(right_roof)
-
     replacements.append(create_box(collection, 'LowpolyChimney', (1.45, 1.2, 7.95), (0.68, 0.68, 2.2)))
+
+    window_specs = [
+        ('LowpolyWindow_FrontLower_L', (-2.0, -4.05, 1.2), (0.95, 0.10, 1.25)),
+        ('LowpolyWindow_FrontLower_R', (2.0, -4.05, 1.2), (0.95, 0.10, 1.25)),
+        ('LowpolyWindow_BackLower_C', (0.0, 4.05, 1.2), (1.05, 0.10, 1.20)),
+        ('LowpolyWindow_LeftLower_A', (-3.05, -1.0, 1.2), (0.10, 0.95, 1.20)),
+        ('LowpolyWindow_LeftLower_B', (-3.05, 1.0, 1.2), (0.10, 0.95, 1.20)),
+        ('LowpolyWindow_RightLower_A', (3.05, -1.0, 1.2), (0.10, 0.95, 1.20)),
+        ('LowpolyWindow_RightLower_B', (3.05, 1.0, 1.2), (0.10, 0.95, 1.20)),
+        ('LowpolyWindow_FrontUpper_L', (-2.0, -4.05, 4.18), (0.95, 0.10, 1.25)),
+        ('LowpolyWindow_FrontUpper_R', (2.0, -4.05, 4.18), (0.95, 0.10, 1.25)),
+        ('LowpolyWindow_BackUpper_C', (0.0, 4.05, 4.18), (1.05, 0.10, 1.20)),
+        ('LowpolyWindow_LeftUpper_A', (-3.05, -3.0, 4.18), (0.10, 0.95, 1.20)),
+        ('LowpolyWindow_LeftUpper_B', (-3.05, 1.0, 4.18), (0.10, 0.95, 1.20)),
+        ('LowpolyWindow_RightUpper_A', (3.05, -3.0, 4.18), (0.10, 0.95, 1.20)),
+        ('LowpolyWindow_RightUpper_B', (3.05, 1.0, 4.18), (0.10, 0.95, 1.20))
+    ]
+    for name, location, size in window_specs:
+        replacements.append(create_box(collection, name, location, size))
+
     return replacements
 
 
