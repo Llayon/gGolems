@@ -29,6 +29,13 @@ function SecondaryPanel(props: { title: string; children: ReactNode }) {
 
 export function MobilePortraitLobbyLayout(props: MobilePortraitLobbyLayoutProps) {
     const [step, setStep] = useState<PortraitStep>('mode');
+    const canGoBack = step !== 'mode';
+    const canGoForward = step !== 'session';
+    const currentTitle = step === 'mode'
+        ? props.modeTitle
+        : step === 'mech'
+            ? props.frameTitle
+            : props.sessionTitle;
 
     return (
         <div className="flex w-full flex-col gap-4">
@@ -56,6 +63,11 @@ export function MobilePortraitLobbyLayout(props: MobilePortraitLobbyLayoutProps)
                 </button>
             </div>
 
+            <div className="rounded-2xl border border-[#8f6a38]/30 bg-black/24 px-4 py-3 text-center backdrop-blur-sm">
+                <div className="text-[10px] tracking-[0.22em] text-[#8fb8c2]">CURRENT STEP</div>
+                <div className="mt-1 text-[13px] font-bold tracking-[0.16em] text-[#f3deb5]">{currentTitle}</div>
+            </div>
+
             {step === 'mode' ? props.modeSection : null}
             {step === 'mech' ? (
                 <div className="flex flex-col gap-4">
@@ -64,6 +76,25 @@ export function MobilePortraitLobbyLayout(props: MobilePortraitLobbyLayoutProps)
                 </div>
             ) : null}
             {step === 'session' ? props.sessionSection : null}
+
+            <div className="grid grid-cols-2 gap-2">
+                <button
+                    type="button"
+                    disabled={!canGoBack}
+                    onClick={() => setStep((current) => current === 'session' ? 'mech' : 'mode')}
+                    className="rounded-xl border border-[#8f6a38]/30 bg-black/25 px-4 py-3 text-[10px] font-bold tracking-[0.18em] text-[#d3bc94] transition-colors hover:border-[#efb768]/50 hover:text-[#fff1d4] disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                    ← BACK
+                </button>
+                <button
+                    type="button"
+                    disabled={!canGoForward}
+                    onClick={() => setStep((current) => current === 'mode' ? 'mech' : 'session')}
+                    className="rounded-xl border border-[#efb768]/60 bg-[#7d4f22]/40 px-4 py-3 text-[10px] font-bold tracking-[0.18em] text-[#fff1d4] transition-colors hover:bg-[#8f5a28] disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                    NEXT →
+                </button>
+            </div>
 
             <SecondaryPanel title={props.roomTitle}>{props.roomSection}</SecondaryPanel>
             <SecondaryPanel title={props.pilotTitle}>{props.pilotSection}</SecondaryPanel>

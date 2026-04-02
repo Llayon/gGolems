@@ -5,6 +5,7 @@ import { LobbyLoadoutSection } from './LobbyLoadoutSection';
 import { LobbyModeSection } from './LobbyModeSection';
 import { LobbyRoomBrowserSection } from './LobbyRoomBrowserSection';
 import { LobbySessionSection } from './LobbySessionSection';
+import { LobbySelectionSummary } from './LobbySelectionSummary';
 import { MobileLandscapeLobbyLayout } from './MobileLandscapeLobbyLayout';
 import { MobilePortraitLobbyLayout } from './MobilePortraitLobbyLayout';
 import { PilotAccountCard } from './PilotAccountCard';
@@ -106,6 +107,12 @@ export function LobbyRoot(props: LobbyScreenProps) {
                 </h1>
 
                 <div className={`${shellWidthClass} max-w-full`}>
+                    <LobbySelectionSummary
+                        modeLabel={props.t(props.selectedGameMode === 'tdm' ? 'lobby.mode.tdm' : 'lobby.mode.control')}
+                        chassisLabel={props.selectedChassis.name}
+                        loadoutLabel={props.selectedLoadout.name}
+                        roomCountLabel={props.firebaseEnabled ? `${viewModel.visibleFirebaseRooms.length}` : undefined}
+                    />
                     {viewModel.layoutKind === 'desktop' ? (
                         <DesktopLobbyLayout
                             modeSection={modeSection}
