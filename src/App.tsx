@@ -105,6 +105,21 @@ export default function App() {
     const [isPortrait, setIsPortrait] = useState(false);
     const [mobileLeftHanded, setMobileLeftHanded] = useState(false);
     const [mobileAimPreset, setMobileAimPreset] = useState<'LOW' | 'MID' | 'HIGH'>('MID');
+    const [ambientAtmosphereEnabled, setAmbientAtmosphereEnabled] = useState(() => {
+        try {
+            const stored = window.localStorage.getItem('golems_atmosphere_enabled');
+            if (stored === 'on') return true;
+            if (stored === 'off') return false;
+        } catch {
+            // Ignore storage access issues.
+        }
+
+        const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
+        const touchDevice = navigator.maxTouchPoints > 0;
+        const minViewport = Math.min(window.innerWidth, window.innerHeight);
+        const isMobile = coarsePointer || touchDevice || minViewport <= 900;
+        return !isMobile;
+    });
     const [hostId, setHostId] = useState('');
     const [roomName, setRoomName] = useState('');
     const [selectedGameMode, setSelectedGameMode] = useState<GameMode>('control');
@@ -120,6 +135,7 @@ export default function App() {
     const session = useGameSession({
         canvasRef,
         firebaseEnabled: firebaseLobbyStatus.enabled,
+        atmosphereEnabled: ambientAtmosphereEnabled,
         roomName,
         selectedChassisId,
         selectedLoadoutId,
@@ -198,9 +214,13 @@ export default function App() {
         try {
             const handed = window.localStorage.getItem('golems_mobile_handed');
             const preset = window.localStorage.getItem('golems_mobile_aim_preset');
+            const atmosphere = window.localStorage.getItem('golems_atmosphere_enabled');
             if (handed === 'left') setMobileLeftHanded(true);
             if (preset === 'LOW' || preset === 'MID' || preset === 'HIGH') {
                 setMobileAimPreset(preset);
+            }
+            if (atmosphere === 'on' || atmosphere === 'off') {
+                setAmbientAtmosphereEnabled(atmosphere === 'on');
             }
         } catch {
             // Ignore storage access issues.
@@ -257,10 +277,15 @@ export default function App() {
         try {
             window.localStorage.setItem('golems_mobile_handed', mobileLeftHanded ? 'left' : 'right');
             window.localStorage.setItem('golems_mobile_aim_preset', mobileAimPreset);
+            window.localStorage.setItem('golems_atmosphere_enabled', ambientAtmosphereEnabled ? 'on' : 'off');
         } catch {
             // Ignore storage access issues.
         }
-    }, [mobileAimPreset, mobileLeftHanded]);
+    }, [ambientAtmosphereEnabled, mobileAimPreset, mobileLeftHanded]);
+
+    useEffect(() => {
+        gameInstance?.setAtmosphereEnabled?.(ambientAtmosphereEnabled);
+    }, [ambientAtmosphereEnabled, gameInstance]);
 
     useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {
@@ -437,9 +462,11 @@ export default function App() {
                             myId={myId}
                             copyState={copyState}
                             showPilotPanel={showPilotPanel}
+                            atmosphereEnabled={ambientAtmosphereEnabled}
                             t={t}
                             onCopyHostId={copyHostId}
                             onTogglePilotPanel={() => setShowPilotPanel((current) => !current)}
+                            onToggleAtmosphere={() => setAmbientAtmosphereEnabled((current) => !current)}
                             onToggleLocale={() => setLocale((current) => current === 'ru' ? 'en' : 'ru')}
                         />
                     ) : null}
@@ -455,6 +482,7 @@ export default function App() {
                             copyMessage={copyMessage}
                             leftHanded={mobileLeftHanded}
                             aimPreset={mobileAimPreset}
+                            atmosphereEnabled={ambientAtmosphereEnabled}
                             locale={locale}
                             t={t}
                             onClose={() => setShowMobileSettings(false)}
@@ -462,6 +490,7 @@ export default function App() {
                             onToggleCameraMode={() => gameInstance?.toggleCameraMode?.()}
                             onToggleHanded={() => setMobileLeftHanded((current) => !current)}
                             onCycleAimPreset={() => setMobileAimPreset((current) => current === 'LOW' ? 'MID' : current === 'MID' ? 'HIGH' : 'LOW')}
+                            onToggleAtmosphere={() => setAmbientAtmosphereEnabled((current) => !current)}
                             onToggleLocale={() => setLocale((current) => current === 'ru' ? 'en' : 'ru')}
                         />
                     ) : null}

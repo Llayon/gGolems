@@ -34,6 +34,7 @@ export function DesktopCombatHud(props: DesktopCombatHudProps) {
                 viewModel={viewModel.pilotPanel}
                 onCopyHostId={props.onCopyHostId}
                 onTogglePilotPanel={props.onTogglePilotPanel}
+                onToggleAtmosphere={props.onToggleAtmosphere}
                 onToggleLocale={props.onToggleLocale}
             />
 

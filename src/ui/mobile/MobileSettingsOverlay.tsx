@@ -13,6 +13,7 @@ type MobileSettingsOverlayProps = {
     copyMessage: TranslationDescriptor;
     leftHanded: boolean;
     aimPreset: AimPreset;
+    atmosphereEnabled: boolean;
     locale: Locale;
     t: Translator;
     onClose: () => void;
@@ -20,6 +21,7 @@ type MobileSettingsOverlayProps = {
     onToggleCameraMode: () => void;
     onToggleHanded: () => void;
     onCycleAimPreset: () => void;
+    onToggleAtmosphere: () => void;
     onToggleLocale: () => void;
 };
 
@@ -76,6 +78,13 @@ export function MobileSettingsOverlay(props: MobileSettingsOverlayProps) {
                                 onClick={props.onCycleAimPreset}
                             >
                                 {props.t('mobile.settings.aimSensitivity', { preset: props.aimPreset })}
+                            </button>
+                            <button
+                                type="button"
+                                className="rounded-full border border-[#8f6a38]/55 bg-black/35 px-3 py-2 text-[10px] tracking-[0.22em] text-[#d8c19a]"
+                                onClick={props.onToggleAtmosphere}
+                            >
+                                {props.t(props.atmosphereEnabled ? 'mobile.settings.atmosphereOn' : 'mobile.settings.atmosphereOff')}
                             </button>
                             <button
                                 type="button"

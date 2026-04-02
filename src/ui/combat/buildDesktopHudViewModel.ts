@@ -25,7 +25,7 @@ function getCopyMessage(copyState: DesktopHudCopyState): TranslationDescriptor {
 }
 
 export function buildDesktopHudViewModel(props: DesktopCombatHudProps): DesktopCombatHudViewModel {
-    const { gameState, locale, sessionMode, myId, copyState, showPilotPanel, t } = props;
+    const { gameState, locale, sessionMode, myId, copyState, showPilotPanel, atmosphereEnabled, t } = props;
     const torsoOffset = angleDiff(gameState.legYaw, gameState.torsoYaw);
     const twistRatio = gameState.maxTwist > 0 ? clamp(torsoOffset / gameState.maxTwist, -1, 1) : 0;
     const throttleRatio = clamp(gameState.throttle, -0.45, 1);
@@ -90,6 +90,7 @@ export function buildDesktopHudViewModel(props: DesktopCombatHudProps): DesktopC
             summary: sessionSummaryLabel,
             terrainDebugLabel,
             terrainDebugTone: gameState.terrainColliderMode === 'heightfield' ? 'text-[#8fb8c2]' : 'text-[#f3b56c]',
+            atmosphereLabel: t(atmosphereEnabled ? 'mobile.settings.atmosphereOn' : 'mobile.settings.atmosphereOff'),
             localeLabel: t('locale.current', { label: t('locale.label'), value: t(locale === 'ru' ? 'locale.ru' : 'locale.en') }),
             copyLabel,
             showHostCopy: sessionMode === 'host' && Boolean(myId),

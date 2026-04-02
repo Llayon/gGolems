@@ -4,6 +4,7 @@ export function DesktopPilotPanel(props: {
     viewModel: DesktopPilotPanelViewModel;
     onCopyHostId: () => void;
     onTogglePilotPanel: () => void;
+    onToggleAtmosphere: () => void;
     onToggleLocale: () => void;
 }) {
     return (
@@ -19,6 +20,13 @@ export function DesktopPilotPanel(props: {
                             <div className={`mt-2 text-[10px] tracking-[0.24em] ${props.viewModel.terrainDebugTone}`}>
                                 {props.viewModel.terrainDebugLabel}
                             </div>
+                            <button
+                                type="button"
+                                onClick={props.onToggleAtmosphere}
+                                className="mt-3 rounded-full border border-[#8f6a38]/55 bg-black/35 px-3 py-1 text-[10px] tracking-[0.24em] text-[#d8c19a] transition-colors hover:border-[#efb768]/70 hover:text-[#efb768]"
+                            >
+                                {props.viewModel.atmosphereLabel}
+                            </button>
                             <button
                                 type="button"
                                 onClick={props.onToggleLocale}

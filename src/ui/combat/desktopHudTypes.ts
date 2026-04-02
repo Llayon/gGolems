@@ -12,9 +12,11 @@ export type DesktopCombatHudProps = {
     myId: string;
     copyState: DesktopHudCopyState;
     showPilotPanel: boolean;
+    atmosphereEnabled: boolean;
     t: Translator;
     onCopyHostId: () => void;
     onTogglePilotPanel: () => void;
+    onToggleAtmosphere: () => void;
     onToggleLocale: () => void;
 };
 
@@ -40,6 +42,7 @@ export type DesktopPilotPanelViewModel = {
     summary: string;
     terrainDebugLabel: string;
     terrainDebugTone: string;
+    atmosphereLabel: string;
     localeLabel: string;
     copyLabel: string;
     showHostCopy: boolean;

@@ -243,6 +243,8 @@ const ru: typeof en = {
     'mobile.settings.hints': 'ПОДСКАЗКИ',
     'mobile.settings.hostId': 'ID ХОСТА',
     'mobile.settings.aimSensitivity': 'ЧУВ {{preset}}',
+    'mobile.settings.atmosphereOn': 'АТМОСФЕРА ВКЛ',
+    'mobile.settings.atmosphereOff': 'АТМОСФЕРА ВЫКЛ',
     'mobile.settings.leftHanded': 'ЛЕВША',
     'mobile.settings.rightHanded': 'ПРАВША',
     'mobile.settings.hint.leftCircle': 'ЛЕВЫЙ КРУГ ход и поворот шасси',

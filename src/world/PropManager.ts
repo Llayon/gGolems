@@ -5,6 +5,13 @@ import sectionedHouseUrl from '../assets/props/VillagePrefab_House_A_breakable_w
 
 type LayoutEntry = { x: number; z: number; rot?: number; scale?: number };
 
+type StaticBodyConfig = {
+    halfWidth: number;
+    halfHeight: number;
+    halfDepth: number;
+    yOffset?: number;
+};
+
 export type TreeSnapshot = {
     id: string;
     hp: number;
@@ -63,6 +70,7 @@ type HouseProp = {
     prefabKind: 'procedural' | 'sectioned';
     sections: HouseSectionProp[];
     sectionById: Map<string, HouseSectionProp>;
+    bodyConfig?: StaticBodyConfig;
     loaded: boolean;
 };
 
@@ -101,6 +109,14 @@ const HOUSE_LAYOUT: LayoutEntry[] = [
     { x: 94, z: 48, rot: -0.08 },
     { x: 104, z: 34, rot: 0.12 },
     { x: 108, z: 58, rot: -0.18 }
+];
+
+const INDUSTRIAL_LAYOUT: LayoutEntry[] = [
+    { x: -100, z: 34, rot: 0.06, scale: 1.06 },
+    { x: -94, z: 10, rot: -0.08, scale: 0.92 },
+    { x: -94, z: 60, rot: 0.12, scale: 0.98 },
+    { x: -70, z: 18, rot: 0.14, scale: 0.88 },
+    { x: -68, z: 50, rot: -0.12, scale: 0.94 }
 ];
 
 const PEOPLE_LAYOUT: LayoutEntry[] = [
@@ -161,6 +177,20 @@ const HOUSE_COLLAPSIBLE_SECTION_IDS = [
     'SEC_RIGHT_SIDE'
 ];
 
+const DEFAULT_HOUSE_BODY_CONFIG: StaticBodyConfig = {
+    halfWidth: 1.8,
+    halfHeight: 1.6,
+    halfDepth: 1.55,
+    yOffset: 1.6
+};
+
+const DEFAULT_INDUSTRIAL_BODY_CONFIG: StaticBodyConfig = {
+    halfWidth: 2.5,
+    halfHeight: 2.2,
+    halfDepth: 2.2,
+    yOffset: 2.2
+};
+
 function loadSectionedHouseTemplate() {
     if (!housePrefabTemplatePromise) {
         housePrefabTemplatePromise = houseLoader.loadAsync(sectionedHouseUrl).then((gltf) => {
@@ -202,6 +232,7 @@ export class PropManager {
         try {
             const template = await loadSectionedHouseTemplate();
             this.addSectionedHouses(template);
+            this.addIndustrialStructures();
             if (this.pendingHouseSnapshots) {
                 this.applyHouseSnapshots(this.pendingHouseSnapshots);
                 this.pendingHouseSnapshots = null;
@@ -209,6 +240,7 @@ export class PropManager {
         } catch (error) {
             console.warn('Failed to load sectioned village house prefab. Falling back to procedural houses.', error);
             this.addProceduralHouses();
+            this.addIndustrialStructures();
             if (this.pendingHouseSnapshots) {
                 this.applyHouseSnapshots(this.pendingHouseSnapshots);
                 this.pendingHouseSnapshots = null;
@@ -328,6 +360,144 @@ export class PropManager {
                 prefabKind: 'procedural',
                 sections: [],
                 sectionById: new Map(),
+                bodyConfig: DEFAULT_HOUSE_BODY_CONFIG,
+                loaded: true
+            };
+
+            for (const mesh of [...collectMeshes(intact), ...collectMeshes(damaged)]) {
+                this.houseByObjectId.set(mesh.id, house);
+            }
+
+            this.setHouseStage(house, 0);
+            this.houses.push(house);
+        });
+    }
+
+    addIndustrialStructures() {
+        INDUSTRIAL_LAYOUT.forEach((layout, index) => {
+            const scale = layout.scale ?? 1;
+            const root = new THREE.Group();
+            root.position.set(layout.x, this.heightAt(layout.x, layout.z), layout.z);
+            root.rotation.y = layout.rot ?? 0;
+            this.scene.add(root);
+
+            const plateMat = new THREE.MeshStandardMaterial({ color: 0x645548, roughness: 0.98 });
+            const tankMat = new THREE.MeshStandardMaterial({ color: 0x6b5e4f, roughness: 0.9, metalness: 0.08 });
+            const trimMat = new THREE.MeshStandardMaterial({ color: 0x3d322b, roughness: 0.98, metalness: 0.06 });
+            const brassMat = new THREE.MeshStandardMaterial({ color: 0x8a6a3e, roughness: 0.82, metalness: 0.14 });
+            const runeMat = new THREE.MeshStandardMaterial({ color: 0x688b90, emissive: 0x22464b, emissiveIntensity: 0.85, roughness: 0.42 });
+            const rubbleMat = new THREE.MeshStandardMaterial({ color: 0x5e534a, roughness: 1 });
+
+            const intact = new THREE.Group();
+            const base = new THREE.Mesh(new THREE.BoxGeometry(4.9 * scale, 0.9 * scale, 4.2 * scale), plateMat);
+            base.position.y = 0.45 * scale;
+            intact.add(base);
+
+            const rearTank = new THREE.Mesh(new THREE.CylinderGeometry(1.05 * scale, 1.18 * scale, 4.1 * scale, 10), tankMat);
+            rearTank.rotation.z = Math.PI / 2;
+            rearTank.position.set(-0.9 * scale, 2.7 * scale, -0.5 * scale);
+            intact.add(rearTank);
+
+            const frontTank = new THREE.Mesh(new THREE.CylinderGeometry(0.82 * scale, 0.92 * scale, 3.0 * scale, 10), tankMat.clone());
+            frontTank.rotation.z = Math.PI / 2;
+            frontTank.position.set(1.1 * scale, 2.05 * scale, 0.95 * scale);
+            intact.add(frontTank);
+
+            const leftBrace = new THREE.Mesh(new THREE.BoxGeometry(0.34 * scale, 3.8 * scale, 0.34 * scale), trimMat);
+            leftBrace.position.set(-1.9 * scale, 1.9 * scale, 1.5 * scale);
+            intact.add(leftBrace);
+
+            const rightBrace = leftBrace.clone();
+            rightBrace.position.x = 1.8 * scale;
+            intact.add(rightBrace);
+
+            const catwalk = new THREE.Mesh(new THREE.BoxGeometry(4.2 * scale, 0.24 * scale, 1.15 * scale), brassMat);
+            catwalk.position.set(-0.15 * scale, 3.65 * scale, 1.1 * scale);
+            intact.add(catwalk);
+
+            const stack = new THREE.Mesh(new THREE.CylinderGeometry(0.34 * scale, 0.42 * scale, 5.9 * scale, 8), trimMat.clone());
+            stack.position.set(1.95 * scale, 3.2 * scale, -1.3 * scale);
+            intact.add(stack);
+
+            const valve = new THREE.Mesh(new THREE.BoxGeometry(0.9 * scale, 0.9 * scale, 0.22 * scale), runeMat);
+            valve.position.set(-1.15 * scale, 2.2 * scale, 2.15 * scale);
+            valve.rotation.y = -0.18;
+            intact.add(valve);
+
+            const damaged = new THREE.Group();
+            const brokenBase = new THREE.Mesh(new THREE.BoxGeometry(4.4 * scale, 0.85 * scale, 3.9 * scale), plateMat.clone());
+            brokenBase.position.set(0, 0.42 * scale, 0);
+            damaged.add(brokenBase);
+
+            const toppledTank = new THREE.Mesh(new THREE.CylinderGeometry(1.0 * scale, 1.1 * scale, 3.9 * scale, 10), tankMat.clone());
+            toppledTank.rotation.set(0.22, 0.3, Math.PI / 2 - 0.28);
+            toppledTank.position.set(-0.35 * scale, 1.45 * scale, -0.2 * scale);
+            damaged.add(toppledTank);
+
+            const rupturedTank = new THREE.Mesh(new THREE.CylinderGeometry(0.78 * scale, 0.88 * scale, 2.4 * scale, 10), tankMat.clone());
+            rupturedTank.rotation.set(-0.18, -0.24, Math.PI / 2 + 0.12);
+            rupturedTank.position.set(1.15 * scale, 1.35 * scale, 1.15 * scale);
+            damaged.add(rupturedTank);
+
+            const brokenStack = new THREE.Mesh(new THREE.CylinderGeometry(0.32 * scale, 0.38 * scale, 3.4 * scale, 8), trimMat.clone());
+            brokenStack.position.set(1.45 * scale, 1.8 * scale, -1.0 * scale);
+            brokenStack.rotation.z = 0.38;
+            damaged.add(brokenStack);
+
+            const spar = new THREE.Mesh(new THREE.BoxGeometry(3.6 * scale, 0.2 * scale, 0.24 * scale), trimMat.clone());
+            spar.position.set(-0.9 * scale, 2.2 * scale, 1.05 * scale);
+            spar.rotation.set(0.28, -0.22, -0.44);
+            damaged.add(spar);
+
+            const crackedPanel = new THREE.Mesh(new THREE.BoxGeometry(0.82 * scale, 0.82 * scale, 0.22 * scale), runeMat.clone());
+            crackedPanel.position.set(-1.05 * scale, 1.35 * scale, 1.95 * scale);
+            crackedPanel.rotation.set(0.18, -0.1, -0.2);
+            damaged.add(crackedPanel);
+
+            damaged.visible = false;
+            root.add(intact, damaged);
+
+            const rubble = new THREE.Group();
+            const rubbleBase = new THREE.Mesh(new THREE.BoxGeometry(4.5 * scale, 0.75 * scale, 3.8 * scale), rubbleMat);
+            rubbleBase.position.set(0, 0.38 * scale, 0);
+            rubble.add(rubbleBase);
+
+            const tankChunk = new THREE.Mesh(new THREE.CylinderGeometry(0.82 * scale, 0.92 * scale, 2.1 * scale, 10), tankMat.clone());
+            tankChunk.rotation.set(0.3, 0.52, Math.PI / 2 - 0.18);
+            tankChunk.position.set(-0.55 * scale, 1.0 * scale, -0.4 * scale);
+            rubble.add(tankChunk);
+
+            const beamChunk = new THREE.Mesh(new THREE.BoxGeometry(2.2 * scale, 0.2 * scale, 0.22 * scale), trimMat.clone());
+            beamChunk.position.set(0.75 * scale, 0.9 * scale, 0.8 * scale);
+            beamChunk.rotation.set(0.22, -0.48, -0.32);
+            rubble.add(beamChunk);
+
+            const valveChunk = new THREE.Mesh(new THREE.BoxGeometry(0.85 * scale, 0.55 * scale, 0.55 * scale), brassMat.clone());
+            valveChunk.position.set(1.3 * scale, 0.72 * scale, -0.95 * scale);
+            valveChunk.rotation.set(0.1, 0.35, 0.22);
+            rubble.add(valveChunk);
+
+            rubble.visible = false;
+            root.add(rubble);
+
+            markShadows(root);
+
+            const house: HouseProp = {
+                id: `industrial-${index}`,
+                root,
+                intact,
+                damaged,
+                rubble,
+                body: this.createHouseBody(root.position, layout.rot ?? 0, DEFAULT_INDUSTRIAL_BODY_CONFIG),
+                hp: 84,
+                maxHp: 84,
+                stage: 0,
+                collisionEntries: [],
+                position: root.position.clone(),
+                prefabKind: 'procedural',
+                sections: [],
+                sectionById: new Map(),
+                bodyConfig: DEFAULT_INDUSTRIAL_BODY_CONFIG,
                 loaded: true
             };
 
@@ -596,10 +766,14 @@ export class PropManager {
         });
     }
 
-    createHouseBody(position: THREE.Vector3, rotationY: number) {
+    createHouseBody(position: THREE.Vector3, rotationY: number, bodyConfig: StaticBodyConfig = DEFAULT_HOUSE_BODY_CONFIG) {
         const houseRotation = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rotationY);
+        const halfWidth = bodyConfig.halfWidth;
+        const halfHeight = bodyConfig.halfHeight;
+        const halfDepth = bodyConfig.halfDepth;
+        const yOffset = bodyConfig.yOffset ?? halfHeight;
         const bodyDesc = RAPIER.RigidBodyDesc.fixed()
-            .setTranslation(position.x, position.y + 1.6, position.z)
+            .setTranslation(position.x, position.y + yOffset, position.z)
             .setRotation({
                 x: houseRotation.x,
                 y: houseRotation.y,
@@ -607,7 +781,7 @@ export class PropManager {
                 w: houseRotation.w
             });
         const body = this.physics.createRigidBody(bodyDesc);
-        const colliderDesc = RAPIER.ColliderDesc.cuboid(1.8, 1.6, 1.55);
+        const colliderDesc = RAPIER.ColliderDesc.cuboid(halfWidth, halfHeight, halfDepth);
         this.physics.createCollider(colliderDesc, body);
         return body;
     }
@@ -1120,7 +1294,7 @@ export class PropManager {
             } else {
                 house.hp = house.maxHp;
                 if (!house.body) {
-                    house.body = this.createHouseBody(house.position, house.root.rotation.y);
+                    house.body = this.createHouseBody(house.position, house.root.rotation.y, house.bodyConfig);
                 }
                 this.setHouseStage(house, 0);
             }

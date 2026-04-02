@@ -243,6 +243,8 @@ const en = {
     'mobile.settings.hints': 'HINTS',
     'mobile.settings.hostId': 'HOST ID',
     'mobile.settings.aimSensitivity': 'SENS {{preset}}',
+    'mobile.settings.atmosphereOn': 'ATMOSPHERE ON',
+    'mobile.settings.atmosphereOff': 'ATMOSPHERE OFF',
     'mobile.settings.leftHanded': 'LEFT-HANDED',
     'mobile.settings.rightHanded': 'RIGHT-HANDED',
     'mobile.settings.hint.leftCircle': 'LEFT CIRCLE move and turn chassis',

@@ -173,13 +173,16 @@ export class TerrainBuilder {
 
         const duneWave = Math.sin(x * 0.024) * 0.34 + Math.cos(z * 0.029) * 0.26 + Math.sin((x + z) * 0.015) * 0.18;
         const centerBasin = -Math.max(0, 1 - radial / 0.68) * 0.65;
-        const serviceShelf = Math.exp(-Math.pow((x + 74) / 26, 2) - Math.pow((z - 34) / 22, 2)) * 1.35;
-        const annexShelf = Math.exp(-Math.pow((x - 76) / 22, 2) - Math.pow((z - 40) / 22, 2)) * 1.95;
-        const centralChannel = -Math.exp(-Math.pow((z + 18) / 10, 2)) * (2.35 + Math.exp(-Math.pow(x / 68, 2)) * 0.95);
-        const channelCore = -Math.exp(-Math.pow(x / 28, 2) - Math.pow((z + 18) / 8, 2)) * 1.2;
-        const channelNorthLip = Math.exp(-Math.pow(x / 46, 2) - Math.pow((z + 2) / 14, 2)) * 0.85;
-        const blueBerm = Math.exp(-Math.pow((x + 58) / 13, 2) - Math.pow((z + 6) / 32, 2)) * 4.15;
-        const redBerm = Math.exp(-Math.pow((x - 58) / 13, 2) - Math.pow((z + 4) / 32, 2)) * 4.15;
+        const serviceShelf = Math.exp(-Math.pow((x + 74) / 26, 2) - Math.pow((z - 34) / 22, 2)) * 1.65;
+        const annexShelf = Math.exp(-Math.pow((x - 76) / 22, 2) - Math.pow((z - 40) / 22, 2)) * 1.7;
+        const centralChannel = -Math.exp(-Math.pow((z + 18) / 12, 2)) * (1.55 + Math.exp(-Math.pow(x / 72, 2)) * 0.55);
+        const channelCore = -Math.exp(-Math.pow(x / 28, 2) - Math.pow((z + 18) / 8, 2)) * 0.55;
+        const channelNorthLip = Math.exp(-Math.pow(x / 46, 2) - Math.pow((z + 2) / 14, 2)) * 0.55;
+        const midIsland = Math.exp(-Math.pow(x / 16, 2) - Math.pow((z + 18) / 10, 2)) * 0.82;
+        const westExitShelf = Math.exp(-Math.pow((x + 22) / 12, 2) - Math.pow((z + 14) / 10, 2)) * 0.54;
+        const eastExitShelf = Math.exp(-Math.pow((x - 22) / 12, 2) - Math.pow((z + 14) / 10, 2)) * 0.54;
+        const blueBerm = Math.exp(-Math.pow((x + 58) / 16, 2) - Math.pow((z + 6) / 34, 2)) * 3.2;
+        const redBerm = Math.exp(-Math.pow((x - 58) / 16, 2) - Math.pow((z + 4) / 34, 2)) * 3.2;
         const westPass = -Math.exp(-Math.pow((x + 78) / 16, 2) - Math.pow((z - 2) / 20, 2)) * 0.7;
         const eastPass = -Math.exp(-Math.pow((x - 78) / 16, 2) - Math.pow((z - 2) / 20, 2)) * 0.72;
         const northRise = Math.exp(-Math.pow((z - 96) / 20, 2)) * Math.exp(-Math.pow(x / 76, 2)) * 2.1;
@@ -202,6 +205,9 @@ export class TerrainBuilder {
             + centralChannel
             + channelCore
             + channelNorthLip
+            + midIsland
+            + westExitShelf
+            + eastExitShelf
             + blueBerm
             + redBerm
             + westPass

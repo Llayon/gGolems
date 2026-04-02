@@ -14,6 +14,7 @@ import { DummyBot } from '../entities/DummyBot';
 import { ParticleManager } from '../fx/ParticleManager';
 import { DebrisManager } from '../fx/DebrisManager';
 import { DecalManager } from '../fx/DecalManager';
+import { AtmosphereManager } from '../fx/AtmosphereManager';
 import { ProjectileManager } from '../combat/ProjectileManager';
 import { MechCamera } from '../camera/MechCamera';
 import { ControlPointManager } from '../gameplay/ControlPointManager';
@@ -88,6 +89,10 @@ function clamp(value: number, min: number, max: number) {
 
 type SessionMode = RespawnSessionMode;
 
+type GameRuntimeOptions = {
+    atmosphereEnabled?: boolean;
+};
+
 const TEAM_SIZE = 5;
 const SCORE_TO_WIN: Record<GameMode, number> = {
     control: 200,
@@ -107,6 +112,7 @@ export class Game {
     remotePlayerStates: Map<string, RemotePlayerState> = new Map();
     particles: ParticleManager;
     debris: DebrisManager;
+    atmosphere: AtmosphereManager;
     projectiles: ProjectileManager;
     bots: Map<string, DummyBot> = new Map();
     controlPoints: ControlPointManager;
@@ -146,7 +152,8 @@ export class Game {
         onStateUpdate: (state: GameHudState) => void,
         sessionMode: SessionMode = 'solo',
         gameMode: GameMode = 'control',
-        localMechOptions: GolemControllerOptions = {}
+        localMechOptions: GolemControllerOptions = {},
+        runtimeOptions: GameRuntimeOptions = {}
     ) {
         this.canvas = canvas;
         this.onStateUpdate = onStateUpdate;
@@ -171,6 +178,11 @@ export class Game {
         this.golem.gameCamera = this.mechCamera;
         this.particles = new ParticleManager(this.renderer.scene, this.quality);
         this.debris = new DebrisManager(this.renderer.scene, this.quality);
+        this.atmosphere = new AtmosphereManager(
+            this.renderer.scene,
+            this.quality,
+            runtimeOptions.atmosphereEnabled ?? !this.quality.isMobile
+        );
         this.projectiles = new ProjectileManager(this.renderer.scene);
         this.controlPoints = new ControlPointManager(this.renderer.scene, this.world.controlPointPositions);
         this.controlPoints.setVisible(gameMode === 'control');
@@ -599,6 +611,11 @@ export class Game {
         return mode;
     }
 
+    setAtmosphereEnabled(enabled: boolean) {
+        this.atmosphere.setEnabled(enabled);
+        return this.atmosphere.enabled;
+    }
+
     allocateRemoteSpawnSlot() {
         for (let slot = 1; slot < TEAM_SIZE; slot++) {
             if (![...this.remoteSpawnSlots.values()].includes(slot)) {
@@ -621,6 +638,7 @@ export class Game {
         this.input.dispose();
         this.network.destroy();
         this.sounds.dispose();
+        this.atmosphere.dispose();
         this.renderer.dispose();
     }
 
@@ -766,6 +784,7 @@ export class Game {
         }
         this.particles.update(dt);
         this.debris.update(dt);
+        this.atmosphere.update(dt);
         this.world.propManager.update(dt);
 
         // Network synchronization (20 Hz)
@@ -882,10 +901,11 @@ export async function initGame(
     onStateUpdate: (state: GameHudState) => void,
     sessionMode: SessionMode = 'solo',
     gameMode: GameMode = 'control',
-    localMechOptions: GolemControllerOptions = {}
+    localMechOptions: GolemControllerOptions = {},
+    runtimeOptions: GameRuntimeOptions = {}
 ) {
     await RAPIER.init();
-    const game = new Game(canvas, onStateUpdate, sessionMode, gameMode, localMechOptions);
+    const game = new Game(canvas, onStateUpdate, sessionMode, gameMode, localMechOptions, runtimeOptions);
     game.start();
     return game;
 }

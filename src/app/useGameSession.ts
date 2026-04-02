@@ -58,6 +58,7 @@ async function withTimeout<T>(
 type UseGameSessionArgs = {
     canvasRef: RefObject<HTMLCanvasElement | null>;
     firebaseEnabled: boolean;
+    atmosphereEnabled: boolean;
     roomName: string;
     selectedChassisId: ChassisId;
     selectedLoadoutId: LoadoutId;
@@ -118,6 +119,8 @@ export function useGameSession(args: UseGameSessionArgs) {
                         }, mode, requestedMode, {
                             chassisId: args.selectedChassisId,
                             loadoutId: args.selectedLoadoutId
+                        }, {
+                            atmosphereEnabled: args.atmosphereEnabled
                         });
                     } catch (error) {
                         throw toStartupFailure(error, 'startWorld');

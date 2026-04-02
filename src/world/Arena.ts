@@ -77,6 +77,7 @@ export class Arena {
         this.createRuinQuarter(scene, physics, 104, 46, -0.08, 1.12);
         this.createRuinQuarter(scene, physics, 104, 18, 0.2, 0.78);
         this.createRockArch(scene, physics, 94, -86, -0.18, 1.12);
+        this.createRouteLandmarks(scene, physics);
 
         this.propManager = new PropManager(scene, physics, this.surfaceY.bind(this));
     }
@@ -185,31 +186,194 @@ export class Arena {
 
     createCombatCover(scene: THREE.Scene, physics: RAPIER.World) {
         const configs: BoxConfig[] = [
+            // Spawn staging screens.
+            { x: -108, z: -62, w: 10, h: 4.0, d: 12, color: 0x54535d, yOffset: 2.0, rotationY: 0.06 },
+            { x: -108, z: 20, w: 10, h: 4.0, d: 12, color: 0x54535d, yOffset: 2.0, rotationY: -0.06 },
+            { x: -108, z: 72, w: 10, h: 4.0, d: 12, color: 0x54535d, yOffset: 2.0, rotationY: 0.08 },
+            { x: 108, z: -62, w: 10, h: 4.0, d: 12, color: 0x646167, yOffset: 2.0, rotationY: -0.06 },
+            { x: 108, z: 20, w: 10, h: 4.0, d: 12, color: 0x646167, yOffset: 2.0, rotationY: 0.06 },
+            { x: 108, z: 72, w: 10, h: 4.0, d: 12, color: 0x646167, yOffset: 2.0, rotationY: -0.08 },
+
+            // Outer flank anchors.
             { x: -102, z: -18, w: 10, h: 3.8, d: 18, color: 0x5c595f, yOffset: 1.9, rotationY: -0.08 },
             { x: -98, z: 46, w: 10, h: 3.8, d: 18, color: 0x5c595f, yOffset: 1.9, rotationY: 0.08 },
             { x: 102, z: -8, w: 10, h: 3.8, d: 18, color: 0x646167, yOffset: 1.9, rotationY: 0.08 },
             { x: 98, z: 54, w: 10, h: 3.8, d: 18, color: 0x646167, yOffset: 1.9, rotationY: -0.08 },
 
-            { x: -92, z: 24, w: 12, h: 4.6, d: 16, color: 0x54535d, yOffset: 2.3, rotationY: 0.14 },
-            { x: -92, z: 50, w: 10, h: 4.2, d: 14, color: 0x5a5860, yOffset: 2.1, rotationY: -0.18 },
+            // A lane: boost the industrial side to better match the ruin quarter.
+            { x: -74, z: 12, w: 8, h: 3.8, d: 12, color: 0x5c595f, yOffset: 1.9, rotationY: -0.12 },
             { x: -50, z: 36, w: 8, h: 3.8, d: 12, color: 0x66636a, yOffset: 1.9, rotationY: 0.08 },
             { x: -56, z: 54, w: 12, h: 4.4, d: 10, color: 0x595760, yOffset: 2.2, rotationY: 0.08 },
             { x: -58, z: 20, w: 10, h: 3.8, d: 8, color: 0x5b585f, yOffset: 1.9, rotationY: -0.14 },
 
-            { x: -32, z: -34, w: 14, h: 4.2, d: 8, color: 0x5d5a61, yOffset: 2.1, rotationY: 0.18 },
-            { x: -18, z: 0, w: 10, h: 3.4, d: 12, color: 0x66626a, yOffset: 1.7, rotationY: -0.08 },
-            { x: 0, z: -40, w: 12, h: 3.0, d: 6, color: 0x706b71, yOffset: 1.5, rotationY: 0.04 },
-            { x: 18, z: 0, w: 10, h: 3.8, d: 12, color: 0x5f5c64, yOffset: 1.9, rotationY: -0.12 },
-            { x: 34, z: -32, w: 12, h: 4.0, d: 8, color: 0x65626a, yOffset: 2.0, rotationY: 0.16 },
+            // B lane: shift from a kill bowl into a contestable mid.
+            { x: -24, z: -4, w: 8, h: 3.6, d: 12, color: 0x66626a, yOffset: 1.8, rotationY: -0.08 },
+            { x: -14, z: -14, w: 8, h: 4.0, d: 10, color: 0x605d63, yOffset: 2.0, rotationY: 0.16 },
+            { x: -10, z: -30, w: 10, h: 3.6, d: 8, color: 0x6b666c, yOffset: 1.8, rotationY: 0.10 },
+            { x: 0, z: -20, w: 8, h: 4.2, d: 8, color: 0x6a666d, yOffset: 2.1, rotationY: 0.06 },
+            { x: 10, z: -30, w: 10, h: 3.6, d: 8, color: 0x6b666c, yOffset: 1.8, rotationY: -0.10 },
+            { x: 14, z: -14, w: 8, h: 4.0, d: 10, color: 0x605d63, yOffset: 2.0, rotationY: -0.16 },
+            { x: 24, z: -4, w: 8, h: 3.6, d: 12, color: 0x66626a, yOffset: 1.8, rotationY: 0.08 },
 
+            // C lane: keep its identity but reduce redundant static cover.
             { x: 56, z: 24, w: 8, h: 3.8, d: 12, color: 0x635d61, yOffset: 1.9, rotationY: -0.12 },
             { x: 58, z: 54, w: 10, h: 4.4, d: 14, color: 0x6b6468, yOffset: 2.2, rotationY: 0.14 },
-            { x: 96, z: 24, w: 8, h: 3.8, d: 12, color: 0x665f64, yOffset: 1.9, rotationY: 0.08 },
-            { x: 92, z: 56, w: 10, h: 4.0, d: 14, color: 0x736b70, yOffset: 2.0, rotationY: -0.18 },
             { x: 74, z: 66, w: 12, h: 3.4, d: 8, color: 0x786f73, yOffset: 1.7, rotationY: 0.06 }
         ];
 
         configs.forEach((config) => this.createBox(scene, physics, config));
+    }
+
+    createRouteLandmarks(scene: THREE.Scene, physics: RAPIER.World) {
+        this.createLaneMarker(scene, physics, -90, 78, 'steam', 1.12, 0.08);
+        this.createLaneMarker(scene, physics, -78, -44, 'pressure', 0.96, 0);
+        this.createLaneMarker(scene, physics, 78, -44, 'pressure', 0.96, 0);
+        this.createLaneMarker(scene, physics, 92, 78, 'ruin', 1.12, -0.08);
+
+        // Secondary gateposts frame the high route split without adding traversal complexity.
+        this.createLaneMarker(scene, physics, -82, 28, 'steam', 0.72, 0.06);
+        this.createLaneMarker(scene, physics, 82, 30, 'ruin', 0.72, -0.06);
+    }
+
+    createLaneMarker(
+        scene: THREE.Scene,
+        physics: RAPIER.World,
+        x: number,
+        z: number,
+        theme: 'steam' | 'pressure' | 'ruin',
+        scale = 1,
+        rotationY = 0
+    ) {
+        const root = new THREE.Group();
+        root.position.set(x, this.surfaceY(x, z) + 0.18, z);
+        root.rotation.y = rotationY;
+        scene.add(root);
+
+        if (theme === 'steam') {
+            const baseMaterial = new THREE.MeshStandardMaterial({ color: 0x55463d, roughness: 0.98 });
+            const trimMaterial = new THREE.MeshStandardMaterial({ color: 0x3d322b, roughness: 0.95 });
+            const glowMaterial = new THREE.MeshStandardMaterial({ color: 0x678a91, emissive: 0x254850, emissiveIntensity: 0.9, roughness: 0.42 });
+
+            const base = new THREE.Mesh(new THREE.BoxGeometry(5.4 * scale, 1.2 * scale, 4.2 * scale), baseMaterial);
+            base.position.set(0, 0.6 * scale, 0);
+            root.add(base);
+
+            const stack = new THREE.Mesh(new THREE.CylinderGeometry(0.72 * scale, 0.92 * scale, 12.6 * scale, 10), trimMaterial);
+            stack.position.set(-0.9 * scale, 6.3 * scale, -0.4 * scale);
+            root.add(stack);
+
+            const topCap = new THREE.Mesh(new THREE.CylinderGeometry(1.05 * scale, 1.05 * scale, 1.0 * scale, 10), trimMaterial.clone());
+            topCap.position.set(-0.9 * scale, 12.9 * scale, -0.4 * scale);
+            root.add(topCap);
+
+            const sideTank = new THREE.Mesh(new THREE.CylinderGeometry(0.96 * scale, 1.04 * scale, 4.4 * scale, 10), baseMaterial.clone());
+            sideTank.rotation.z = Math.PI / 2;
+            sideTank.position.set(0.7 * scale, 2.8 * scale, 0.2 * scale);
+            root.add(sideTank);
+
+            const pipe = new THREE.Mesh(new THREE.BoxGeometry(4.4 * scale, 0.32 * scale, 0.32 * scale), trimMaterial.clone());
+            pipe.position.set(0.6 * scale, 7.8 * scale, 0.1 * scale);
+            pipe.rotation.z = 0.1;
+            root.add(pipe);
+
+            const panel = new THREE.Mesh(new THREE.BoxGeometry(1.15 * scale, 1.15 * scale, 0.22 * scale), glowMaterial);
+            panel.position.set(1.7 * scale, 3.1 * scale, 1.95 * scale);
+            panel.rotation.y = -0.22;
+            root.add(panel);
+
+            const glowCap = new THREE.Mesh(new THREE.SphereGeometry(0.6 * scale, 10, 10), glowMaterial.clone());
+            glowCap.position.set(-0.9 * scale, 13.8 * scale, -0.4 * scale);
+            root.add(glowCap);
+
+            this.createBoxCollider(physics, root, base.position, 5.4 * scale, 1.2 * scale, 4.2 * scale, 0, 0, 0);
+            this.createCylinderCollider(physics, root, stack.position, 0.9 * scale, 12.6 * scale);
+        } else if (theme === 'pressure') {
+            const ironMaterial = new THREE.MeshStandardMaterial({ color: 0x4a3d34, roughness: 0.96 });
+            const brassMaterial = new THREE.MeshStandardMaterial({ color: 0x8c6b3f, roughness: 0.82, metalness: 0.14 });
+            const glowMaterial = new THREE.MeshStandardMaterial({ color: 0x76a197, emissive: 0x31595a, emissiveIntensity: 0.82, roughness: 0.38 });
+
+            const base = new THREE.Mesh(new THREE.CylinderGeometry(2.6 * scale, 3.1 * scale, 1.2 * scale, 14), ironMaterial);
+            base.position.set(0, 0.6 * scale, 0);
+            root.add(base);
+
+            const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.42 * scale, 0.58 * scale, 10.6 * scale, 10), brassMaterial);
+            mast.position.set(0, 5.9 * scale, 0);
+            root.add(mast);
+
+            const ring = new THREE.Mesh(new THREE.TorusGeometry(2.2 * scale, 0.18 * scale, 8, 20), ironMaterial.clone());
+            ring.position.set(0, 5.3 * scale, 0);
+            ring.rotation.x = Math.PI / 2;
+            root.add(ring);
+
+            const sideTankA = new THREE.Mesh(new THREE.CylinderGeometry(0.52 * scale, 0.52 * scale, 3.6 * scale, 8), brassMaterial.clone());
+            sideTankA.rotation.z = Math.PI / 2;
+            sideTankA.position.set(-2.0 * scale, 2.2 * scale, 0);
+            root.add(sideTankA);
+
+            const sideTankB = sideTankA.clone();
+            sideTankB.position.x = 2.0 * scale;
+            root.add(sideTankB);
+
+            const cube = new THREE.Mesh(new THREE.BoxGeometry(1.15 * scale, 1.15 * scale, 1.15 * scale), glowMaterial);
+            cube.position.set(0, 11.6 * scale, 0);
+            root.add(cube);
+
+            const beam = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.62 * scale, 1.18 * scale, 9.6 * scale, 10, 1, true),
+                new THREE.MeshBasicMaterial({
+                    color: 0xd7b26d,
+                    transparent: true,
+                    opacity: 0.12,
+                    side: THREE.DoubleSide,
+                    depthWrite: false
+                })
+            );
+            beam.userData.nonCollision = true;
+            beam.position.set(0, 8.6 * scale, 0);
+            root.add(beam);
+
+            this.createCylinderCollider(physics, root, base.position, 2.8 * scale, 1.2 * scale);
+            this.createCylinderCollider(physics, root, mast.position, 0.6 * scale, 10.6 * scale);
+        } else {
+            const wallMaterial = new THREE.MeshStandardMaterial({ color: 0x77685a, roughness: 0.97 });
+            const trimMaterial = new THREE.MeshStandardMaterial({ color: 0x43342c, roughness: 0.98 });
+            const bannerMaterial = new THREE.MeshStandardMaterial({ color: 0x8d4132, emissive: 0x4a1f1a, emissiveIntensity: 0.35, roughness: 0.84, side: THREE.DoubleSide });
+            const emberMaterial = new THREE.MeshStandardMaterial({ color: 0xd7a05d, emissive: 0x7b4720, emissiveIntensity: 0.95, roughness: 0.36 });
+
+            const plinth = new THREE.Mesh(new THREE.BoxGeometry(5.2 * scale, 1.4 * scale, 4.2 * scale), wallMaterial);
+            plinth.position.set(0, 0.7 * scale, 0);
+            root.add(plinth);
+
+            const mast = new THREE.Mesh(new THREE.BoxGeometry(1.0 * scale, 10.8 * scale, 1.0 * scale), trimMaterial);
+            mast.position.set(0, 6.0 * scale, -0.2 * scale);
+            root.add(mast);
+
+            const crossbar = new THREE.Mesh(new THREE.BoxGeometry(4.6 * scale, 0.28 * scale, 0.28 * scale), trimMaterial.clone());
+            crossbar.position.set(0.3 * scale, 9.4 * scale, -0.2 * scale);
+            crossbar.rotation.z = -0.08;
+            root.add(crossbar);
+
+            const banner = new THREE.Mesh(new THREE.PlaneGeometry(2.1 * scale, 4.8 * scale), bannerMaterial);
+            banner.userData.nonCollision = true;
+            banner.position.set(1.7 * scale, 7.4 * scale, 0.36 * scale);
+            banner.rotation.set(0.04, -Math.PI / 2, 0.08);
+            root.add(banner);
+
+            const ember = new THREE.Mesh(new THREE.SphereGeometry(0.58 * scale, 10, 10), emberMaterial);
+            ember.position.set(0, 11.8 * scale, -0.2 * scale);
+            root.add(ember);
+
+            const ruinWing = new THREE.Mesh(new THREE.BoxGeometry(3.2 * scale, 3.8 * scale, 1.2 * scale), wallMaterial.clone());
+            ruinWing.position.set(-2.0 * scale, 1.9 * scale, 1.0 * scale);
+            ruinWing.rotation.y = 0.16;
+            root.add(ruinWing);
+
+            this.createBoxCollider(physics, root, plinth.position, 5.2 * scale, 1.4 * scale, 4.2 * scale, 0, 0, 0);
+            this.createBoxCollider(physics, root, mast.position, 1.0 * scale, 10.8 * scale, 1.0 * scale, 0, 0, 0);
+            this.createBoxCollider(physics, root, ruinWing.position, 3.2 * scale, 3.8 * scale, 1.2 * scale, 0, ruinWing.rotation.y, 0);
+        }
+
+        this.registerGroupMeshes(root);
     }
 
     createSteamYard(scene: THREE.Scene, physics: RAPIER.World, x: number, z: number, rotationY = 0, scale = 1) {
@@ -433,6 +597,35 @@ export class Arena {
         beacon.castShadow = true;
         root.add(beacon);
 
+        const crownRing = new THREE.Mesh(new THREE.TorusGeometry(3.1 * scale, 0.18 * scale, 8, 24), brassMaterial.clone());
+        crownRing.position.set(0, 23.1 * scale, 0);
+        crownRing.rotation.x = Math.PI / 2;
+        root.add(crownRing);
+
+        const finGeometry = new THREE.BoxGeometry(0.5 * scale, 4.2 * scale, 1.2 * scale);
+        for (let index = 0; index < 4; index++) {
+            const angle = (index / 4) * Math.PI * 2 + Math.PI / 4;
+            const fin = new THREE.Mesh(finGeometry, ironMaterial.clone());
+            fin.position.set(Math.cos(angle) * 2.6 * scale, 24.2 * scale, Math.sin(angle) * 2.6 * scale);
+            fin.rotation.y = angle;
+            fin.rotation.z = 0.12 * (index % 2 === 0 ? 1 : -1);
+            root.add(fin);
+        }
+
+        const beaconBeam = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.78 * scale, 1.6 * scale, 22 * scale, 14, 1, true),
+            new THREE.MeshBasicMaterial({
+                color: 0xd7b56c,
+                transparent: true,
+                opacity: 0.1,
+                side: THREE.DoubleSide,
+                depthWrite: false
+            })
+        );
+        beaconBeam.userData.nonCollision = true;
+        beaconBeam.position.set(0, 17.2 * scale, 0);
+        root.add(beaconBeam);
+
         this.createBoxCollider(physics, root, base.position, 10 * scale, 3.4 * scale, 10 * scale, 0, 0, 0);
         this.createCylinderCollider(physics, root, tower.position, 2.1 * scale, 24 * scale);
         this.createCylinderCollider(physics, root, sideTankA.position, 1.7 * scale, 7.2 * scale);
@@ -444,6 +637,9 @@ export class Arena {
     registerGroupMeshes(root: THREE.Group) {
         root.traverse((child) => {
             if (child instanceof THREE.Mesh) {
+                if (child.userData.nonCollision) {
+                    return;
+                }
                 child.castShadow = true;
                 child.receiveShadow = true;
                 this.meshes.push(child);
