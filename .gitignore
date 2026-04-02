@@ -12,6 +12,7 @@ actions.html
 pages_*.html
 pages_bundle*.js
 browser-*.png
+.tmp/
 *.blend1
 Lancer 3D Models-*.zip
 Lancer 3D Models-*/

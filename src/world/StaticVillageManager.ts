@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import villageBlueprintData from '../assets/props/village_blueprints.json';
+import villageModuleManifestData from '../assets/props/village_modules.json';
+import villageModulesUrl from '../assets/props/VillageStatic_House_A_mobile.glb?url';
 
 type StaticVillageModulePlacement = [number, number, number, number, number];
 
@@ -32,18 +35,58 @@ type StaticVillageBlueprint = {
     chunks: StaticVillageChunkDef[];
 };
 
-type ModuleTemplate = {
-    geometry: THREE.BufferGeometry;
-    material: THREE.Material;
+type StaticVillageModuleDef = {
+    id: string;
+    kind: 'prefab';
+    nodeName: string;
+    placementOffset?: [number, number, number];
+};
+
+type StaticVillageModuleManifest = {
+    schemaVersion: number;
+    assetPackVersion: string;
+    libraryKind: 'prefab_glb';
+    modules: StaticVillageModuleDef[];
+};
+
+type PrefabModuleTemplate = {
+    root: THREE.Object3D;
+    placementOffset: THREE.Vector3;
 };
 
 type StaticVillageChunkRuntime = {
     id: string;
+    definition: StaticVillageChunkDef;
     root: THREE.Group;
     colliderBodies: RAPIER.RigidBody[];
 };
 
 const BLUEPRINT = villageBlueprintData as StaticVillageBlueprint;
+const MODULE_MANIFEST = villageModuleManifestData as StaticVillageModuleManifest;
+const villageLoader = new GLTFLoader();
+const authoredModuleLibraryPromise = villageLoader.loadAsync(villageModulesUrl).then((gltf) => {
+    const manifestById = new Map(MODULE_MANIFEST.modules.map((moduleDef) => [moduleDef.id, moduleDef]));
+    const library = new Map<string, PrefabModuleTemplate>();
+    const lookup = new Map<string, THREE.Object3D>();
+
+    gltf.scene.traverse((object) => {
+        lookup.set(object.name, object);
+    });
+
+    for (const [moduleId, moduleDef] of manifestById) {
+        const root = lookup.get(moduleDef.nodeName);
+        if (!root) {
+            console.warn(`StaticVillageManager: module node "${moduleDef.nodeName}" not found in static village asset.`);
+            continue;
+        }
+        library.set(moduleId, {
+            root,
+            placementOffset: new THREE.Vector3(...(moduleDef.placementOffset ?? [0, 0, 0]))
+        });
+    }
+
+    return library;
+});
 
 export class StaticVillageManager {
     collisionMeshes: THREE.Mesh[] = [];
@@ -61,22 +104,56 @@ export class StaticVillageManager {
 
     buildVillage() {
         for (const chunk of BLUEPRINT.chunks) {
-            this.chunks.push(this.buildChunk(chunk));
+            this.chunks.push(this.createChunkRuntime(chunk));
         }
+
+        void this.populateVisuals();
     }
 
-    buildChunk(chunk: StaticVillageChunkDef) {
+    createChunkRuntime(chunk: StaticVillageChunkDef) {
         const root = new THREE.Group();
         root.name = `static-village-${chunk.id}`;
         this.scene.add(root);
 
-        const moduleLibrary = this.createFallbackModuleLibrary(chunk.moduleNames);
-        const matricesByModule = new Map<string, THREE.Matrix4[]>();
         const colliderBodies: RAPIER.RigidBody[] = [];
-
-        for (const moduleName of chunk.moduleNames) {
-            matricesByModule.set(moduleName, []);
+        for (const building of chunk.buildings) {
+            const buildingRotation = (building.rotationSteps ?? 0) * (Math.PI / 2);
+            const buildingBaseX = chunk.origin[0] + building.origin[0];
+            const buildingBaseZ = chunk.origin[1] + building.origin[1];
+            const buildingBaseY = this.heightAt(buildingBaseX, buildingBaseZ);
+            const buildingBase = new THREE.Vector3(buildingBaseX, buildingBaseY, buildingBaseZ);
+            colliderBodies.push(this.createBuildingCollider(building, buildingBase, buildingRotation));
         }
+
+        return {
+            id: chunk.id,
+            definition: chunk,
+            root,
+            colliderBodies
+        };
+    }
+
+    async populateVisuals() {
+        try {
+            const moduleLibrary = await authoredModuleLibraryPromise;
+            this.rebuildChunkVisuals(moduleLibrary);
+        } catch (error) {
+            console.warn('StaticVillageManager: failed to load authored village modules, using fallback prefabs instead.', error);
+            this.rebuildChunkVisuals(this.createFallbackModuleLibrary());
+        }
+    }
+
+    rebuildChunkVisuals(moduleLibrary: Map<string, PrefabModuleTemplate>) {
+        this.collisionMeshes = [];
+
+        for (const chunkRuntime of this.chunks) {
+            chunkRuntime.root.clear();
+            this.populateChunk(chunkRuntime, moduleLibrary);
+        }
+    }
+
+    populateChunk(chunkRuntime: StaticVillageChunkRuntime, moduleLibrary: Map<string, PrefabModuleTemplate>) {
+        const chunk = chunkRuntime.definition;
 
         for (const building of chunk.buildings) {
             const buildingRotation = (building.rotationSteps ?? 0) * (Math.PI / 2);
@@ -86,45 +163,28 @@ export class StaticVillageManager {
             const buildingBase = new THREE.Vector3(buildingBaseX, buildingBaseY, buildingBaseZ);
 
             for (const [moduleIndex, x, y, z, rotationSteps] of building.modules) {
-                const moduleName = chunk.moduleNames[moduleIndex];
-                const piecePos = new THREE.Vector3(x, y, z).applyAxisAngle(THREE.Object3D.DEFAULT_UP, buildingRotation);
-                piecePos.add(buildingBase);
+                const moduleId = chunk.moduleNames[moduleIndex];
+                const template = moduleLibrary.get(moduleId);
+                if (!template) continue;
 
+                const localPosition = new THREE.Vector3(x, y, z).applyAxisAngle(THREE.Object3D.DEFAULT_UP, buildingRotation);
                 const totalRotation = buildingRotation + rotationSteps * (Math.PI / 2);
-                const matrix = new THREE.Matrix4().compose(
-                    piecePos,
-                    new THREE.Quaternion().setFromEuler(new THREE.Euler(0, totalRotation, 0)),
-                    new THREE.Vector3(1, 1, 1)
-                );
+                const placementOffset = template.placementOffset.clone().applyAxisAngle(THREE.Object3D.DEFAULT_UP, totalRotation);
 
-                matricesByModule.get(moduleName)?.push(matrix);
+                const instance = template.root.clone(true);
+                instance.position.copy(buildingBase).add(localPosition).add(placementOffset);
+                instance.rotation.y = totalRotation;
+                instance.name = `${building.id}:${moduleId}`;
+                chunkRuntime.root.add(instance);
+
+                instance.traverse((object) => {
+                    if (!(object instanceof THREE.Mesh)) return;
+                    object.castShadow = true;
+                    object.receiveShadow = true;
+                    this.collisionMeshes.push(object);
+                });
             }
-
-            colliderBodies.push(this.createBuildingCollider(building, buildingBase, buildingRotation));
         }
-
-        for (const moduleName of chunk.moduleNames) {
-            const matrices = matricesByModule.get(moduleName) ?? [];
-            if (matrices.length === 0) continue;
-
-            const template = moduleLibrary.get(moduleName);
-            if (!template) continue;
-
-            const instanced = new THREE.InstancedMesh(template.geometry, template.material, matrices.length);
-            instanced.name = `${chunk.id}:${moduleName}`;
-            instanced.castShadow = true;
-            instanced.receiveShadow = true;
-            matrices.forEach((matrix, index) => instanced.setMatrixAt(index, matrix));
-            instanced.instanceMatrix.needsUpdate = true;
-            root.add(instanced);
-            this.collisionMeshes.push(instanced);
-        }
-
-        return {
-            id: chunk.id,
-            root,
-            colliderBodies
-        };
     }
 
     createBuildingCollider(building: StaticVillageBuildingDef, buildingBase: THREE.Vector3, buildingRotation: number) {
@@ -146,71 +206,54 @@ export class StaticVillageManager {
         return body;
     }
 
-    createFallbackModuleLibrary(moduleNames: string[]) {
-        const library = new Map<string, ModuleTemplate>();
-        for (const moduleName of moduleNames) {
-            library.set(moduleName, this.createFallbackModule(moduleName));
+    createFallbackModuleLibrary() {
+        const library = new Map<string, PrefabModuleTemplate>();
+        const moduleIds = new Set(BLUEPRINT.chunks.flatMap((chunk) => chunk.moduleNames));
+        for (const moduleId of moduleIds) {
+            library.set(moduleId, this.createFallbackPrefab(moduleId));
         }
         return library;
     }
 
-    createFallbackModule(moduleName: string): ModuleTemplate {
-        switch (moduleName) {
-            case 'Foundation':
-                return {
-                    geometry: new THREE.BoxGeometry(2.05, 0.6, 2.05).translate(0, 0.3, 0),
-                    material: new THREE.MeshStandardMaterial({ color: 0x7b756b, roughness: 1 })
-                };
-            case 'Wall_Window':
-                return {
-                    geometry: new THREE.BoxGeometry(2.04, 2.45, 0.22).translate(0, 1.225, 0),
-                    material: new THREE.MeshStandardMaterial({ color: 0xd0c0a6, roughness: 1 })
-                };
-            case 'Wall_Door':
-                return {
-                    geometry: new THREE.BoxGeometry(2.04, 2.2, 0.22).translate(0, 1.1, 0),
-                    material: new THREE.MeshStandardMaterial({ color: 0x6a4c34, roughness: 1 })
-                };
-            case 'Corner_Brick':
-                return {
-                    geometry: new THREE.BoxGeometry(0.34, 3.0, 0.34).translate(0, 1.5, 0),
-                    material: new THREE.MeshStandardMaterial({ color: 0x876d55, roughness: 1 })
-                };
-            case 'Roof_Left': {
-                const geometry = new THREE.BoxGeometry(3.6, 0.18, 6.6);
-                geometry.rotateZ(-0.62);
-                geometry.translate(0, 1.05, 0);
-                return {
-                    geometry,
-                    material: new THREE.MeshStandardMaterial({ color: 0xa6533a, roughness: 0.95 })
-                };
-            }
-            case 'Roof_Right': {
-                const geometry = new THREE.BoxGeometry(3.6, 0.18, 6.6);
-                geometry.rotateZ(0.62);
-                geometry.translate(0, 1.05, 0);
-                return {
-                    geometry,
-                    material: new THREE.MeshStandardMaterial({ color: 0xa6533a, roughness: 0.95 })
-                };
-            }
-            case 'Roof_Gable':
-                return {
-                    geometry: new THREE.BoxGeometry(6.1, 1.9, 0.18).translate(0, 0.95, 0),
-                    material: new THREE.MeshStandardMaterial({ color: 0xc9b79a, roughness: 1 })
-                };
-            case 'Chimney':
-                return {
-                    geometry: new THREE.BoxGeometry(0.44, 1.4, 0.44).translate(0, 0.7, 0),
-                    material: new THREE.MeshStandardMaterial({ color: 0x6e655d, roughness: 1 })
-                };
-            case 'Wall_Straight':
-            default:
-                return {
-                    geometry: new THREE.BoxGeometry(2.04, 2.8, 0.22).translate(0, 1.4, 0),
-                    material: new THREE.MeshStandardMaterial({ color: 0xe0d0b4, roughness: 1 })
-                };
-        }
+    createFallbackPrefab(moduleId: string): PrefabModuleTemplate {
+        const root = new THREE.Group();
+        root.name = moduleId;
+
+        const wallMaterial = new THREE.MeshStandardMaterial({ color: 0xd7ccb7, roughness: 0.96 });
+        const trimMaterial = new THREE.MeshStandardMaterial({ color: 0x7a5b45, roughness: 0.92 });
+        const roofMaterial = new THREE.MeshStandardMaterial({ color: 0xa6563d, roughness: 0.9 });
+
+        const body = new THREE.Mesh(new THREE.BoxGeometry(7.4, 6.2, 7.8), wallMaterial);
+        body.position.y = 3.1;
+        root.add(body);
+
+        const frameA = new THREE.Mesh(new THREE.BoxGeometry(0.26, 6.6, 0.26), trimMaterial);
+        frameA.position.set(-3.55, 3.3, -3.75);
+        root.add(frameA);
+        const frameB = frameA.clone();
+        frameB.position.set(3.55, 3.3, -3.75);
+        root.add(frameB);
+        const frameC = frameA.clone();
+        frameC.position.set(-3.55, 3.3, 3.75);
+        root.add(frameC);
+        const frameD = frameA.clone();
+        frameD.position.set(3.55, 3.3, 3.75);
+        root.add(frameD);
+
+        const roofLeft = new THREE.Mesh(new THREE.BoxGeometry(4.5, 0.24, 8.8), roofMaterial);
+        roofLeft.position.set(-1.15, 6.65, 0);
+        roofLeft.rotation.z = -0.62;
+        root.add(roofLeft);
+
+        const roofRight = roofLeft.clone();
+        roofRight.position.x = 1.15;
+        roofRight.rotation.z = 0.62;
+        root.add(roofRight);
+
+        return {
+            root,
+            placementOffset: new THREE.Vector3()
+        };
     }
 
     getCollisionMeshes() {
