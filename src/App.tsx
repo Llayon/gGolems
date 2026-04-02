@@ -345,6 +345,8 @@ export default function App() {
                     locale={locale}
                     localeLabel={localeLabel}
                     t={t}
+                    isTouchDevice={isTouchDevice}
+                    isPortrait={isPortrait}
                     selectedGameMode={selectedGameMode}
                     onSelectGameMode={setSelectedGameMode}
                     availableChassis={availableChassis}

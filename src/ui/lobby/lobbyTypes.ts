@@ -1,0 +1,48 @@
+import type { PilotAccountState, AuthUpgradeBusy, AuthUpgradeMessage } from '../../app/pilotAccountState';
+import type { FirebaseLobbyRoom } from '../../firebase/lobbyRegistry';
+import type { GameMode } from '../../gameplay/types';
+import type { Translator } from '../../i18n';
+import type { Locale } from '../../i18n/types';
+import type { ChassisDefinition, ChassisId, LoadoutDefinition, LoadoutId } from '../../mechs/types';
+
+export type LobbyLayoutKind = 'desktop' | 'mobilePortrait' | 'mobileLandscape';
+
+export type LobbyScreenProps = {
+    locale: Locale;
+    localeLabel: string;
+    t: Translator;
+    isTouchDevice: boolean;
+    isPortrait: boolean;
+    selectedGameMode: GameMode;
+    onSelectGameMode: (mode: GameMode) => void;
+    availableChassis: ChassisDefinition[];
+    selectedChassisId: ChassisId;
+    selectedChassis: ChassisDefinition;
+    onSelectChassis: (chassisId: ChassisId) => void;
+    availableLoadouts: LoadoutDefinition[];
+    selectedLoadoutId: LoadoutId;
+    selectedLoadout: LoadoutDefinition;
+    onSelectLoadout: (loadoutId: LoadoutId) => void;
+    pilotAccount: PilotAccountState;
+    authEmail: string;
+    authBusy: AuthUpgradeBusy;
+    authMessage: AuthUpgradeMessage | null;
+    onAuthEmailChange: (value: string) => void;
+    onLinkGoogle: () => void;
+    onSendMagicLink: () => void;
+    roomName: string;
+    onRoomNameChange: (value: string) => void;
+    onStartSolo: () => void;
+    onStartHost: () => void;
+    hostId: string;
+    onHostIdChange: (value: string) => void;
+    onStartClient: (hostId: string, mode: GameMode) => void;
+    firebaseEnabled: boolean;
+    firebaseMissingKeys: string[];
+    firebaseRooms: FirebaseLobbyRoom[];
+    roomFilter: 'all' | GameMode;
+    onRoomFilterChange: (filter: 'all' | GameMode) => void;
+    showUnavailableRooms: boolean;
+    onToggleUnavailableRooms: () => void;
+    onToggleLocale: () => void;
+};

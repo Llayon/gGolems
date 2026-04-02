@@ -41,6 +41,7 @@ type PilotAccountCardProps = {
     onAuthEmailChange: (value: string) => void;
     onLinkGoogle: () => void;
     onSendMagicLink: () => void;
+    showTitle?: boolean;
 };
 
 export function PilotAccountCard(props: PilotAccountCardProps) {
@@ -62,8 +63,10 @@ export function PilotAccountCard(props: PilotAccountCardProps) {
 
     return (
         <div className="rounded-xl border border-[#8f6a38]/30 bg-black/25 px-4 py-3">
-            <div className="text-center text-xs tracking-[0.28em] text-[#8fb8c2]">{props.t('supabase.title')}</div>
-            <div className={`mt-2 text-center text-[11px] tracking-[0.18em] ${statusTone}`}>
+            {props.showTitle !== false ? (
+                <div className="text-center text-xs tracking-[0.28em] text-[#8fb8c2]">{props.t('supabase.title')}</div>
+            ) : null}
+            <div className={`${props.showTitle !== false ? 'mt-2 ' : ''}text-center text-[11px] tracking-[0.18em] ${statusTone}`}>
                 {props.t(statusKey)}
             </div>
             {props.account.status === 'ready' ? (
