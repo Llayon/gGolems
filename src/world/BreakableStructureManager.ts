@@ -18,6 +18,7 @@ import {
 const houseLoader = new GLTFLoader();
 let housePrefabTemplatePromise: Promise<THREE.Group> | null = null;
 const BREAKABLE_PROXY_ACTIVATION_RADIUS = 96;
+const USE_BREAKABLE_HOUSE_PROXIES = false;
 
 type HouseProxy = {
     root: THREE.Group;
@@ -198,7 +199,9 @@ export class BreakableStructureManager {
             this.setHouseStage(house, 0);
             this.houses.push(house);
             this.registerHouseProxy(house);
-            this.deactivateHouse(house);
+            if (USE_BREAKABLE_HOUSE_PROXIES) {
+                this.deactivateHouse(house);
+            }
         });
     }
 
@@ -281,7 +284,9 @@ export class BreakableStructureManager {
             this.recomputeSectionedHouseState(house);
             this.houses.push(house);
             this.registerHouseProxy(house);
-            this.deactivateHouse(house);
+            if (USE_BREAKABLE_HOUSE_PROXIES) {
+                this.deactivateHouse(house);
+            }
         });
     }
 
@@ -406,6 +411,7 @@ export class BreakableStructureManager {
         chimney.position.set(0.55, 4.35, 0.18);
         proxyRoot.add(chimney);
 
+        proxyRoot.visible = false;
         markShadows(proxyRoot);
         this.scene.add(proxyRoot);
 
