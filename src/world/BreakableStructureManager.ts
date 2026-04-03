@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import sectionedHouseUrl from '../assets/props/VillagePrefab_House_A_breakable_web.glb?url';
+import staticHouseUrl from '../assets/props/VillageStatic_House_A_mobile.glb?url';
 import {
     FallingSection,
     HouseProp,
@@ -17,8 +18,9 @@ import { createGltfLoader } from './gltfLoader';
 
 const houseLoader = createGltfLoader();
 let housePrefabTemplatePromise: Promise<THREE.Group> | null = null;
-const BREAKABLE_PROXY_ACTIVATION_RADIUS = 96;
-const USE_BREAKABLE_HOUSE_PROXIES = false;
+let houseProxyTemplatePromise: Promise<THREE.Group> | null = null;
+const BREAKABLE_PROXY_ACTIVATION_RADIUS = 0;
+const USE_BREAKABLE_HOUSE_PROXIES = true;
 
 type HouseProxy = {
     root: THREE.Group;
@@ -35,6 +37,16 @@ function loadSectionedHouseTemplate() {
         });
     }
     return housePrefabTemplatePromise;
+}
+
+function loadHouseProxyTemplate() {
+    if (!houseProxyTemplatePromise) {
+        houseProxyTemplatePromise = houseLoader.loadAsync(staticHouseUrl).then((gltf) => {
+            gltf.scene.updateMatrixWorld(true);
+            return gltf.scene as THREE.Group;
+        });
+    }
+    return houseProxyTemplatePromise;
 }
 
 export class BreakableStructureManager {
@@ -60,8 +72,11 @@ export class BreakableStructureManager {
 
     async addHouses() {
         try {
-            const template = await loadSectionedHouseTemplate();
-            this.addSectionedHouses(template);
+            const [template, proxyTemplate] = await Promise.all([
+                loadSectionedHouseTemplate(),
+                loadHouseProxyTemplate()
+            ]);
+            this.addSectionedHouses(template, proxyTemplate);
             if (this.pendingHouseSnapshots) {
                 this.applySnapshot(this.pendingHouseSnapshots);
                 this.pendingHouseSnapshots = null;
@@ -205,7 +220,7 @@ export class BreakableStructureManager {
         });
     }
 
-    addSectionedHouses(template: THREE.Group) {
+    addSectionedHouses(template: THREE.Group, proxyTemplate?: THREE.Group) {
         BREAKABLE_HOUSE_LAYOUT.forEach((layout, index) => {
             const root = template.clone(true);
             root.name = `village-house-${index}`;
@@ -283,7 +298,7 @@ export class BreakableStructureManager {
 
             this.recomputeSectionedHouseState(house);
             this.houses.push(house);
-            this.registerHouseProxy(house);
+            this.registerHouseProxy(house, proxyTemplate);
             if (USE_BREAKABLE_HOUSE_PROXIES) {
                 this.deactivateHouse(house);
             }
@@ -388,29 +403,12 @@ export class BreakableStructureManager {
         return body;
     }
 
-    registerHouseProxy(house: HouseProp) {
+    registerHouseProxy(house: HouseProp, proxyTemplate?: THREE.Group) {
         if (!USE_BREAKABLE_HOUSE_PROXIES) return;
-        const proxyRoot = new THREE.Group();
+        const proxyRoot = proxyTemplate ? proxyTemplate.clone(true) : new THREE.Group();
         proxyRoot.name = `${house.id}-proxy`;
         proxyRoot.position.copy(house.position);
         proxyRoot.rotation.y = house.root.rotation.y;
-
-        const wallMat = new THREE.MeshStandardMaterial({ color: 0xc7b397, roughness: 1 });
-        const roofMat = new THREE.MeshStandardMaterial({ color: 0x9b563b, roughness: 0.95 });
-        const trimMat = new THREE.MeshStandardMaterial({ color: 0x735d49, roughness: 1 });
-
-        const body = new THREE.Mesh(new THREE.BoxGeometry(3.7, 3.2, 3.2), wallMat);
-        body.position.y = 1.6;
-        proxyRoot.add(body);
-
-        const roof = new THREE.Mesh(new THREE.ConeGeometry(2.55, 1.8, 4), roofMat);
-        roof.position.y = 4.05;
-        roof.rotation.y = Math.PI / 4;
-        proxyRoot.add(roof);
-
-        const chimney = new THREE.Mesh(new THREE.BoxGeometry(0.34, 1.0, 0.34), trimMat);
-        chimney.position.set(0.55, 4.35, 0.18);
-        proxyRoot.add(chimney);
 
         proxyRoot.visible = false;
         markShadows(proxyRoot);

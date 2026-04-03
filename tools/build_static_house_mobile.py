@@ -18,25 +18,9 @@ EXCLUDED_OBJECTS = {
     'Vine_Right'
 }
 
-REMOVED_NAME_PARTS = (
-    '_Glass',
-    '_Shutters'
-)
-
-REPLACED_OBJECTS = {
-    'Front_Door',
-    'Front_Door_Frame',
-    'Chimney'
-}
-
-SIMPLE_MATERIALS = {
-    'plaster': (0.73, 0.67, 0.58, 1.0),
-    'wood': (0.49, 0.33, 0.22, 1.0),
-    'roof': (0.72, 0.34, 0.22, 1.0),
-    'stone': (0.57, 0.54, 0.50, 1.0),
-    'brick': (0.54, 0.39, 0.33, 1.0),
-    'window': (0.10, 0.13, 0.18, 1.0)
-}
+ATLAS_SIZE = 512
+ATLAS_FILENAME = 'VillageHouse_A_BaseColor_512.png'
+BAKE_MARGIN = 8
 
 
 def parse_args():
@@ -44,6 +28,7 @@ def parse_args():
     parser.add_argument('--blend', required=True)
     parser.add_argument('--out', required=True)
     parser.add_argument('--root-name', default='StaticHouseMobile_A')
+    parser.add_argument('--atlas')
     parser.add_argument('--save-blend')
     return parser.parse_args(sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else [])
 
@@ -63,61 +48,18 @@ def compute_bounds(objects):
     return min_v, max_v, max_v - min_v
 
 
-def get_material(name, rgba):
-    material = bpy.data.materials.get(name)
-    if material is None:
-        material = bpy.data.materials.new(name=name)
-    material.diffuse_color = rgba
-    material.use_nodes = True
-    principled = material.node_tree.nodes.get('Principled BSDF')
-    if principled is not None:
-        principled.inputs['Base Color'].default_value = rgba
-        principled.inputs['Metallic'].default_value = 0.0
-        principled.inputs['Roughness'].default_value = 0.95
-        principled.inputs['Specular IOR Level'].default_value = 0.15
-    return material
-
-
-def choose_material_key(name):
-    if name.startswith('LowpolyDoor'):
-        return 'wood' if name == 'LowpolyDoor' else 'stone'
-    if name.startswith('LowpolyChimney'):
-        return 'brick'
-    if name.startswith('LowpolyWindow'):
-        return 'window'
-    if name == 'Main_Roof':
-        return 'roof'
-    if name == 'Chimney':
-        return 'brick'
-    if name.startswith('Front_Door'):
-        return 'wood' if name == 'Front_Door' else 'stone'
-    if name.startswith('Corner_'):
-        return 'wood'
-    if name.startswith('Floor_'):
-        return 'wood'
-    if name.startswith('Gable_'):
-        return 'plaster'
-    if name.startswith('Wall_'):
-        return 'plaster'
-    return 'stone'
-
-
-def iter_exportable_sources():
+def iter_source_objects():
     for obj in bpy.data.objects:
         if obj.type != 'MESH':
             continue
         if obj.name in EXCLUDED_OBJECTS:
             continue
-        if obj.name in REPLACED_OBJECTS:
-            continue
-        if any(part in obj.name for part in REMOVED_NAME_PARTS):
-            continue
         yield obj
 
 
-def duplicate_sources(collection):
+def duplicate_sources(collection, sources):
     duplicates = []
-    for source in iter_exportable_sources():
+    for source in sources:
         duplicate = source.copy()
         duplicate.data = source.data.copy()
         duplicate.animation_data_clear()
@@ -144,68 +86,16 @@ def add_decimate(obj, ratio):
 
 def simplify_geometry(objects):
     for obj in objects:
-        if obj.name.startswith('Floor_'):
+        if obj.name == 'Main_Roof':
+            add_decimate(obj, 0.78)
+        elif obj.name.startswith('Floor_'):
             add_decimate(obj, 0.72)
-        elif obj.name == 'Main_Roof':
-            add_decimate(obj, 0.68)
-
-
-def create_box(collection, name, location, size):
-    bpy.ops.mesh.primitive_cube_add(size=1.0, location=location)
-    obj = bpy.context.active_object
-    obj.name = name
-    obj.scale = (size[0] * 0.5, size[1] * 0.5, size[2] * 0.5)
-    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
-    if obj.users_collection:
-        for owner in list(obj.users_collection):
-            owner.objects.unlink(obj)
-    collection.objects.link(obj)
-    return obj
-
-
-def create_lowpoly_replacements(collection):
-    replacements = []
-
-    replacements.append(create_box(collection, 'LowpolyDoorFrame_Left', (-0.74, -4.0, 1.2), (0.2, 0.22, 2.35)))
-    replacements.append(create_box(collection, 'LowpolyDoorFrame_Right', (0.74, -4.0, 1.2), (0.2, 0.22, 2.35)))
-    replacements.append(create_box(collection, 'LowpolyDoorFrame_Top', (0.0, -4.0, 2.33), (1.68, 0.22, 0.2)))
-    replacements.append(create_box(collection, 'LowpolyDoor', (0.0, -3.94, 1.07), (1.18, 0.12, 2.08)))
-
-    replacements.append(create_box(collection, 'LowpolyChimney', (1.45, 1.2, 7.95), (0.68, 0.68, 2.2)))
-
-    window_specs = [
-        ('LowpolyWindow_FrontLower_L', (-2.0, -4.05, 1.2), (0.95, 0.10, 1.25)),
-        ('LowpolyWindow_FrontLower_R', (2.0, -4.05, 1.2), (0.95, 0.10, 1.25)),
-        ('LowpolyWindow_BackLower_C', (0.0, 4.05, 1.2), (1.05, 0.10, 1.20)),
-        ('LowpolyWindow_LeftLower_A', (-3.05, -1.0, 1.2), (0.10, 0.95, 1.20)),
-        ('LowpolyWindow_LeftLower_B', (-3.05, 1.0, 1.2), (0.10, 0.95, 1.20)),
-        ('LowpolyWindow_RightLower_A', (3.05, -1.0, 1.2), (0.10, 0.95, 1.20)),
-        ('LowpolyWindow_RightLower_B', (3.05, 1.0, 1.2), (0.10, 0.95, 1.20)),
-        ('LowpolyWindow_FrontUpper_L', (-2.0, -4.05, 4.18), (0.95, 0.10, 1.25)),
-        ('LowpolyWindow_FrontUpper_R', (2.0, -4.05, 4.18), (0.95, 0.10, 1.25)),
-        ('LowpolyWindow_BackUpper_C', (0.0, 4.05, 4.18), (1.05, 0.10, 1.20)),
-        ('LowpolyWindow_LeftUpper_A', (-3.05, -3.0, 4.18), (0.10, 0.95, 1.20)),
-        ('LowpolyWindow_LeftUpper_B', (-3.05, 1.0, 4.18), (0.10, 0.95, 1.20)),
-        ('LowpolyWindow_RightUpper_A', (3.05, -3.0, 4.18), (0.10, 0.95, 1.20)),
-        ('LowpolyWindow_RightUpper_B', (3.05, 1.0, 4.18), (0.10, 0.95, 1.20))
-    ]
-    for name, location, size in window_specs:
-        replacements.append(create_box(collection, name, location, size))
-
-    return replacements
-
-
-def assign_simple_materials(objects):
-    material_cache = {key: get_material(f'SM_{key.title()}', rgba) for key, rgba in SIMPLE_MATERIALS.items()}
-    for obj in objects:
-        key = choose_material_key(obj.name)
-        material = material_cache[key]
-        obj.data.materials.clear()
-        obj.data.materials.append(material)
-        bpy.ops.object.select_all(action='DESELECT')
-        obj.select_set(True)
-        bpy.context.view_layer.objects.active = obj
-        bpy.ops.object.shade_flat()
+        elif obj.name.startswith('Front_Door_Frame'):
+            add_decimate(obj, 0.55)
+        elif obj.name == 'Front_Door':
+            add_decimate(obj, 0.7)
+        elif obj.name == 'Chimney':
+            add_decimate(obj, 0.65)
 
 
 def join_objects(objects, root_name):
@@ -229,6 +119,88 @@ def cleanup_mesh(obj):
     bpy.ops.mesh.dissolve_degenerate()
     bpy.ops.mesh.normals_make_consistent(inside=False)
     bpy.ops.object.mode_set(mode='OBJECT')
+
+
+def ensure_atlas_uv(obj):
+    atlas_uv = obj.data.uv_layers.get('AtlasUV')
+    if atlas_uv is None:
+        atlas_uv = obj.data.uv_layers.new(name='AtlasUV')
+    obj.data.uv_layers.active = atlas_uv
+    for uv_layer in obj.data.uv_layers:
+        uv_layer.active_render = uv_layer.name == atlas_uv.name
+    return atlas_uv
+
+
+def smart_unwrap(obj):
+    bpy.ops.object.select_all(action='DESELECT')
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.uv.smart_project(angle_limit=1.15192, island_margin=0.03, area_weight=0.0, margin_method='SCALED')
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+
+def create_bake_image(filepath):
+    image = bpy.data.images.new('VillageHouse_A_BaseColor_512', width=ATLAS_SIZE, height=ATLAS_SIZE, alpha=False)
+    image.generated_color = (0.5, 0.5, 0.5, 1.0)
+    image.filepath_raw = filepath
+    image.file_format = 'PNG'
+    image.colorspace_settings.name = 'sRGB'
+    return image
+
+
+def create_baked_material(image):
+    material = bpy.data.materials.get('M_VillageHouse_A_Baked')
+    if material is None:
+        material = bpy.data.materials.new(name='M_VillageHouse_A_Baked')
+    material.use_nodes = True
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+    nodes.clear()
+
+    tex_node = nodes.new(type='ShaderNodeTexImage')
+    tex_node.name = 'BakeTarget'
+    tex_node.image = image
+    tex_node.interpolation = 'Linear'
+
+    bsdf = nodes.new(type='ShaderNodeBsdfPrincipled')
+    bsdf.inputs['Roughness'].default_value = 0.9
+    bsdf.inputs['Metallic'].default_value = 0.0
+
+    output = nodes.new(type='ShaderNodeOutputMaterial')
+    links.new(tex_node.outputs['Color'], bsdf.inputs['Base Color'])
+    links.new(bsdf.outputs['BSDF'], output.inputs['Surface'])
+
+    nodes.active = tex_node
+    return material
+
+
+def assign_baked_material(obj, material):
+    obj.data.materials.clear()
+    obj.data.materials.append(material)
+
+
+def bake_diffuse_color(low_obj, high_sources, image):
+    scene = bpy.context.scene
+    scene.render.engine = 'CYCLES'
+    scene.cycles.samples = 1
+    scene.render.bake.margin = BAKE_MARGIN
+    scene.render.bake.use_selected_to_active = True
+    scene.render.bake.use_pass_direct = False
+    scene.render.bake.use_pass_indirect = False
+    scene.render.bake.use_pass_color = True
+
+    bpy.ops.object.select_all(action='DESELECT')
+    for obj in high_sources:
+        obj.select_set(True)
+    low_obj.select_set(True)
+    bpy.context.view_layer.objects.active = low_obj
+    image.generated_color = (0.0, 0.0, 0.0, 1.0)
+    image.update()
+    bpy.ops.object.bake(type='DIFFUSE', use_selected_to_active=True, cage_extrusion=0.04)
+    image.save()
+    image.pack()
 
 
 def center_on_ground(obj):
@@ -283,19 +255,32 @@ def export_glb(obj, output_path):
 
 def main():
     args = parse_args()
+    atlas_path = args.atlas or os.path.join(os.path.dirname(args.out), ATLAS_FILENAME)
+    atlas_dir = os.path.dirname(atlas_path)
+    if atlas_dir:
+        os.makedirs(atlas_dir, exist_ok=True)
+
     bpy.ops.wm.open_mainfile(filepath=args.blend)
+
+    source_objects = list(iter_source_objects())
+    if not source_objects:
+        raise RuntimeError('No exportable source meshes found.')
 
     collection = bpy.data.collections.new('StaticHouseMobileExport')
     bpy.context.scene.collection.children.link(collection)
-    duplicates = duplicate_sources(collection)
-    duplicates.extend(create_lowpoly_replacements(collection))
-    if not duplicates:
-        raise RuntimeError('No exportable source meshes found.')
-
+    duplicates = duplicate_sources(collection, source_objects)
     simplify_geometry(duplicates)
-    assign_simple_materials(duplicates)
+
     joined = join_objects(duplicates, args.root_name)
     cleanup_mesh(joined)
+    ensure_atlas_uv(joined)
+    smart_unwrap(joined)
+
+    bake_image = create_bake_image(atlas_path)
+    baked_material = create_baked_material(bake_image)
+    assign_baked_material(joined, baked_material)
+    bake_diffuse_color(joined, source_objects, bake_image)
+
     min_v, max_v, dims = center_on_ground(joined)
     apply_object_transforms(joined)
     min_v, max_v, dims = compute_bounds([joined])
@@ -303,6 +288,7 @@ def main():
 
     print('OPTIMIZED_OBJECTS', len(duplicates))
     print('OPTIMIZED_TRIS', tris)
+    print('ATLAS', atlas_path, os.path.getsize(atlas_path))
     print('BBOX_MIN', tuple(round(v, 3) for v in min_v))
     print('BBOX_MAX', tuple(round(v, 3) for v in max_v))
     print('DIMS', tuple(round(v, 3) for v in dims))
