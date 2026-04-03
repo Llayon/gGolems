@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import villageBlueprintData from '../assets/props/village_blueprints.json';
 import villageModuleManifestData from '../assets/props/village_modules.json';
 import villageModulesUrl from '../assets/props/VillageStatic_House_A_mobile.glb?url';
+import { createGltfLoader } from './gltfLoader';
 
 type StaticVillageModulePlacement = [number, number, number, number, number];
 
@@ -63,7 +63,7 @@ type StaticVillageChunkRuntime = {
 
 const BLUEPRINT = villageBlueprintData as StaticVillageBlueprint;
 const MODULE_MANIFEST = villageModuleManifestData as StaticVillageModuleManifest;
-const villageLoader = new GLTFLoader();
+const villageLoader = createGltfLoader();
 const authoredModuleLibraryPromise = villageLoader.loadAsync(villageModulesUrl).then((gltf) => {
     const manifestById = new Map(MODULE_MANIFEST.modules.map((moduleDef) => [moduleDef.id, moduleDef]));
     const library = new Map<string, PrefabModuleTemplate>();

@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import sectionedHouseUrl from '../assets/props/VillagePrefab_House_A_breakable_web.glb?url';
 import {
     FallingSection,
@@ -14,8 +13,9 @@ import {
     collectMeshes,
     markShadows
 } from './propShared';
+import { createGltfLoader } from './gltfLoader';
 
-const houseLoader = new GLTFLoader();
+const houseLoader = createGltfLoader();
 let housePrefabTemplatePromise: Promise<THREE.Group> | null = null;
 const BREAKABLE_PROXY_ACTIVATION_RADIUS = 96;
 const USE_BREAKABLE_HOUSE_PROXIES = false;
@@ -389,6 +389,7 @@ export class BreakableStructureManager {
     }
 
     registerHouseProxy(house: HouseProp) {
+        if (!USE_BREAKABLE_HOUSE_PROXIES) return;
         const proxyRoot = new THREE.Group();
         proxyRoot.name = `${house.id}-proxy`;
         proxyRoot.position.copy(house.position);
@@ -467,6 +468,7 @@ export class BreakableStructureManager {
     }
 
     deactivateHouse(house: HouseProp) {
+        if (!USE_BREAKABLE_HOUSE_PROXIES) return;
         if (!house.active) return;
         house.active = false;
         house.root.visible = false;
@@ -500,6 +502,7 @@ export class BreakableStructureManager {
     }
 
     promoteNearbyHouses(observerPositions: THREE.Vector3[]) {
+        if (!USE_BREAKABLE_HOUSE_PROXIES) return;
         if (observerPositions.length === 0) return;
         const activationRadiusSq = BREAKABLE_PROXY_ACTIVATION_RADIUS * BREAKABLE_PROXY_ACTIVATION_RADIUS;
         for (const house of this.houses) {
@@ -951,7 +954,9 @@ export class BreakableStructureManager {
                 }
                 this.setHouseStage(house, 0);
             }
-            this.deactivateHouse(house);
+            if (USE_BREAKABLE_HOUSE_PROXIES) {
+                this.deactivateHouse(house);
+            }
         }
     }
 }

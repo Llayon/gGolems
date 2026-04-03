@@ -240,6 +240,13 @@ def center_on_ground(obj):
     return compute_bounds([obj])
 
 
+def apply_object_transforms(obj):
+    bpy.ops.object.select_all(action='DESELECT')
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+
+
 def triangle_count(obj):
     depsgraph = bpy.context.evaluated_depsgraph_get()
     evaluated = obj.evaluated_get(depsgraph)
@@ -290,6 +297,8 @@ def main():
     joined = join_objects(duplicates, args.root_name)
     cleanup_mesh(joined)
     min_v, max_v, dims = center_on_ground(joined)
+    apply_object_transforms(joined)
+    min_v, max_v, dims = compute_bounds([joined])
     tris = triangle_count(joined)
 
     print('OPTIMIZED_OBJECTS', len(duplicates))
