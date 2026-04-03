@@ -17,7 +17,7 @@ import {
 
 const houseLoader = new GLTFLoader();
 let housePrefabTemplatePromise: Promise<THREE.Group> | null = null;
-const BREAKABLE_PROXY_ACTIVATION_RADIUS = 34;
+const BREAKABLE_PROXY_ACTIVATION_RADIUS = 96;
 
 type HouseProxy = {
     root: THREE.Group;

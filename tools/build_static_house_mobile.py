@@ -67,10 +67,12 @@ def get_material(name, rgba):
     material = bpy.data.materials.get(name)
     if material is None:
         material = bpy.data.materials.new(name=name)
+    material.diffuse_color = rgba
     material.use_nodes = True
     principled = material.node_tree.nodes.get('Principled BSDF')
     if principled is not None:
         principled.inputs['Base Color'].default_value = rgba
+        principled.inputs['Metallic'].default_value = 0.0
         principled.inputs['Roughness'].default_value = 0.95
         principled.inputs['Specular IOR Level'].default_value = 0.15
     return material
