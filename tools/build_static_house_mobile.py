@@ -20,6 +20,7 @@ EXCLUDED_OBJECTS = {
 
 ATLAS_SIZE = 512
 ATLAS_FILENAME = 'VillageHouse_A_BaseColor_512.png'
+NORMAL_ATLAS_FILENAME = 'VillageHouse_A_Normal_512.png'
 BAKE_MARGIN = 8
 
 
@@ -86,15 +87,15 @@ def add_decimate(obj, ratio):
 
 def simplify_geometry(objects):
     for obj in objects:
-        if obj.name == 'Main_Roof':
+        if obj.name.startswith('Main_Roof'):
             add_decimate(obj, 0.78)
         elif obj.name.startswith('Floor_'):
             add_decimate(obj, 0.72)
         elif obj.name.startswith('Front_Door_Frame'):
             add_decimate(obj, 0.55)
-        elif obj.name == 'Front_Door':
+        elif obj.name.startswith('Front_Door'):
             add_decimate(obj, 0.7)
-        elif obj.name == 'Chimney':
+        elif obj.name.startswith('Chimney'):
             add_decimate(obj, 0.65)
 
 
@@ -141,16 +142,16 @@ def smart_unwrap(obj):
     bpy.ops.object.mode_set(mode='OBJECT')
 
 
-def create_bake_image(filepath):
-    image = bpy.data.images.new('VillageHouse_A_BaseColor_512', width=ATLAS_SIZE, height=ATLAS_SIZE, alpha=False)
+def create_bake_image(name, filepath, colorspace='sRGB'):
+    image = bpy.data.images.new(name, width=ATLAS_SIZE, height=ATLAS_SIZE, alpha=False)
     image.generated_color = (0.5, 0.5, 0.5, 1.0)
     image.filepath_raw = filepath
     image.file_format = 'PNG'
-    image.colorspace_settings.name = 'sRGB'
+    image.colorspace_settings.name = colorspace
     return image
 
 
-def create_baked_material(image):
+def create_baked_material(base_image, normal_image):
     material = bpy.data.materials.get('M_VillageHouse_A_Baked')
     if material is None:
         material = bpy.data.materials.new(name='M_VillageHouse_A_Baked')
@@ -159,20 +160,30 @@ def create_baked_material(image):
     links = material.node_tree.links
     nodes.clear()
 
-    tex_node = nodes.new(type='ShaderNodeTexImage')
-    tex_node.name = 'BakeTarget'
-    tex_node.image = image
-    tex_node.interpolation = 'Linear'
+    color_tex_node = nodes.new(type='ShaderNodeTexImage')
+    color_tex_node.name = 'BakeBaseColor'
+    color_tex_node.image = base_image
+    color_tex_node.interpolation = 'Linear'
+
+    normal_tex_node = nodes.new(type='ShaderNodeTexImage')
+    normal_tex_node.name = 'BakeNormal'
+    normal_tex_node.image = normal_image
+    normal_tex_node.interpolation = 'Linear'
+    normal_tex_node.image.colorspace_settings.name = 'Non-Color'
+
+    normal_map = nodes.new(type='ShaderNodeNormalMap')
+    normal_map.inputs['Strength'].default_value = 0.9
 
     bsdf = nodes.new(type='ShaderNodeBsdfPrincipled')
     bsdf.inputs['Roughness'].default_value = 0.9
     bsdf.inputs['Metallic'].default_value = 0.0
 
     output = nodes.new(type='ShaderNodeOutputMaterial')
-    links.new(tex_node.outputs['Color'], bsdf.inputs['Base Color'])
+    links.new(color_tex_node.outputs['Color'], bsdf.inputs['Base Color'])
+    links.new(normal_tex_node.outputs['Color'], normal_map.inputs['Color'])
+    links.new(normal_map.outputs['Normal'], bsdf.inputs['Normal'])
     links.new(bsdf.outputs['BSDF'], output.inputs['Surface'])
 
-    nodes.active = tex_node
     return material
 
 
@@ -199,6 +210,34 @@ def bake_diffuse_color(low_obj, high_sources, image):
     image.generated_color = (0.0, 0.0, 0.0, 1.0)
     image.update()
     bpy.ops.object.bake(type='DIFFUSE', use_selected_to_active=True, cage_extrusion=0.04)
+    image.save()
+    image.pack()
+
+
+def set_active_bake_node(material, node_name):
+    nodes = material.node_tree.nodes
+    node = nodes.get(node_name)
+    if node is None:
+        raise RuntimeError(f'Bake node "{node_name}" not found.')
+    nodes.active = node
+    return node
+
+
+def bake_normal_map(low_obj, high_sources, image):
+    scene = bpy.context.scene
+    scene.render.engine = 'CYCLES'
+    scene.cycles.samples = 1
+    scene.render.bake.margin = BAKE_MARGIN
+    scene.render.bake.use_selected_to_active = True
+
+    bpy.ops.object.select_all(action='DESELECT')
+    for obj in high_sources:
+        obj.select_set(True)
+    low_obj.select_set(True)
+    bpy.context.view_layer.objects.active = low_obj
+    image.generated_color = (0.5, 0.5, 1.0, 1.0)
+    image.update()
+    bpy.ops.object.bake(type='NORMAL', use_selected_to_active=True, cage_extrusion=0.04, normal_space='TANGENT')
     image.save()
     image.pack()
 
@@ -256,6 +295,7 @@ def export_glb(obj, output_path):
 def main():
     args = parse_args()
     atlas_path = args.atlas or os.path.join(os.path.dirname(args.out), ATLAS_FILENAME)
+    normal_atlas_path = os.path.join(os.path.dirname(atlas_path), NORMAL_ATLAS_FILENAME)
     atlas_dir = os.path.dirname(atlas_path)
     if atlas_dir:
         os.makedirs(atlas_dir, exist_ok=True)
@@ -276,10 +316,14 @@ def main():
     ensure_atlas_uv(joined)
     smart_unwrap(joined)
 
-    bake_image = create_bake_image(atlas_path)
-    baked_material = create_baked_material(bake_image)
+    bake_image = create_bake_image('VillageHouse_A_BaseColor_512', atlas_path, 'sRGB')
+    normal_image = create_bake_image('VillageHouse_A_Normal_512', normal_atlas_path, 'Non-Color')
+    baked_material = create_baked_material(bake_image, normal_image)
     assign_baked_material(joined, baked_material)
+    set_active_bake_node(baked_material, 'BakeBaseColor')
     bake_diffuse_color(joined, source_objects, bake_image)
+    set_active_bake_node(baked_material, 'BakeNormal')
+    bake_normal_map(joined, source_objects, normal_image)
 
     min_v, max_v, dims = center_on_ground(joined)
     apply_object_transforms(joined)
@@ -289,6 +333,7 @@ def main():
     print('OPTIMIZED_OBJECTS', len(duplicates))
     print('OPTIMIZED_TRIS', tris)
     print('ATLAS', atlas_path, os.path.getsize(atlas_path))
+    print('NORMAL_ATLAS', normal_atlas_path, os.path.getsize(normal_atlas_path))
     print('BBOX_MIN', tuple(round(v, 3) for v in min_v))
     print('BBOX_MAX', tuple(round(v, 3) for v in max_v))
     print('DIMS', tuple(round(v, 3) for v in dims))

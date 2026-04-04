@@ -2,6 +2,16 @@ import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import sectionedHouseUrl from '../assets/props/VillagePrefab_House_A_breakable_web.glb?url';
 import staticHouseUrl from '../assets/props/VillageStatic_House_A_mobile.glb?url';
+import brickBaseUrl from '../../Medieval Village MegaKit[Standard]/glTF/T_Brick_BaseColor.png?url';
+import brickNormalUrl from '../../Medieval Village MegaKit[Standard]/glTF/T_Brick_Normal.png?url';
+import plasterBaseUrl from '../../Medieval Village MegaKit[Standard]/glTF/T_Plaster_BaseColor.png?url';
+import plasterNormalUrl from '../../Medieval Village MegaKit[Standard]/glTF/T_Plaster_Normal.png?url';
+import roundTilesBaseUrl from '../../Medieval Village MegaKit[Standard]/glTF/T_RoundTiles_BaseColor.png?url';
+import roundTilesNormalUrl from '../../Medieval Village MegaKit[Standard]/glTF/T_RoundTiles_Normal.png?url';
+import unevenBrickBaseUrl from '../../Medieval Village MegaKit[Standard]/glTF/T_UnevenBrick_BaseColor.png?url';
+import unevenBrickNormalUrl from '../../Medieval Village MegaKit[Standard]/glTF/T_UnevenBrick_Normal.png?url';
+import woodTrimBaseUrl from '../../Medieval Village MegaKit[Standard]/glTF/T_WoodTrim_BaseColor.png?url';
+import woodTrimNormalUrl from '../../Medieval Village MegaKit[Standard]/glTF/T_WoodTrim_Normal.png?url';
 import {
     FallingSection,
     HouseProp,
@@ -17,8 +27,10 @@ import {
 import { createGltfLoader } from './gltfLoader';
 
 const houseLoader = createGltfLoader();
+const houseTextureLoader = new THREE.TextureLoader();
 let housePrefabTemplatePromise: Promise<THREE.Group> | null = null;
 let houseProxyTemplatePromise: Promise<THREE.Group> | null = null;
+let sectionedHouseMaterialLibraryPromise: Promise<Map<string, THREE.Material>> | null = null;
 const BREAKABLE_PROXY_ACTIVATION_RADIUS = 0;
 const USE_BREAKABLE_HOUSE_PROXIES = true;
 
@@ -49,6 +61,106 @@ function loadHouseProxyTemplate() {
     return houseProxyTemplatePromise;
 }
 
+function loadHouseTexture(url: string, color = false) {
+    return houseTextureLoader.loadAsync(url).then((texture) => {
+        texture.flipY = false;
+        if (color) {
+            texture.colorSpace = THREE.SRGBColorSpace;
+        }
+        texture.needsUpdate = true;
+        return texture;
+    });
+}
+
+function loadSectionedHouseMaterialLibrary() {
+    if (!sectionedHouseMaterialLibraryPromise) {
+        sectionedHouseMaterialLibraryPromise = Promise.all([
+            loadHouseTexture(plasterBaseUrl, true),
+            loadHouseTexture(plasterNormalUrl),
+            loadHouseTexture(woodTrimBaseUrl, true),
+            loadHouseTexture(woodTrimNormalUrl),
+            loadHouseTexture(roundTilesBaseUrl, true),
+            loadHouseTexture(roundTilesNormalUrl),
+            loadHouseTexture(unevenBrickBaseUrl, true),
+            loadHouseTexture(unevenBrickNormalUrl),
+            loadHouseTexture(brickBaseUrl, true),
+            loadHouseTexture(brickNormalUrl)
+        ]).then(([
+            plasterBase,
+            plasterNormal,
+            woodBase,
+            woodNormal,
+            roofBase,
+            roofNormal,
+            stoneBase,
+            stoneNormal,
+            brickBase,
+            brickNormal
+        ]) => {
+            const materialLibrary = new Map<string, THREE.Material>();
+            materialLibrary.set('BH_Plaster', new THREE.MeshStandardMaterial({
+                name: 'BH_Plaster_Textured',
+                map: plasterBase,
+                normalMap: plasterNormal,
+                roughness: 0.98,
+                metalness: 0
+            }));
+            materialLibrary.set('BH_Wood', new THREE.MeshStandardMaterial({
+                name: 'BH_Wood_Textured',
+                map: woodBase,
+                normalMap: woodNormal,
+                roughness: 0.92,
+                metalness: 0
+            }));
+            materialLibrary.set('BH_Roof', new THREE.MeshStandardMaterial({
+                name: 'BH_Roof_Textured',
+                map: roofBase,
+                normalMap: roofNormal,
+                roughness: 0.9,
+                metalness: 0
+            }));
+            materialLibrary.set('BH_Stone', new THREE.MeshStandardMaterial({
+                name: 'BH_Stone_Textured',
+                map: stoneBase,
+                normalMap: stoneNormal,
+                roughness: 1,
+                metalness: 0
+            }));
+            materialLibrary.set('BH_Brick', new THREE.MeshStandardMaterial({
+                name: 'BH_Brick_Textured',
+                map: brickBase,
+                normalMap: brickNormal,
+                roughness: 0.96,
+                metalness: 0
+            }));
+            materialLibrary.set('BH_Window', new THREE.MeshStandardMaterial({
+                name: 'BH_Window_Textured',
+                color: 0x1f2530,
+                roughness: 0.2,
+                metalness: 0,
+                transparent: true,
+                opacity: 0.82
+            }));
+            return materialLibrary;
+        });
+    }
+
+    return sectionedHouseMaterialLibraryPromise;
+}
+
+function applySectionedHouseMaterials(root: THREE.Object3D, materialLibrary: Map<string, THREE.Material>) {
+    root.traverse((node) => {
+        if (!(node instanceof THREE.Mesh)) return;
+
+        if (Array.isArray(node.material)) {
+            node.material = node.material.map((material) => materialLibrary.get(material.name) ?? material);
+            return;
+        }
+
+        node.material = materialLibrary.get(node.material.name) ?? node.material;
+    });
+}
+
 export class BreakableStructureManager {
     collisionMeshes: THREE.Mesh[] = [];
     houses: HouseProp[] = [];
@@ -74,8 +186,10 @@ export class BreakableStructureManager {
         try {
             const [template, proxyTemplate] = await Promise.all([
                 loadSectionedHouseTemplate(),
-                loadHouseProxyTemplate()
+                loadHouseProxyTemplate(),
+                loadSectionedHouseMaterialLibrary()
             ]);
+            applySectionedHouseMaterials(template, await loadSectionedHouseMaterialLibrary());
             this.addSectionedHouses(template, proxyTemplate);
             if (this.pendingHouseSnapshots) {
                 this.applySnapshot(this.pendingHouseSnapshots);
