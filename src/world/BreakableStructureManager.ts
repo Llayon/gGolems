@@ -2,16 +2,16 @@ import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import sectionedHouseUrl from '../assets/props/VillagePrefab_House_A_breakable_web.glb?url';
 import staticHouseUrl from '../assets/props/VillageStatic_House_A_mobile.glb?url';
-import brickBaseUrl from '../../Medieval Village MegaKit[Standard]/glTF/T_Brick_BaseColor.png?url';
-import brickNormalUrl from '../../Medieval Village MegaKit[Standard]/glTF/T_Brick_Normal.png?url';
-import plasterBaseUrl from '../../Medieval Village MegaKit[Standard]/glTF/T_Plaster_BaseColor.png?url';
-import plasterNormalUrl from '../../Medieval Village MegaKit[Standard]/glTF/T_Plaster_Normal.png?url';
-import roundTilesBaseUrl from '../../Medieval Village MegaKit[Standard]/glTF/T_RoundTiles_BaseColor.png?url';
-import roundTilesNormalUrl from '../../Medieval Village MegaKit[Standard]/glTF/T_RoundTiles_Normal.png?url';
-import unevenBrickBaseUrl from '../../Medieval Village MegaKit[Standard]/glTF/T_UnevenBrick_BaseColor.png?url';
-import unevenBrickNormalUrl from '../../Medieval Village MegaKit[Standard]/glTF/T_UnevenBrick_Normal.png?url';
-import woodTrimBaseUrl from '../../Medieval Village MegaKit[Standard]/glTF/T_WoodTrim_BaseColor.png?url';
-import woodTrimNormalUrl from '../../Medieval Village MegaKit[Standard]/glTF/T_WoodTrim_Normal.png?url';
+import brickBaseUrl from '../assets/props/breakable-house-textures/T_Brick_BaseColor.png?url';
+import brickNormalUrl from '../assets/props/breakable-house-textures/T_Brick_Normal.png?url';
+import plasterBaseUrl from '../assets/props/breakable-house-textures/T_Plaster_BaseColor.png?url';
+import plasterNormalUrl from '../assets/props/breakable-house-textures/T_Plaster_Normal.png?url';
+import roundTilesBaseUrl from '../assets/props/breakable-house-textures/T_RoundTiles_BaseColor.png?url';
+import roundTilesNormalUrl from '../assets/props/breakable-house-textures/T_RoundTiles_Normal.png?url';
+import unevenBrickBaseUrl from '../assets/props/breakable-house-textures/T_UnevenBrick_BaseColor.png?url';
+import unevenBrickNormalUrl from '../assets/props/breakable-house-textures/T_UnevenBrick_Normal.png?url';
+import woodTrimBaseUrl from '../assets/props/breakable-house-textures/T_WoodTrim_BaseColor.png?url';
+import woodTrimNormalUrl from '../assets/props/breakable-house-textures/T_WoodTrim_Normal.png?url';
 import {
     FallingSection,
     HouseProp,
