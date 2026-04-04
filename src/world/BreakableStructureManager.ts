@@ -597,13 +597,19 @@ export class BreakableStructureManager {
     handleProjectileHit(object: THREE.Object3D, point: THREE.Vector3, damage: number, authoritative: boolean) {
         const proxyHouse = this.findHouseProxy(object);
         if (proxyHouse) {
-            this.activateHouse(proxyHouse);
             if (authoritative) {
                 const section = this.findClosestSection(proxyHouse, point);
                 if (section) {
+                    const previousHp = section.hp;
                     this.damageHouseSection(proxyHouse, section, damage, point);
+                    if (previousHp > 0 && section.hp <= 0) {
+                        this.activateHouse(proxyHouse);
+                    }
                 } else {
                     this.damageHouse(proxyHouse, damage);
+                    if (proxyHouse.stage > 0) {
+                        this.activateHouse(proxyHouse);
+                    }
                 }
             }
             return true;
@@ -727,6 +733,9 @@ export class BreakableStructureManager {
             this.restoreCollapsedHouseExtras(house, false);
         }
         this.recomputeSectionedHouseState(house);
+        if (!house.active && house.sections.some((section) => section.destroyed)) {
+            this.activateHouse(house);
+        }
     }
 
     recomputeSectionedHouseState(house: HouseProp) {
