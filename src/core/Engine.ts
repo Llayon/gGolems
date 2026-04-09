@@ -80,6 +80,9 @@ import type { PlayerRespawnState, RemotePlayerState, RespawnSessionMode } from '
 const _weaponOrigin = new THREE.Vector3();
 const _aimPoint = new THREE.Vector3();
 const _botTarget = new THREE.Vector3();
+const _botOffsetTarget = new THREE.Vector3();
+const _botAttackDir = new THREE.Vector3();
+const _botSideDir = new THREE.Vector3();
 const _spawnDir = new THREE.Vector3();
 const _cameraAimDir = new THREE.Vector3();
 
@@ -100,6 +103,8 @@ const SCORE_TO_WIN: Record<GameMode, number> = {
 };
 const RESPAWN_WAVE_DELAY = 8;
 const LOCAL_PLAYER_ID = 'local-player';
+
+type BotObjectiveRole = 'anchor' | 'assault' | 'flank';
 
 export class Game {
     canvas: HTMLCanvasElement;
@@ -226,8 +231,8 @@ export class Game {
             setGameMode: (mode) => this.setGameMode(mode),
             propManager: this.world.propManager,
             controlPoints: this.controlPoints,
-            getMovementTarget: (team, from, gameMode) => gameMode === 'control'
-                ? this.getBotMovementTarget(team, from)
+            getMovementTarget: (botId, team, from, gameMode) => gameMode === 'control'
+                ? this.getBotMovementTarget(botId, team, from)
                 : this.getNearestEnemyTarget(team, from),
             getEngageTarget: (team, from, maxDistance) => this.getNearestEnemyTarget(team, from, maxDistance),
             createBot: (id, team, slot) => this.createBot(id, team, slot),
@@ -481,8 +486,33 @@ export class Game {
         return bestTarget;
     }
 
-    getPriorityControlPoint(team: TeamId, from: THREE.Vector3) {
+    getBotObjectiveRole(botId: string): { role: BotObjectiveRole; slot: number; sideBias: -1 | 1 } {
+        const slot = Number(botId.split('-').pop() ?? 0) || 0;
+        const roleCycle: BotObjectiveRole[] = ['anchor', 'assault', 'flank'];
+        return {
+            role: roleCycle[slot % roleCycle.length],
+            slot,
+            sideBias: slot % 2 === 0 ? -1 : 1
+        };
+    }
+
+    getTeamControlLanes(team: TeamId) {
+        return team === 'blue'
+            ? { home: 'C' as const, center: 'B' as const, enemy: 'A' as const }
+            : { home: 'A' as const, center: 'B' as const, enemy: 'C' as const };
+    }
+
+    getPriorityControlPoint(team: TeamId, from: THREE.Vector3, botId: string) {
         const enemyTeam: TeamId = team === 'blue' ? 'red' : 'blue';
+        const roleState = this.getBotObjectiveRole(botId);
+        const lanes = this.getTeamControlLanes(team);
+        const blueHeld = this.controlPoints.points.filter((point) => point.owner === 'blue').length;
+        const redHeld = this.controlPoints.points.filter((point) => point.owner === 'red').length;
+        const heldAdvantage = team === 'blue' ? blueHeld - redHeld : redHeld - blueHeld;
+        const scoreAdvantage = team === 'blue'
+            ? this.teamScores.blue - this.teamScores.red
+            : this.teamScores.red - this.teamScores.blue;
+        const trailing = heldAdvantage < 0 || scoreAdvantage < 0;
         let bestScore = Number.NEGATIVE_INFINITY;
         let bestPoint: (typeof this.controlPoints.points)[number] | null = null;
 
@@ -490,7 +520,10 @@ export class Game {
             const friendlyInside = team === 'blue' ? point.blueInside : point.redInside;
             const enemyInside = team === 'blue' ? point.redInside : point.blueInside;
             const distance = from.distanceTo(point.position);
-            let score = -distance * 1.6;
+            const capturePressure = point.capture * (team === 'blue' ? 1 : -1);
+            const fullySecured = point.owner === team && capturePressure >= 0.98;
+            const needsHelp = point.contested || enemyInside > 0 || (point.owner === team && capturePressure < 0.9);
+            let score = -distance * 1.45;
 
             if (point.contested) {
                 score += 260;
@@ -504,15 +537,44 @@ export class Game {
                 score += 60;
             }
 
-            if (point.owner === team && point.capture * (team === 'blue' ? 1 : -1) >= 0.98) {
-                score -= 30;
+            if (roleState.role === 'anchor') {
+                if (point.id === lanes.home) score += needsHelp ? 300 : 120;
+                else if (point.id === lanes.center) score += trailing ? 150 : 80;
+                else score += trailing ? 55 : -20;
+            } else if (roleState.role === 'assault') {
+                if (point.id === lanes.center) score += 240;
+                else if (point.id === lanes.enemy) score += trailing ? 165 : 110;
+                else score += needsHelp ? 120 : 10;
+            } else {
+                if (point.id === lanes.enemy) score += 240;
+                else if (point.id === lanes.center) score += point.contested ? 170 : 95;
+                else score += needsHelp ? 90 : -30;
             }
 
-            score -= friendlyInside * 24;
+            if (point.owner === team && fullySecured) {
+                score -= 25;
+            }
+
+            const desiredFriendly = roleState.role === 'anchor'
+                ? (point.id === lanes.home ? 2 : 1)
+                : roleState.role === 'assault'
+                    ? (point.id === lanes.center ? 2 : 1)
+                    : 1;
+
+            score -= friendlyInside * 28;
+            score -= Math.max(0, friendlyInside - desiredFriendly) * 85;
             score += enemyInside * 16;
 
             if (distance <= point.radius * 0.78) {
                 score += 32;
+            }
+
+            if (trailing && (point.owner === enemyTeam || point.contested)) {
+                score += 38;
+            }
+
+            if (!trailing && point.id === lanes.home && needsHelp) {
+                score += 24;
             }
 
             if (score > bestScore) {
@@ -524,10 +586,53 @@ export class Game {
         return bestPoint;
     }
 
-    getBotMovementTarget(team: TeamId, from: THREE.Vector3) {
-        const point = this.getPriorityControlPoint(team, from);
-        if (point) {
+    getControlPointStagingTarget(point: (typeof this.controlPoints.points)[number], team: TeamId, botId: string) {
+        const roleState = this.getBotObjectiveRole(botId);
+        const lanes = this.getTeamControlLanes(team);
+        const homePoint = this.controlPoints.points.find((entry) => entry.id === lanes.home);
+        const enemyPoint = this.controlPoints.points.find((entry) => entry.id === lanes.enemy);
+
+        if (!homePoint || !enemyPoint) {
             return point.position.clone();
+        }
+
+        _botAttackDir.copy(enemyPoint.position).sub(homePoint.position).setY(0);
+        if (_botAttackDir.lengthSq() < 0.0001) {
+            _botAttackDir.set(team === 'blue' ? 1 : -1, 0, 0);
+        } else {
+            _botAttackDir.normalize();
+        }
+        _botSideDir.set(-_botAttackDir.z, 0, _botAttackDir.x);
+
+        let attackOffset = 0;
+        let sideOffset = 0;
+        if (roleState.role === 'anchor') {
+            attackOffset = point.id === lanes.home ? -0.34 : -0.16;
+            sideOffset = 0.18 * roleState.sideBias;
+        } else if (roleState.role === 'assault') {
+            attackOffset = point.id === lanes.center ? 0.04 : 0.16;
+            sideOffset = 0.26 * roleState.sideBias;
+        } else {
+            attackOffset = point.id === lanes.enemy ? 0.3 : 0.14;
+            sideOffset = 0.28 * roleState.sideBias;
+        }
+
+        if (point.contested || (team === 'blue' ? point.redInside : point.blueInside) > 0) {
+            attackOffset *= 0.55;
+            sideOffset *= 0.55;
+        }
+
+        return _botOffsetTarget
+            .copy(point.position)
+            .addScaledVector(_botAttackDir, point.radius * attackOffset)
+            .addScaledVector(_botSideDir, point.radius * sideOffset)
+            .clone();
+    }
+
+    getBotMovementTarget(botId: string, team: TeamId, from: THREE.Vector3) {
+        const point = this.getPriorityControlPoint(team, from, botId);
+        if (point) {
+            return this.getControlPointStagingTarget(point, team, botId);
         }
         return this.getNearestEnemyTarget(team, from);
     }

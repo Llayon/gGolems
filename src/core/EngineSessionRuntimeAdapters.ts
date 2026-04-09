@@ -64,7 +64,7 @@ export type EngineSessionRuntimeAdaptersDeps = {
     setGameMode: (mode: GameMode) => void;
     propManager: AuthoritativeStateRuntimeContext['propManager'];
     controlPoints: AuthoritativeStateRuntimeContext['controlPoints'];
-    getMovementTarget: (team: TeamId, from: Vector3, gameMode: GameMode) => Vector3 | null;
+    getMovementTarget: (botId: string, team: TeamId, from: Vector3, gameMode: GameMode) => Vector3 | null;
     getEngageTarget: (team: TeamId, from: Vector3, maxDistance: number) => Vector3 | null;
     createBot: (id: string, team: TeamId, slot: number) => DummyBot;
     destroyBot: (id: string) => void;

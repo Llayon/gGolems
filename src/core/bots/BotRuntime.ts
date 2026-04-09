@@ -25,7 +25,7 @@ export type BotRuntimeContext = {
     remoteSpawnSlots: Map<string, number>;
     createBot: (id: string, team: TeamId, slot: number) => DummyBot;
     destroyBot: (id: string) => void;
-    getMovementTarget: (team: TeamId, from: THREE.Vector3, gameMode: GameMode) => THREE.Vector3 | null;
+    getMovementTarget: (botId: string, team: TeamId, from: THREE.Vector3, gameMode: GameMode) => THREE.Vector3 | null;
     getEngageTarget: (team: TeamId, from: THREE.Vector3, maxDistance: number) => THREE.Vector3 | null;
     fireShot: (shot: BotShotView, ownerId: string) => void;
     playWeaponVolleyFx: (shots: FireShotPayload[]) => void;
@@ -123,7 +123,7 @@ export function updateBots(
         const botPos = bot.body.translation();
         const from = _botRuntimeTarget.set(botPos.x, botPos.y, botPos.z);
         const movementTarget = authorityMode && !matchEnded
-            ? context.getMovementTarget(bot.team, from, gameMode)
+            ? context.getMovementTarget(bot.id, bot.team, from, gameMode)
             : undefined;
         const engageTarget = authorityMode && !matchEnded
             ? context.getEngageTarget(bot.team, from, 58)
