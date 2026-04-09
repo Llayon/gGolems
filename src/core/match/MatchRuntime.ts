@@ -23,6 +23,7 @@ export type MatchRestartContext = {
     controlPoints: { reset: () => void };
     propManager: { reset: () => void };
     resetHitConfirm: () => void;
+    resetRecentDeaths?: () => void;
     setTeamScores: (scores: TeamScoreState) => void;
     setRespawnWaves: (waves: Record<TeamId, number>) => void;
     localRespawnState: PlayerRespawnState;
@@ -173,6 +174,7 @@ export function updateControlMatch(context: MatchControlRuntimeContext, dt: numb
 export function restartMatchSession(context: MatchRestartContext) {
     context.projectiles.clear();
     context.resetHitConfirm();
+    context.resetRecentDeaths?.();
     context.setTeamScores(createTeamScores(context.gameMode, context.scoreToWinByMode));
     context.setRespawnWaves({ blue: 0, red: 0 });
     context.controlPoints.reset();

@@ -5,7 +5,7 @@ import { Renderer } from './Renderer';
 import { InputManager } from './InputManager';
 import { AudioManager } from './AudioManager';
 import { NetworkManager } from '../network/NetworkManager';
-import { Arena } from '../world/Arena';
+import { Arena, type ArenaLaneNodeKind, type ArenaLaneNodeSide } from '../world/Arena';
 import {
     GolemController,
     type GolemControllerOptions
@@ -85,6 +85,9 @@ const _botAttackDir = new THREE.Vector3();
 const _botSideDir = new THREE.Vector3();
 const _spawnDir = new THREE.Vector3();
 const _cameraAimDir = new THREE.Vector3();
+const _spawnSafetyOrigin = new THREE.Vector3();
+const _spawnSafetyTarget = new THREE.Vector3();
+const _spawnSafetyDir = new THREE.Vector3();
 
 function clamp(value: number, min: number, max: number) {
     return Math.max(min, Math.min(max, value));
@@ -105,6 +108,13 @@ const RESPAWN_WAVE_DELAY = 8;
 const LOCAL_PLAYER_ID = 'local-player';
 
 type BotObjectiveRole = 'anchor' | 'assault' | 'flank';
+type RecentDeath = {
+    team: TeamId;
+    position: THREE.Vector3;
+    age: number;
+};
+
+const RECENT_DEATH_WINDOW = 12;
 
 export class Game {
     canvas: HTMLCanvasElement;
@@ -121,6 +131,7 @@ export class Game {
     projectiles: ProjectileManager;
     bots: Map<string, DummyBot> = new Map();
     controlPoints: ControlPointManager;
+    spawnSafetyRaycaster = new THREE.Raycaster();
     physicsWrapper: Physics;
     physics: RAPIER.World;
     network: NetworkManager;
@@ -135,6 +146,7 @@ export class Game {
     teamScores: TeamScoreState = { blue: 0, red: 0, scoreToWin: SCORE_TO_WIN.control, winner: null };
     localRespawnState: PlayerRespawnState = { alive: true, timer: 0, slot: 0 };
     respawnWaves: Record<TeamId, number> = { blue: 0, red: 0 };
+    recentDeaths: RecentDeath[] = [];
     hitConfirmTimer = 0;
     hitTargetHp = 0;
     hitTargetMaxHp = 100;
@@ -223,6 +235,7 @@ export class Game {
             allocateRemoteSpawnSlot: () => this.allocateRemoteSpawnSlot(),
             setRemotePlayerState: (id, patch) => this.setRemotePlayerState(id, patch),
             getTeamSpawn: (team, slot) => this.getTeamSpawn(team, slot),
+            resolveTeamSpawn: (team, preferredSlot) => this.resolveTeamSpawn(team, preferredSlot),
             getSpawnYaw: (spawn) => this.getSpawnYaw(spawn),
             sendRemoteRespawn: (id, payload) => this.network.sendTo(id, { type: 'respawn', ...payload }),
             setTeamScores: (scores) => {
@@ -294,6 +307,7 @@ export class Game {
             queueLocalRespawn: () => queueLocalRespawnRuntime(this.sessionRuntimeAdapters.respawn(), RESPAWN_WAVE_DELAY),
             queueRemoteRespawn: (id) => queueRemoteRespawnRuntime(this.sessionRuntimeAdapters.respawn(), id, RESPAWN_WAVE_DELAY),
             scheduleRespawnWave: (team) => scheduleRespawnWaveRuntime(this.sessionRuntimeAdapters.respawn(), team, RESPAWN_WAVE_DELAY),
+            registerDeath: (team, position) => this.registerRecentDeath(team, position),
             collisionMeshes: () => this.world.getCollisionMeshes(),
             propManager: this.world.propManager,
             decals: this.decals,
@@ -323,6 +337,9 @@ export class Game {
                 this.hitConfirmTimer = 0;
                 this.hitTargetHp = 0;
                 this.hitTargetMaxHp = 100;
+            },
+            resetRecentDeaths: () => {
+                this.recentDeaths = [];
             },
             setTeamScores: (scores: TeamScoreState) => {
                 this.teamScores = scores;
@@ -400,6 +417,152 @@ export class Game {
     getTeamSpawn(team: TeamId, slot: number) {
         const spawns = this.getTeamSpawns(team);
         return spawns[slot % spawns.length].clone();
+    }
+
+    getRespawnObjectivePoint(team: TeamId) {
+        const enemyTeam: TeamId = team === 'blue' ? 'red' : 'blue';
+        let bestScore = Number.NEGATIVE_INFINITY;
+        let bestPoint: THREE.Vector3 | null = null;
+
+        for (const point of this.controlPoints.points) {
+            const friendlyInside = team === 'blue' ? point.blueInside : point.redInside;
+            const enemyInside = team === 'blue' ? point.redInside : point.blueInside;
+            const capturePressure = point.capture * (team === 'blue' ? 1 : -1);
+            let score = point.id === 'B' ? 24 : 0;
+
+            if (point.contested) {
+                score += 220;
+            } else if (point.owner === enemyTeam) {
+                score += 180;
+            } else if (point.owner === 'neutral') {
+                score += 150;
+            } else if (point.owner === team && capturePressure < 0.9) {
+                score += 110;
+            } else {
+                score += 40;
+            }
+
+            score += enemyInside * 18;
+            score -= friendlyInside * 12;
+
+            if (score > bestScore) {
+                bestScore = score;
+                bestPoint = point.position;
+            }
+        }
+
+        return (bestPoint ?? this.world.controlPointPositions.B).clone();
+    }
+
+    registerRecentDeath(team: TeamId, position: { x: number; y: number; z: number }) {
+        this.recentDeaths.push({
+            team,
+            position: new THREE.Vector3(position.x, position.y, position.z),
+            age: 0
+        });
+        if (this.recentDeaths.length > 32) {
+            this.recentDeaths.splice(0, this.recentDeaths.length - 32);
+        }
+    }
+
+    getNearestLaneId(position: THREE.Vector3) {
+        let bestLane: 'A' | 'B' | 'C' = 'B';
+        let bestDistanceSq = Number.POSITIVE_INFINITY;
+        (['A', 'B', 'C'] as const).forEach((laneId) => {
+            const distanceSq = position.distanceToSquared(this.world.controlPointPositions[laneId]);
+            if (distanceSq < bestDistanceSq) {
+                bestDistanceSq = distanceSq;
+                bestLane = laneId;
+            }
+        });
+        return bestLane;
+    }
+
+    forEachAliveEnemyPosition(team: TeamId, callback: (position: THREE.Vector3) => void) {
+        const consider = (position: THREE.Vector3, enemyTeam: TeamId, alive: boolean) => {
+            if (!alive || enemyTeam === team) return;
+            callback(position);
+        };
+
+        const localPos = this.golem.body.translation();
+        consider(_weaponOrigin.set(localPos.x, localPos.y, localPos.z), 'blue', this.localRespawnState.alive);
+
+        this.remotePlayers.forEach((player, id) => {
+            const state = this.remotePlayerStates.get(id);
+            const alive = state ? state.alive : true;
+            const pos = player.body.translation();
+            consider(_aimPoint.set(pos.x, pos.y, pos.z), 'blue', alive);
+        });
+
+        for (const bot of this.bots.values()) {
+            const pos = bot.body.translation();
+            consider(_botTarget.set(pos.x, pos.y, pos.z), bot.team, bot.alive);
+        }
+    }
+
+    hasDirectSpawnLineOfSight(enemyPosition: THREE.Vector3, spawn: THREE.Vector3) {
+        _spawnSafetyOrigin.copy(enemyPosition);
+        _spawnSafetyOrigin.y += 1.6;
+        _spawnSafetyTarget.copy(spawn);
+        _spawnSafetyTarget.y += 1.2;
+        _spawnSafetyDir.copy(_spawnSafetyTarget).sub(_spawnSafetyOrigin);
+        const distance = _spawnSafetyDir.length();
+        if (distance <= 1) return true;
+        _spawnSafetyDir.divideScalar(distance);
+        this.spawnSafetyRaycaster.set(_spawnSafetyOrigin, _spawnSafetyDir);
+        this.spawnSafetyRaycaster.far = Math.max(0, distance - 1.5);
+        const hits = this.spawnSafetyRaycaster.intersectObjects(this.world.getCollisionMeshes(), false);
+        return hits.length === 0;
+    }
+
+    resolveTeamSpawn(team: TeamId, preferredSlot: number) {
+        const spawns = this.getTeamSpawns(team);
+        const objective = this.getRespawnObjectivePoint(team);
+        const preferredIndex = preferredSlot % spawns.length;
+        let bestIndex = preferredIndex;
+        let bestScore = Number.NEGATIVE_INFINITY;
+
+        for (let index = 0; index < spawns.length; index++) {
+            const spawn = spawns[index];
+            let score = index === preferredIndex ? 18 : 0;
+            score -= spawn.distanceTo(objective) * 0.22;
+
+            this.forEachAliveEnemyPosition(team, (enemyPosition) => {
+                const distance = spawn.distanceTo(enemyPosition);
+                if (distance < 42) {
+                    score -= 260 + (42 - distance) * 8;
+                } else if (distance < 72) {
+                    score -= (72 - distance) * 2.4;
+                }
+
+                if (distance < 96 && this.hasDirectSpawnLineOfSight(enemyPosition, spawn)) {
+                    score -= distance < 68 ? 180 : 96;
+                }
+            });
+
+            for (const death of this.recentDeaths) {
+                const distance = spawn.distanceTo(death.position);
+                if (distance > 72) continue;
+                const freshness = 1 - death.age / RECENT_DEATH_WINDOW;
+                const severity = death.team === team ? 190 : 74;
+                score -= freshness * severity * (1 - distance / 72);
+            }
+
+            if (score > bestScore) {
+                bestScore = score;
+                bestIndex = index;
+            }
+        }
+
+        const selected = spawns[bestIndex];
+        return {
+            slot: bestIndex,
+            spawn: {
+                x: selected.x,
+                y: selected.y,
+                z: selected.z
+            }
+        };
     }
 
     createBot(id: string, team: TeamId, slot: number) {
@@ -595,6 +758,23 @@ export class Game {
         const lanes = this.getTeamControlLanes(team);
         const homePoint = this.controlPoints.points.find((entry) => entry.id === lanes.home);
         const enemyPoint = this.controlPoints.points.find((entry) => entry.id === lanes.enemy);
+        const side: ArenaLaneNodeSide = roleState.sideBias < 0 ? 'left' : 'right';
+        const preferredKinds: ArenaLaneNodeKind[] = roleState.role === 'anchor'
+            ? (point.id === lanes.home ? ['hold_node', 'staging_node', 'objective_entry'] : ['objective_entry', 'hold_node', 'rotate_node'])
+            : roleState.role === 'assault'
+                ? ['objective_entry', 'staging_node', 'rotate_node']
+                : ['rotate_node', 'objective_entry', 'staging_node'];
+
+        if (point.contested || (team === 'blue' ? point.redInside : point.blueInside) > 0) {
+            preferredKinds.unshift('objective_entry');
+        }
+
+        for (const kind of preferredKinds) {
+            const node = this.world.getLaneNode(point.id, kind, team, side);
+            if (node) {
+                return node;
+            }
+        }
 
         if (!homePoint || !enemyPoint) {
             return point.position.clone();
@@ -636,6 +816,13 @@ export class Game {
     getBotRetreatTarget(team: TeamId, botId: string) {
         const lanes = this.getTeamControlLanes(team);
         const homePoint = this.controlPoints.points.find((entry) => entry.id === lanes.home);
+        const roleState = this.getBotObjectiveRole(botId);
+        const side: ArenaLaneNodeSide = roleState.sideBias < 0 ? 'left' : 'right';
+        const retreatNode = this.world.getLaneNode(lanes.home, 'retreat_node', team, side)
+            ?? this.world.getLaneNode(lanes.home, 'retreat_node', team, 'center');
+        if (retreatNode) {
+            return retreatNode;
+        }
         if (homePoint) {
             const retreatBase = this.getControlPointStagingTarget(homePoint, team, botId);
             _botAttackDir.copy(lanes.enemy === 'A'
@@ -649,7 +836,6 @@ export class Game {
             return retreatBase;
         }
 
-        const roleState = this.getBotObjectiveRole(botId);
         const spawn = this.getTeamSpawn(team, roleState.slot);
         return new THREE.Vector3(spawn.x, spawn.y, spawn.z);
     }
@@ -665,7 +851,25 @@ export class Game {
 
         const point = this.getPriorityControlPoint(team, from, botId);
         if (point) {
+            const roleState = this.getBotObjectiveRole(botId);
+            const side: ArenaLaneNodeSide = roleState.sideBias < 0 ? 'left' : 'right';
+            const currentLane = this.getNearestLaneId(from);
             const enemyInside = team === 'blue' ? point.redInside : point.blueInside;
+            const shouldRotateThroughNode = currentLane !== point.id &&
+                from.distanceTo(point.position) > point.radius * 1.6 &&
+                !point.contested &&
+                enemyInside === 0 &&
+                roleState.role !== 'anchor';
+
+            if (shouldRotateThroughNode) {
+                const rotateNode = this.world.getLaneNode(point.id, 'rotate_node', team, side)
+                    ?? this.world.getLaneNode(point.id, 'rotate_node', team, 'center');
+                if (rotateNode && from.distanceTo(rotateNode) > 6) {
+                    this.setBotIntent(botId, 'push');
+                    return rotateNode;
+                }
+            }
+
             const intent: BotIntent = point.contested || enemyInside > 0
                 ? 'contest'
                 : point.owner === team
@@ -795,6 +999,9 @@ export class Game {
         const dt = Math.min((time - this.lastTime) / 1000, 0.1);
         this.lastTime = time;
         this.hitConfirmTimer = Math.max(0, this.hitConfirmTimer - dt);
+        this.recentDeaths = this.recentDeaths
+            .map((entry) => ({ ...entry, age: entry.age + dt }))
+            .filter((entry) => entry.age < RECENT_DEATH_WINDOW);
 
         this.physics.step();
 

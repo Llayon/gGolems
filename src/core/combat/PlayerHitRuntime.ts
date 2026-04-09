@@ -16,6 +16,7 @@ export type PlayerHitRuntimeContext = {
     queueRemoteRespawn: (id: string) => void;
     scheduleRespawnWave: (team: TeamId) => void;
     confirmHitForOwner: (ownerId: string, targetHp: number, targetMaxHp: number) => void;
+    registerDeath?: (team: TeamId, position: { x: number; y: number; z: number }) => void;
 };
 
 function awardTeamScore(teamScores: TeamScoreState, team: TeamId) {
@@ -23,6 +24,17 @@ function awardTeamScore(teamScores: TeamScoreState, team: TeamId) {
     if (teamScores[team] >= teamScores.scoreToWin) {
         teamScores.winner = team;
     }
+}
+
+function readUnitPosition(unit: { body?: { translation?: () => { x: number; y: number; z: number } }; targetPos?: { x: number; y: number; z: number } }) {
+    const livePosition = unit.body?.translation?.();
+    if (livePosition) {
+        return { x: livePosition.x, y: livePosition.y, z: livePosition.z };
+    }
+    if (unit.targetPos) {
+        return { x: unit.targetPos.x, y: unit.targetPos.y, z: unit.targetPos.z };
+    }
+    return { x: 0, y: 0, z: 0 };
 }
 
 export function handlePlayerHit(
@@ -38,6 +50,7 @@ export function handlePlayerHit(
         if (!bot) return;
         const remainingHp = bot.takeDamage(damage);
         if (remainingHp <= 0) {
+            context.registerDeath?.(bot.team, readUnitPosition(bot));
             context.scheduleRespawnWave(bot.team);
             if (context.gameMode === 'tdm' && ownerTeam && ownerTeam !== bot.team) {
                 awardTeamScore(context.teamScores, ownerTeam);
@@ -53,6 +66,7 @@ export function handlePlayerHit(
         const result = context.localPlayer.applySectionDamage(hitSection, damage);
         context.mechCamera.onHit(damage);
         if (result.lethal) {
+            context.registerDeath?.('blue', readUnitPosition(context.localPlayer));
             context.queueLocalRespawn();
             if (context.gameMode === 'tdm' && ownerTeam && ownerTeam !== 'blue') {
                 awardTeamScore(context.teamScores, ownerTeam);
@@ -66,6 +80,7 @@ export function handlePlayerHit(
     if (!player) return;
     const result = player.applySectionDamage(hitSection, damage);
     if (result.lethal) {
+        context.registerDeath?.('blue', readUnitPosition(player));
         context.queueRemoteRespawn(targetId);
         if (context.gameMode === 'tdm' && ownerTeam && ownerTeam !== 'blue') {
             awardTeamScore(context.teamScores, ownerTeam);

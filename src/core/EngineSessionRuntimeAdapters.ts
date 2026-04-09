@@ -58,6 +58,7 @@ export type EngineSessionRuntimeAdaptersDeps = {
     allocateRemoteSpawnSlot: () => number;
     setRemotePlayerState: (id: string, patch: Partial<RemotePlayerState>) => void;
     getTeamSpawn: (team: TeamId, slot: number) => NetworkPosition;
+    resolveTeamSpawn: (team: TeamId, preferredSlot: number) => { spawn: NetworkPosition; slot: number };
     getSpawnYaw: (spawn: NetworkPosition) => number;
     sendRemoteRespawn: (id: string, payload: { x: number; y: number; z: number; yaw: number; slot: number }) => void;
     setTeamScores: (scores: TeamScoreState) => void;
@@ -124,6 +125,7 @@ export function createEngineSessionRuntimeAdapters(
         golem: deps.localPlayer,
         mechCamera: deps.mechCamera,
         getTeamSpawn: deps.getTeamSpawn,
+        resolveTeamSpawn: deps.resolveTeamSpawn,
         getSpawnYaw: deps.getSpawnYaw,
         placeGolemAtSpawn: deps.placeGolemAtSpawn,
         setGolemPresence: deps.setGolemPresence,

@@ -160,6 +160,7 @@ export type PlayerHitRuntimeContextDeps = {
     queueRemoteRespawn: PlayerHitRuntimeContext['queueRemoteRespawn'];
     scheduleRespawnWave: PlayerHitRuntimeContext['scheduleRespawnWave'];
     hitConfirmContext: HitConfirmRuntimeContext;
+    registerDeath?: PlayerHitRuntimeContext['registerDeath'];
 };
 
 export function createPlayerHitRuntimeContext(
@@ -177,6 +178,7 @@ export function createPlayerHitRuntimeContext(
         queueLocalRespawn: deps.queueLocalRespawn,
         queueRemoteRespawn: deps.queueRemoteRespawn,
         scheduleRespawnWave: deps.scheduleRespawnWave,
+        registerDeath: deps.registerDeath,
         confirmHitForOwner: (ownerId, targetHp, targetMaxHp) => confirmHitForOwnerRuntime(
             deps.hitConfirmContext,
             ownerId,
@@ -282,6 +284,7 @@ export type EngineRuntimeAdaptersDeps = {
     queueLocalRespawn: PlayerHitRuntimeContext['queueLocalRespawn'];
     queueRemoteRespawn: PlayerHitRuntimeContext['queueRemoteRespawn'];
     scheduleRespawnWave: PlayerHitRuntimeContext['scheduleRespawnWave'];
+    registerDeath?: PlayerHitRuntimeContext['registerDeath'];
     collisionMeshes: () => ProjectileCollisionRuntimeContext['collisionMeshes'];
     propManager: ProjectileCollisionRuntimeContext['propManager'];
     decals: ProjectileCollisionRuntimeContext['decals'];
@@ -361,6 +364,7 @@ export function createEngineRuntimeAdapters(
                 queueLocalRespawn: deps.queueLocalRespawn,
                 queueRemoteRespawn: deps.queueRemoteRespawn,
                 scheduleRespawnWave: deps.scheduleRespawnWave,
+                registerDeath: deps.registerDeath,
                 hitConfirmContext: getHitConfirmContext()
             })
         }),

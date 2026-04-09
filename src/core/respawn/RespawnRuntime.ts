@@ -16,12 +16,24 @@ export type RespawnRuntimeContext = {
     golem: GolemController;
     mechCamera: MechCamera;
     getTeamSpawn: (team: TeamId, slot: number) => NetworkPosition;
+    resolveTeamSpawn?: (team: TeamId, preferredSlot: number) => { spawn: NetworkPosition; slot: number };
     getSpawnYaw: (spawn: NetworkPosition) => number;
     placeGolemAtSpawn: (golem: GolemController, spawn: NetworkPosition, yaw?: number) => void;
     setGolemPresence: (golem: GolemController, alive: boolean) => void;
     setRemotePlayerState: (id: string, patch: Partial<RemotePlayerState>) => void;
     sendRemoteRespawn: (id: string, payload: { x: number; y: number; z: number; yaw: number; slot: number }) => void;
 };
+
+function selectTeamSpawn(context: RespawnRuntimeContext, team: TeamId, preferredSlot: number) {
+    if (context.resolveTeamSpawn) {
+        return context.resolveTeamSpawn(team, preferredSlot);
+    }
+
+    return {
+        slot: preferredSlot,
+        spawn: context.getTeamSpawn(team, preferredSlot)
+    };
+}
 
 export function applyTeamWaveTimer(context: RespawnRuntimeContext, team: TeamId, timer: number) {
     const clamped = Math.max(0, timer);
@@ -81,16 +93,18 @@ export function queueLocalRespawn(context: RespawnRuntimeContext, delay: number)
     context.golem.resetSections();
     context.golem.hp = 0;
     context.setGolemPresence(context.golem, false);
-    const spawn = context.getTeamSpawn('blue', context.localRespawnState.slot);
-    context.placeGolemAtSpawn(context.golem, spawn);
+    const selection = selectTeamSpawn(context, 'blue', context.localRespawnState.slot);
+    context.localRespawnState.slot = selection.slot;
+    context.placeGolemAtSpawn(context.golem, selection.spawn);
     scheduleRespawnWave(context, 'blue', delay);
 }
 
 export function respawnLocalPlayer(context: RespawnRuntimeContext) {
     context.localRespawnState.alive = true;
     context.localRespawnState.timer = 0;
-    const spawn = context.getTeamSpawn('blue', context.localRespawnState.slot);
-    context.placeGolemAtSpawn(context.golem, spawn);
+    const selection = selectTeamSpawn(context, 'blue', context.localRespawnState.slot);
+    context.localRespawnState.slot = selection.slot;
+    context.placeGolemAtSpawn(context.golem, selection.spawn);
     context.golem.steam = context.golem.maxSteam;
     context.golem.isOverheated = false;
     context.golem.overheatTimer = 0;
@@ -101,28 +115,29 @@ export function respawnLocalPlayer(context: RespawnRuntimeContext) {
 export function queueRemoteRespawn(context: RespawnRuntimeContext, id: string, delay: number) {
     const player = context.remotePlayers.get(id);
     if (!player) return;
-    const slot = context.remoteSpawnSlots.get(id) ?? 1;
-    context.setRemotePlayerState(id, { alive: false, timer: 0, slot });
+    const preferredSlot = context.remoteSpawnSlots.get(id) ?? 1;
+    const selection = selectTeamSpawn(context, 'blue', preferredSlot);
+    context.setRemotePlayerState(id, { alive: false, timer: 0, slot: selection.slot });
     player.resetSections();
     player.hp = 0;
     context.setGolemPresence(player, false);
-    const spawn = context.getTeamSpawn('blue', slot);
-    context.placeGolemAtSpawn(player, spawn);
+    context.placeGolemAtSpawn(player, selection.spawn);
     scheduleRespawnWave(context, 'blue', delay);
 }
 
 export function respawnRemotePlayer(context: RespawnRuntimeContext, id: string) {
     const player = context.remotePlayers.get(id);
     if (!player) return;
-    const slot = context.remoteSpawnSlots.get(id) ?? 1;
-    const spawn = context.getTeamSpawn('blue', slot);
+    const preferredSlot = context.remoteSpawnSlots.get(id) ?? 1;
+    const selection = selectTeamSpawn(context, 'blue', preferredSlot);
+    const spawn = selection.spawn;
     context.placeGolemAtSpawn(player, spawn);
     player.steam = player.maxSteam;
     player.isOverheated = false;
     player.overheatTimer = 0;
     context.setGolemPresence(player, true);
-    context.setRemotePlayerState(id, { alive: true, timer: 0, slot });
-    context.sendRemoteRespawn(id, { x: spawn.x, y: spawn.y, z: spawn.z, yaw: context.getSpawnYaw(spawn), slot });
+    context.setRemotePlayerState(id, { alive: true, timer: 0, slot: selection.slot });
+    context.sendRemoteRespawn(id, { x: spawn.x, y: spawn.y, z: spawn.z, yaw: context.getSpawnYaw(spawn), slot: selection.slot });
 }
 
 export function resolveRespawnWave(context: RespawnRuntimeContext, team: TeamId) {
@@ -145,9 +160,9 @@ export function resolveRespawnWave(context: RespawnRuntimeContext, team: TeamId)
 
     for (const [id, bot] of context.bots) {
         if (bot.team === team && !bot.alive) {
-            const slot = Number(id.split('-').pop() ?? 0) || 0;
-            const spawn = context.getTeamSpawn(bot.team, slot);
-            bot.respawnAt(spawn);
+            const preferredSlot = Number(id.split('-').pop() ?? 0) || 0;
+            const selection = selectTeamSpawn(context, bot.team, preferredSlot);
+            bot.respawnAt(selection.spawn);
         }
     }
 
