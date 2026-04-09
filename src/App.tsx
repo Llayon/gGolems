@@ -383,6 +383,7 @@ export default function App() {
                 <MatchStatusOverlay
                     scores={gameState.teamScores}
                     points={gameState.controlPoints}
+                    controlSummary={gameState.controlSummary}
                     teamOverview={gameState.teamOverview}
                     respawnTimer={gameState.respawnTimer}
                     isTouchDevice={isTouchDevice}

@@ -2,50 +2,56 @@ import { formatPercent, formatSeconds } from '../../i18n/format';
 import type { Locale } from '../../i18n/types';
 import type { ControlPointView, GameMode, TeamOverview, TeamScoreState } from '../../gameplay/types';
 import type { Translator } from '../../i18n';
+import type { ControlHudSummary } from '../../core/gameHudState';
 
-function getPointStatusText(points: ControlPointView[], t: Translator, locale: Locale) {
-    const contestedPoint = points.find((point) => point.contested);
+function getPointStatusText(summary: ControlHudSummary, t: Translator, locale: Locale) {
+    const contestedPoint = summary.contestedPoints[0];
     if (contestedPoint) {
-        return t('hud.point.contested', { point: contestedPoint.id });
+        return t('hud.point.contested', { point: contestedPoint });
     }
 
-    const activePoint = points.find((point) => {
-        const blueSecuring = point.blueInside > 0 && point.redInside === 0 && !(point.owner === 'blue' && point.capture >= 0.99);
-        const redSecuring = point.redInside > 0 && point.blueInside === 0 && !(point.owner === 'red' && point.capture <= -0.99);
-        return blueSecuring || redSecuring;
-    });
-
-    if (activePoint) {
-        const blueSecuring = activePoint.blueInside > 0 && activePoint.redInside === 0;
-        return t('hud.point.securing', {
-            team: t(blueSecuring ? 'hud.team.blue' : 'hud.team.red'),
-            point: activePoint.id,
-            progress: formatPercent(locale, Math.abs(activePoint.capture) * 100)
+    if (summary.activeCapture) {
+        const isPressuring = summary.activeCapture.targetOwner !== 'neutral'
+            && summary.activeCapture.targetOwner !== summary.activeCapture.team;
+        return t(isPressuring ? 'hud.point.pressuring' : 'hud.point.securing', {
+            team: t(summary.activeCapture.team === 'blue' ? 'hud.team.blue' : 'hud.team.red'),
+            point: summary.activeCapture.point,
+            progress: formatPercent(locale, summary.activeCapture.progress * 100)
         });
     }
 
-    const blueOwned = points.filter((point) => point.owner === 'blue').length;
-    const redOwned = points.filter((point) => point.owner === 'red').length;
-    if (blueOwned === 0 && redOwned === 0) {
+    if (summary.blueHeld === 0 && summary.redHeld === 0) {
         return t('hud.point.neutral');
     }
-    if (blueOwned === redOwned) {
-        return t('hud.point.split', { blue: blueOwned, red: redOwned });
+    if (summary.blueHeld === summary.redHeld) {
+        return t('hud.point.split', { blue: summary.blueHeld, red: summary.redHeld });
     }
 
     return t('hud.point.holding', {
-        team: t(blueOwned > redOwned ? 'hud.team.blue' : 'hud.team.red'),
-        count: Math.max(blueOwned, redOwned)
+        team: t(summary.blueHeld > summary.redHeld ? 'hud.team.blue' : 'hud.team.red'),
+        count: Math.max(summary.blueHeld, summary.redHeld)
     });
 }
 
-function getHeldPoints(points: ControlPointView[], owner: 'blue' | 'red') {
-    return points.filter((point) => point.owner === owner).length;
+function getPointDetailText(summary: ControlHudSummary, t: Translator) {
+    const counts = t('hud.point.counts', {
+        blue: summary.blueHeld,
+        red: summary.redHeld
+    });
+    if (!summary.leadingTeam || summary.scoreGap <= 0) {
+        return counts;
+    }
+
+    return `${counts} | ${t('hud.point.lead', {
+        team: t(summary.leadingTeam === 'blue' ? 'hud.team.blue' : 'hud.team.red'),
+        margin: summary.scoreGap
+    })}`;
 }
 
 export function MatchStatusOverlay(props: {
     scores: TeamScoreState;
     points: ControlPointView[];
+    controlSummary: ControlHudSummary;
     teamOverview: TeamOverview;
     respawnTimer: number;
     isTouchDevice: boolean;
@@ -63,8 +69,11 @@ export function MatchStatusOverlay(props: {
                 ? 'border-[#a24f39]/60 bg-[#f26b4a]/18 text-[#ffb49b]'
                 : 'border-[#8f6a38]/55 bg-black/25 text-[#e6c78c]';
     const pointStatus = props.gameMode === 'control'
-        ? getPointStatusText(props.points, props.t, props.locale)
+        ? getPointStatusText(props.controlSummary, props.t, props.locale)
         : props.t('hud.mode.tdm');
+    const pointDetail = props.gameMode === 'control'
+        ? getPointDetailText(props.controlSummary, props.t)
+        : null;
     const objectiveLabel = props.gameMode === 'control' ? props.t('hud.results.points') : props.t('hud.results.objective');
     const waveLabels = (['blue', 'red'] as const)
         .map((team) => {
@@ -76,8 +85,8 @@ export function MatchStatusOverlay(props: {
             });
         })
         .filter(Boolean) as string[];
-    const blueHeld = getHeldPoints(props.points, 'blue');
-    const redHeld = getHeldPoints(props.points, 'red');
+    const blueHeld = props.controlSummary.blueHeld;
+    const redHeld = props.controlSummary.redHeld;
 
     return (
         <>
@@ -117,6 +126,11 @@ export function MatchStatusOverlay(props: {
                     <div className="mt-1 text-center text-[10px] tracking-[0.18em] text-[#e7d3aa]">
                         {pointStatus}
                     </div>
+                    {pointDetail ? (
+                        <div className="mt-1 text-center text-[9px] tracking-[0.18em] text-[#cbb48a]">
+                            {pointDetail}
+                        </div>
+                    ) : null}
                     {waveLabels.length > 0 ? (
                         <div className="mt-1 text-center text-[9px] tracking-[0.18em] text-[#c6d7d8]">
                             {waveLabels.join('  |  ')}

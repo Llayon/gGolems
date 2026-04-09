@@ -1,5 +1,13 @@
 import type { WeaponStatusView } from '../combat/weaponTypes';
-import type { ControlPointView, GameMode, TeamOverview, TeamScoreState } from '../gameplay/types';
+import type {
+    ControlOwner,
+    ControlPointId,
+    ControlPointView,
+    GameMode,
+    TeamId,
+    TeamOverview,
+    TeamScoreState
+} from '../gameplay/types';
 import type { GolemSection } from '../mechs/sections';
 
 export type SectionName = GolemSection;
@@ -11,6 +19,23 @@ export type RadarContact = {
     kind: 'enemy' | 'bot';
     distance: number;
     meters: number;
+};
+
+export type ControlHudSummary = {
+    blueHeld: number;
+    redHeld: number;
+    contestedPoints: ControlPointId[];
+    activeCapture: {
+        point: ControlPointId;
+        team: TeamId;
+        progress: number;
+        targetOwner: ControlOwner;
+        unitAdvantage: number;
+    } | null;
+    leadingTeam: TeamId | null;
+    scoreGap: number;
+    blueToWin: number;
+    redToWin: number;
 };
 
 export type GameHudState = {
@@ -45,6 +70,7 @@ export type GameHudState = {
     radarContacts: RadarContact[];
     gameMode: GameMode;
     controlPoints: ControlPointView[];
+    controlSummary: ControlHudSummary;
     teamScores: TeamScoreState;
     teamOverview: TeamOverview;
     respawnTimer: number;
@@ -95,6 +121,16 @@ export const INITIAL_GAME_HUD_STATE: GameHudState = {
     radarContacts: [],
     gameMode: 'control',
     controlPoints: [],
+    controlSummary: {
+        blueHeld: 0,
+        redHeld: 0,
+        contestedPoints: [],
+        activeCapture: null,
+        leadingTeam: null,
+        scoreGap: 0,
+        blueToWin: 200,
+        redToWin: 200
+    },
     teamScores: { blue: 0, red: 0, scoreToWin: 200, winner: null },
     teamOverview: {
         blue: { alive: 5, total: 5, waveTimer: 0 },
