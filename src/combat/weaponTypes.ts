@@ -6,6 +6,7 @@ export type WeaponMountId = 'rightArmMount' | 'leftArmMount' | 'torsoMount';
 export type WeaponGroupId = 1 | 2 | 3;
 export type ProjectileProfileId = 'bolt' | 'arc_pulse' | 'steam_slug';
 export type WeaponSlotClass = 'arm' | 'torso';
+export type WeaponRole = 'precision' | 'pressure' | 'breach';
 export type WeaponSection = Extract<GolemSection, 'leftArm' | 'rightArm' | 'leftTorso' | 'rightTorso' | 'centerTorso'>;
 export type WeaponState = 'ready' | 'recycle' | 'offline' | 'heat';
 
@@ -24,6 +25,7 @@ export type WeaponDefinition = {
     id: WeaponId;
     nameKey: TranslationKey;
     shortKey: TranslationKey;
+    role: WeaponRole;
     allowedSlotClasses: WeaponSlotClass[];
     damage: number;
     cooldown: number;
@@ -31,6 +33,8 @@ export type WeaponDefinition = {
     projectileSpeed: number;
     spread: number;
     effectiveRange: number;
+    falloffStart: number;
+    minDamageScale: number;
     projectileProfile: ProjectileProfileId;
     projectileCount: number;
     fireTrauma: number;

@@ -246,9 +246,9 @@ export class DummyBot {
                 this.fireCooldown -= dt;
                 const combatDistance = combatTarget ? combatTarget.distanceTo(_currentPos) : Number.POSITIVE_INFINITY;
                 if (combatTarget && this.fireCooldown <= 0 && combatDistance < 58) {
-                    const weaponId = combatDistance < 25
+                    const weaponId = combatDistance < 19
                         ? 'steam_cannon'
-                        : combatDistance > 55
+                        : combatDistance > 52
                             ? 'rune_bolt'
                             : 'arc_emitter';
                     const definition = getWeaponDefinition(weaponId);

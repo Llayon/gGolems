@@ -31,18 +31,25 @@ export const PROJECTILE_PROFILES: Record<ProjectileProfileId, ProjectileProfileD
     }
 };
 
+function clamp01(value: number) {
+    return Math.max(0, Math.min(1, value));
+}
+
 export const WEAPON_DEFINITIONS: Record<WeaponId, WeaponDefinition> = {
     rune_bolt: {
         id: 'rune_bolt',
         nameKey: 'weapon.runeBolt',
         shortKey: 'weapon.short.runeBolt',
+        role: 'precision',
         allowedSlotClasses: ['arm'],
-        damage: 16,
-        cooldown: 0.45,
-        heatCost: 8,
-        projectileSpeed: 78,
-        spread: 0.004,
-        effectiveRange: 85,
+        damage: 15,
+        cooldown: 0.52,
+        heatCost: 9,
+        projectileSpeed: 84,
+        spread: 0.0035,
+        effectiveRange: 92,
+        falloffStart: 62,
+        minDamageScale: 0.8,
         projectileProfile: 'bolt',
         projectileCount: 1,
         fireTrauma: 0.18,
@@ -62,13 +69,16 @@ export const WEAPON_DEFINITIONS: Record<WeaponId, WeaponDefinition> = {
         id: 'arc_emitter',
         nameKey: 'weapon.arcEmitter',
         shortKey: 'weapon.short.arcEmitter',
+        role: 'pressure',
         allowedSlotClasses: ['arm'],
-        damage: 7,
-        cooldown: 0.8,
-        heatCost: 14,
-        projectileSpeed: 65,
-        spread: 0.012,
-        effectiveRange: 65,
+        damage: 8,
+        cooldown: 0.74,
+        heatCost: 15,
+        projectileSpeed: 62,
+        spread: 0.016,
+        effectiveRange: 58,
+        falloffStart: 34,
+        minDamageScale: 0.62,
         projectileProfile: 'arc_pulse',
         projectileCount: 3,
         fireTrauma: 0.24,
@@ -88,13 +98,16 @@ export const WEAPON_DEFINITIONS: Record<WeaponId, WeaponDefinition> = {
         id: 'steam_cannon',
         nameKey: 'weapon.steamCannon',
         shortKey: 'weapon.short.steamCannon',
+        role: 'breach',
         allowedSlotClasses: ['torso'],
-        damage: 34,
-        cooldown: 1.35,
-        heatCost: 22,
-        projectileSpeed: 42,
-        spread: 0.03,
-        effectiveRange: 35,
+        damage: 42,
+        cooldown: 1.48,
+        heatCost: 24,
+        projectileSpeed: 38,
+        spread: 0.024,
+        effectiveRange: 38,
+        falloffStart: 18,
+        minDamageScale: 0.42,
         projectileProfile: 'steam_slug',
         projectileCount: 1,
         fireTrauma: 0.42,
@@ -116,6 +129,22 @@ export const WEAPON_GROUP_ORDER: WeaponGroupId[] = [1, 2, 3];
 
 export function getWeaponDefinition(id: WeaponId) {
     return WEAPON_DEFINITIONS[id];
+}
+
+export function computeWeaponDamageAtDistance(
+    weaponId: WeaponId,
+    baseDamage: number,
+    distance: number
+) {
+    const definition = getWeaponDefinition(weaponId);
+    if (distance <= definition.falloffStart) {
+        return Math.max(1, Math.round(baseDamage));
+    }
+
+    const falloffSpan = Math.max(0.001, definition.effectiveRange - definition.falloffStart);
+    const t = clamp01((distance - definition.falloffStart) / falloffSpan);
+    const scale = 1 - t * (1 - definition.minDamageScale);
+    return Math.max(1, Math.round(baseDamage * scale));
 }
 
 export function isWeaponCompatibleWithSlot(weaponId: WeaponId, slotClass: WeaponSlotClass) {

@@ -1,5 +1,6 @@
 import * as assert from 'node:assert/strict';
 
+import { computeWeaponDamageAtDistance } from '../../combat/weapons';
 import type { LoadoutDefinition } from '../types';
 import { validateLoadoutDefinition } from '../definitions';
 import { GOLEM_SECTION_ORDER } from '../sections';
@@ -123,6 +124,17 @@ runSmoke('weapon rules derive availability, cooldowns, readiness, and status vie
     assert.equal(statuses.find((item) => item.mountId === 'rightArmMount')?.state, 'recycle');
     assert.equal(statuses.find((item) => item.mountId === 'leftArmMount')?.state, 'heat');
     assert.equal(canAnyWeaponFire(mounts, [...mountOrder], createFixtureHeatState({ steam: 100 })), true);
+});
+
+runSmoke('weapon damage falloff preserves weapon roles across distance bands', () => {
+    assert.equal(computeWeaponDamageAtDistance('rune_bolt', 15, 24), 15);
+    assert.equal(computeWeaponDamageAtDistance('rune_bolt', 15, 92), 12);
+
+    assert.equal(computeWeaponDamageAtDistance('arc_emitter', 8, 18), 8);
+    assert.equal(computeWeaponDamageAtDistance('arc_emitter', 8, 58), 5);
+
+    assert.equal(computeWeaponDamageAtDistance('steam_cannon', 42, 12), 42);
+    assert.equal(computeWeaponDamageAtDistance('steam_cannon', 42, 38), 18);
 });
 
 runSmoke('loadout legality rejects incompatible or incomplete assignments', () => {
