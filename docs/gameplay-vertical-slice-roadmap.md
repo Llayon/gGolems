@@ -1,7 +1,7 @@
-# Gameplay Vertical Slice Roadmap v2
+# Gameplay Vertical Slice Roadmap v3
 
 > Status: Active roadmap  
-> Current relevance: Near-term gameplay execution plan for the next 1-2 weeks. This version adds phase gates, measurable targets, and explicit playtest rules.
+> Current relevance: Near-term gameplay execution plan for the next 1-2 weeks. This version ties match feel to map topology, spawn safety, bot navigation, and minimum telemetry.
 
 ## Goal
 Ship one mode that feels good enough to replay without needing extra content, progression, or art polish to carry it.
@@ -48,12 +48,12 @@ This slice does **not** include:
 ## Hard Scope Rule
 Do not split effort evenly across systems. Work in this order:
 
-1. mode readability
+1. lane and mode readability
 2. weapon feel and TTK
 3. bot objective behavior
 4. destruction as tactical cover
-5. lane and spawn pacing
-6. repeat playtest tuning
+5. spawn safety and lane pacing
+6. repeat playtest tuning with telemetry
 
 If a task does not improve one of those six items, it probably belongs after the slice.
 
@@ -73,6 +73,39 @@ Record:
 
 This baseline can be manual. The point is to avoid "feels better" without evidence.
 
+## Slice Contracts
+This roadmap assumes the map and runtime now obey the architecture-plan contracts in [arena-village-architecture-plan.md](arena-village-architecture-plan.md).
+
+### Combat Topology Contract
+Every lane should provide:
+- one primary pressure route
+- one safer fallback route
+- at least one retake entry
+- one hold pocket
+- one punishable overextension zone
+
+### Spawn Safety Contract
+Every respawn pass should guarantee:
+- one safe way back into the match
+- no obvious direct spawn into dominant enemy line-of-sight
+- bounded respawn-to-re-engage time
+
+### Bot Navigation Contract
+Bots should move through authored intent space:
+- `lane_anchor`
+- `hold_node`
+- `rotate_node`
+- `retreat_node`
+- `objective_entry`
+
+### Destruction Value Rule
+Any breakable kept in the slice must change:
+- a sightline, or
+- a cover shape, or
+- a route timing window
+
+If it does not do one of those three things, it should not consume slice time.
+
 ## Metrics
 Use these as slice targets:
 
@@ -84,6 +117,16 @@ Use these as slice targets:
 - objective-relevant bot time: `>= 60%`
 - meaningful breakable structures on map: `2-4`
 - tactical destruction events per match: at least `1-2`
+
+Track at minimum:
+- `time_to_first_engagement`
+- `respawn_to_reengage`
+- `lane_occupancy`
+- `point_contest_duration`
+- `breakable_trigger_count`
+- `spawn_death_window`
+- `point_flip_frequency`
+- `bot_objective_uptime`
 
 These are not final ship metrics. They are vertical-slice control numbers.
 
@@ -103,6 +146,13 @@ Definition of done:
 - contested and capture states are visible without standing on the point
 - `Control` no longer feels like `TDM` with letters layered on top
 
+### Gate 1A. Lane readability
+Definition of done:
+
+- `village`, `center`, and `steam/ruins` can be described by role after one match
+- each lane has a readable primary route and fallback route
+- at least one retake entry per lane is obvious in motion, not only on paper
+
 ### Gate 2. Weapon roles and TTK
 Definition of done:
 
@@ -115,6 +165,7 @@ Definition of done:
 
 - bots hold, contest, rotate, and retreat in ways that support the mode
 - bots no longer over-prioritize empty fights away from points
+- bots route through authored map logic instead of only aiming at generic target vectors
 
 ### Gate 4. Tactical destruction
 Definition of done:
@@ -129,6 +180,7 @@ Definition of done:
 - first engagements happen quickly
 - lane identity is readable
 - losing one point does not create an unrecoverable spawn spiral
+- respawns do not repeatedly feed players into direct death funnels
 
 ## Workstreams
 
@@ -182,6 +234,7 @@ Touch points:
 - [BotRuntime.ts](/D:/Programms/Max/GODOT/Golem/gGolems/src/core/bots/BotRuntime.ts)
 - [RespawnRuntime.ts](/D:/Programms/Max/GODOT/Golem/gGolems/src/core/respawn/RespawnRuntime.ts)
 - [MatchRuntime.ts](/D:/Programms/Max/GODOT/Golem/gGolems/src/core/match/MatchRuntime.ts)
+- [Arena.ts](/D:/Programms/Max/GODOT/Golem/gGolems/src/world/Arena.ts)
 
 Required bot intents:
 
@@ -197,6 +250,7 @@ Tasks:
 - reduce pointless `chase` behavior away from the mode objective
 - add low-HP / high-heat retreat logic
 - make respawning bots rejoin useful pressure instead of scattering
+- introduce authored lane nodes so bots can stage, rotate, and retreat through the same map logic players learn
 
 ### 4. Use destruction as a tactical mechanic
 Touch points:
@@ -211,6 +265,7 @@ Tasks:
 - place them so destruction opens an angle, route, or retake option
 - preserve non-breakable landmarks so the map stays readable
 - make the feedback strong enough to signal "this lane just changed"
+- tag each breakable as `angle opener`, `cover breaker`, `route opener`, or `hold dislodger`
 
 ### 5. Finish lane and spawn pacing
 Touch points:
@@ -230,12 +285,14 @@ Tasks:
 - reduce useless runback time after respawn
 - avoid spawn traps while preserving control-point pressure
 - make the correct reason to rotate be map state, not confusion
+- score spawn candidates by enemy proximity, line-of-sight danger, route length, and recent death density
 
 ## Suggested 10-Day Slice
 
 ### Days 1-2
 - capture baseline
 - lock `Control` readability and scoring clarity
+- validate lane readability against the topology contract
 - remove ambiguous point-state behavior
 
 ### Days 3-4
@@ -245,6 +302,7 @@ Tasks:
 
 ### Days 5-6
 - rework bot intent around points
+- add authored lane and retreat nodes
 - verify both offline and host sessions show objective-focused behavior
 
 ### Days 7-8
@@ -253,6 +311,7 @@ Tasks:
 
 ### Days 9-10
 - tune spawn timing and lane pressure
+- validate spawn safety against enemy LOS and re-engage timing
 - run repeated matches and log the top `3` complaints after each pass
 
 ## Playtest Scenarios
@@ -288,6 +347,8 @@ After each pass, answer:
 4. Did bots support the mode or cheapen it?
 5. Did destruction create a tactical decision?
 6. Would you queue another match immediately?
+7. Did any spawn feel unfair because of direct enemy pressure or LOS?
+8. Did bots retreat and rotate in a way that matched the lane structure?
 
 If item `6` is "no", do not expand scope.
 
@@ -299,6 +360,7 @@ Revert or simplify changes if they:
 - increase match length without adding better decisions
 - cause bots to leave objective play more often
 - add destruction noise without changing map tactics
+- worsen spawn safety or create more death-on-respawn moments
 
 Do not preserve a change just because it was expensive to build.
 
@@ -310,6 +372,18 @@ During this slice, avoid:
 - keeping decorative breakables that confuse target priority
 - compensating for weak combat with larger maps or bigger numbers
 - letting bots bypass objective play just because they shoot well
+- treating telemetry as optional once the first few manual matches "feel okay"
+
+## Review Order
+When deciding what to fix next, use this order:
+
+1. topology and readability failures
+2. spawn safety failures
+3. bot navigation failures
+4. weapon overlap or TTK failures
+5. destruction value failures
+
+If a system later in the list looks weak, but a system earlier in the list is still failing, fix the earlier system first.
 
 ## After This Slice
 Only after this slice is stable should the next branch open:

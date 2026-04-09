@@ -1,12 +1,24 @@
-# Arena and Village Architecture Plan v2
+# Arena and Village Architecture Plan v3
 
 > Status: Implementation plan
-> Current relevance: Active target plan for arena/world-prop refactor. Treat this file as the source plan until the corresponding runtime and world reference docs are updated.
+> Current relevance: Active target plan for arena/world-prop refactor. This version tightens the document into an implementation spec with map, runtime, and telemetry contracts.
 
 ## Goal
 Rebuild arena content architecture around a cheaper static village layer, a smaller set of high-value breakable structures, and a clearer combat layout for mech fights.
 
 This plan is intentionally hybrid. The project should not move to "everything baked in Blender" and should not move to "everything assembled from runtime modules". Both extremes create unnecessary costs.
+
+## Current State Snapshot
+As of the current codebase:
+
+- [src/world/WorldPropSystem.ts](../src/world/WorldPropSystem.ts) already acts as the facade over static village, breakable structures, trees, and ambient props
+- [src/world/StaticVillageManager.ts](../src/world/StaticVillageManager.ts) already loads authored village blueprint and manifest data, but still places prefab clones instead of true chunked instancing
+- [src/world/BreakableStructureManager.ts](../src/world/BreakableStructureManager.ts) already owns coarse sectioned houses, but proximity-based proxy activation is not yet meaningfully enabled
+- [src/world/Arena.ts](../src/world/Arena.ts) already expresses a lane-oriented `A / B / C` layout with themed `village`, `center`, and `steam` spaces
+- [src/core/buildGameHudState.ts](../src/core/buildGameHudState.ts) and [src/ui/combat/MatchStatusOverlay.tsx](../src/ui/combat/MatchStatusOverlay.tsx) already provide a clearer `Control` summary than the original HUD
+- [src/core/Engine.ts](../src/core/Engine.ts), [src/core/bots/BotRuntime.ts](../src/core/bots/BotRuntime.ts), and [src/entities/DummyBot.ts](../src/entities/DummyBot.ts) already contain role-aware bot objective targeting and basic intents
+
+This means the next phase is no longer "invent the architecture". The next phase is to harden the current architecture into a deterministic, measurable world-and-map system.
 
 ## Key Corrections
 
@@ -386,6 +398,101 @@ This creates a readable rhythm:
 - central brawl
 - heavy-industrial flank
 
+## Combat Topology Contract
+Every lane and every objective space must satisfy a consistent combat topology.
+
+### Lane Contract
+Each primary lane must provide:
+- one primary route that is the fastest obvious way to contest the lane
+- one safer fallback route that trades speed for survivability
+- at least one retake entry that allows pressure after losing the lane anchor
+- one hold pocket that supports temporary defense without being permanently dominant
+- one punishable overextension zone that rewards disciplined crossfire
+
+### Objective Space Contract
+Each control point space must provide:
+- one obvious capture footprint
+- one readable contest edge
+- at least two approach vectors
+- nearby cover that supports contesting without turning the point into a bunker
+- at least one punish angle for teams that overcommit to the point center
+
+### Topology Review Rule
+Do not consider a lane "finished" because it looks themed. A lane is only done when:
+- its route choices are readable in motion
+- its hold pocket is useful but breakable by rotation or destruction
+- a losing team still has a viable retake entry
+
+## Spawn Safety Contract
+Spawn logic must actively protect match pacing and prevent silent snowball failures.
+
+### Spawn Rules
+- never spawn a player if an enemy is within the unsafe proximity radius for that spawn cluster
+- never spawn a player into direct line-of-sight of a dominant objective angle when an alternate spawn is available
+- prefer spawn candidates that restore pressure on the team's weakest lane instead of stacking the same route every time
+- respawn-to-re-engage distance must remain bounded and measured, not guessed
+
+### Spawn Safety Evaluation
+Each spawn candidate should be scored by:
+- enemy proximity
+- enemy line-of-sight danger
+- recent death density near the spawn
+- route length to the nearest useful objective
+- team spread, so that the game does not create isolated trickle spawns
+
+### Anti-Snowball Rule
+If one team loses a point, the next spawn wave must still have:
+- one safe route back into the match
+- one realistic retake option
+- enough cover to re-enter combat without immediate deletion
+
+## Bot Navigation Contract
+Bots should graduate from "drive to a target position" into lane-aware authored navigation.
+
+### Required Node Types
+- `lane_anchor`
+- `hold_node`
+- `rotate_node`
+- `retreat_node`
+- `staging_node`
+- `objective_entry`
+
+### Bot Routing Rules
+- `anchor` bots prefer `hold_node` and nearby `objective_entry` routes
+- `assault` bots prefer the fastest pressure route unless health or heat state forces retreat
+- `flank` bots prefer off-angle `rotate_node` routes and punish exposed hold pockets
+- `retreat` state must resolve to authored safe nodes, not arbitrary reverse movement
+- bots should never treat the map as pure open-space steering when authored nodes exist
+
+### Navigation Definition Of Done
+The navigation layer is only good enough when:
+- bots distribute across entries instead of stacking one point center
+- retreats create recovery behavior rather than random drift
+- rotations follow understandable lane logic
+
+## Destruction Value Rules
+Breakables exist to change combat space, not just to add spectacle.
+
+Keep a structure breakable only if its destruction changes at least one of:
+- a sightline
+- a cover shape
+- a route timing window
+- a retake entry
+
+Do not keep a structure breakable if it only:
+- creates particles
+- removes set dressing
+- makes the lane noisier without changing decisions
+
+### Breakable Placement Rule
+Each breakable structure should be tagged in design review as one of:
+- `angle opener`
+- `cover breaker`
+- `route opener`
+- `hold dislodger`
+
+If it fits none of those tags, demote it to static content.
+
 ## Performance Budgets
 These numbers should be treated as design constraints, not rough wishes.
 
@@ -414,6 +521,25 @@ These numbers should be treated as design constraints, not rough wishes.
 - static village core pack target: keep blocking-load contribution within the `<= 3s` first-load target
 - if measured first-load cost is too high, split the village module pack by zone rather than by individual module
 
+## Telemetry Minimum Set
+The architecture and layout plan is not complete without runtime measurement.
+
+Track at minimum:
+- `time_to_first_engagement`
+- `respawn_to_reengage`
+- `lane_occupancy`
+- `point_contest_duration`
+- `breakable_trigger_count`
+- `spawn_death_window`
+- `point_flip_frequency`
+- `bot_objective_uptime`
+
+Interpretation rules:
+- if one lane owns a disproportionate amount of occupancy, fix topology before adding content
+- if `spawn_death_window` spikes, fix spawn safety before tuning damage
+- if breakables trigger often but do not correlate with point flips or retakes, they are visual noise
+- if bot objective uptime is low, fix navigation and intent routing before adding more bot combat polish
+
 ## Testing Strategy
 Destruction and village systems should ship with explicit debug and determinism tools.
 
@@ -424,6 +550,8 @@ Required test support:
 - deterministic replay test: the same ordered hit sequence must produce the same final structure state
 - network convergence test under simulated latency such as `200ms`
 - mobile profile run with debris, decals, and breakable caps enforced
+- repeated map-topology test: verify each lane still has a retake route and hold pocket after destruction
+- spawn safety test: repeatedly kill and respawn units near all three objectives and verify the game avoids direct death funnels
 
 ## Migration Plan
 
@@ -432,6 +560,7 @@ Required test support:
 - define draw call targets
 - define acceptable destruction state counts
 - profile current house asset load and render cost before replacing it
+- capture the minimum telemetry set for `5-10` baseline matches
 
 ### Phase 1: Split the Current PropManager
 Starting point:
@@ -457,7 +586,7 @@ Actions:
 - allow rough greybox layout iteration during this phase, but do not treat it as the final relayout pass
 
 Definition of done:
-- at least one block of houses renders via instancing
+- at least one block of houses renders through chunk-ready authored content
 - no breakable gameplay is attached to that block yet
 
 ### Phase 3: Replace Background Houses
@@ -475,15 +604,29 @@ Actions:
 
 Definition of done:
 - the system supports cheap distant presentation and full local destruction
+- promotion radius and promotion triggers are measured and non-zero in gameplay builds
 
 ### Phase 5: Arena Relayout
 Actions:
 - reorganize the arena by zone role
 - move objectives into `village / center / ruins`
 - tune route spacing and cover density around the combat core
+- validate each lane against the combat topology contract
+- validate spawns against the spawn safety contract
 
 Definition of done:
 - the map reads as intentional lanes and landmarks instead of a spread of isolated prop islands
+- each lane has a primary route, fallback route, retake entry, hold pocket, and punishable overextension zone
+
+### Phase 5A: Bot Navigation Authoring
+Actions:
+- add authored lane and retreat nodes
+- migrate objective bots from free-vector routing to node-guided routing
+- validate `anchor`, `assault`, and `flank` behavior against authored navigation data
+
+Definition of done:
+- bots rotate through authored map logic rather than only chasing generic target positions
+- retreats and re-entries are readable in replays and playtests
 
 ### Phase 6: Decide on World Expansion
 Actions:
@@ -505,6 +648,9 @@ Avoid:
 - baseline per-piece geometry and material cloning for destruction
 - random runtime ids for world props that need network sync
 - naive grid-neighbor collapse logic as the authoritative structural model
+- spawn rules that only use fixed points and ignore enemy proximity or line-of-sight
+- bot routing that treats the arena as open steering space after lane roles have already been authored
+- keeping breakables that do not change any route, angle, or cover decision
 
 ## Definition of Success
 The plan is successful when:
@@ -514,3 +660,6 @@ The plan is successful when:
 - non-breakable structures feel justified in-world
 - prop systems are split by responsibility instead of growing a larger `PropManager`
 - future content can add village variants without rewriting core runtime code
+- spawn safety and respawn pacing are enforced by explicit rules instead of ad-hoc placement
+- bots navigate the map through authored lane logic, not only raw distance heuristics
+- map tuning decisions are supported by telemetry rather than only by feel

@@ -20,7 +20,7 @@
 - [mech-system-reference.md](mech-system-reference.md)
 - [testing-and-validation.md](testing-and-validation.md)
 - [content-pipeline.md](content-pipeline.md)
-- [gameplay-vertical-slice-roadmap.md](gameplay-vertical-slice-roadmap.md)
+- [gameplay-vertical-slice-roadmap.md](gameplay-vertical-slice-roadmap.md) - active slice plan with topology, spawn safety, bot navigation, and telemetry gates
 
 ## Networking and Backend
 
@@ -44,8 +44,8 @@
 
 - [engine-refactor-plan.md](engine-refactor-plan.md)
 - [runtime-architecture-plan.md](runtime-architecture-plan.md)
-- [arena-village-architecture-plan.md](arena-village-architecture-plan.md)
-- [gameplay-vertical-slice-roadmap.md](gameplay-vertical-slice-roadmap.md)
+- [arena-village-architecture-plan.md](arena-village-architecture-plan.md) - current world, map, and prop-system implementation plan
+- [gameplay-vertical-slice-roadmap.md](gameplay-vertical-slice-roadmap.md) - current gameplay execution roadmap
 - [lobby-layout-plan.md](lobby-layout-plan.md)
 - [mech-roster-architecture.md](mech-roster-architecture.md)
 - [kwii-hero-adaptation-plan.md](kwii-hero-adaptation-plan.md)
