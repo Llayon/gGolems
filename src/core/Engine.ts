@@ -10,7 +10,7 @@ import {
     GolemController,
     type GolemControllerOptions
 } from '../entities/GolemController';
-import { DummyBot } from '../entities/DummyBot';
+import { DummyBot, type BotIntent } from '../entities/DummyBot';
 import { ParticleManager } from '../fx/ParticleManager';
 import { DebrisManager } from '../fx/DebrisManager';
 import { DecalManager } from '../fx/DecalManager';
@@ -502,6 +502,10 @@ export class Game {
             : { home: 'A' as const, center: 'B' as const, enemy: 'C' as const };
     }
 
+    setBotIntent(botId: string, intent: BotIntent) {
+        this.bots.get(botId)?.setIntent(intent);
+    }
+
     getPriorityControlPoint(team: TeamId, from: THREE.Vector3, botId: string) {
         const enemyTeam: TeamId = team === 'blue' ? 'red' : 'blue';
         const roleState = this.getBotObjectiveRole(botId);
@@ -629,11 +633,48 @@ export class Game {
             .clone();
     }
 
+    getBotRetreatTarget(team: TeamId, botId: string) {
+        const lanes = this.getTeamControlLanes(team);
+        const homePoint = this.controlPoints.points.find((entry) => entry.id === lanes.home);
+        if (homePoint) {
+            const retreatBase = this.getControlPointStagingTarget(homePoint, team, botId);
+            _botAttackDir.copy(lanes.enemy === 'A'
+                ? this.controlPoints.points.find((entry) => entry.id === 'A')?.position ?? homePoint.position
+                : this.controlPoints.points.find((entry) => entry.id === 'C')?.position ?? homePoint.position
+            ).sub(homePoint.position).setY(0);
+            if (_botAttackDir.lengthSq() > 0.0001) {
+                _botAttackDir.normalize();
+                retreatBase.addScaledVector(_botAttackDir, -homePoint.radius * 0.42);
+            }
+            return retreatBase;
+        }
+
+        const roleState = this.getBotObjectiveRole(botId);
+        const spawn = this.getTeamSpawn(team, roleState.slot);
+        return new THREE.Vector3(spawn.x, spawn.y, spawn.z);
+    }
+
     getBotMovementTarget(botId: string, team: TeamId, from: THREE.Vector3) {
+        const bot = this.bots.get(botId);
+        const hpRatio = bot ? bot.hp / Math.max(1, bot.maxHp) : 1;
+        const nearbyThreat = this.getNearestEnemyTarget(team, from, 42);
+        if (hpRatio <= 0.35 && nearbyThreat) {
+            this.setBotIntent(botId, 'retreat');
+            return this.getBotRetreatTarget(team, botId);
+        }
+
         const point = this.getPriorityControlPoint(team, from, botId);
         if (point) {
+            const enemyInside = team === 'blue' ? point.redInside : point.blueInside;
+            const intent: BotIntent = point.contested || enemyInside > 0
+                ? 'contest'
+                : point.owner === team
+                    ? 'hold'
+                    : 'push';
+            this.setBotIntent(botId, intent);
             return this.getControlPointStagingTarget(point, team, botId);
         }
+        this.setBotIntent(botId, 'push');
         return this.getNearestEnemyTarget(team, from);
     }
 

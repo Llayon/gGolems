@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
-import type { DummyBot } from '../../entities/DummyBot';
+import type { BotIntent, DummyBot } from '../../entities/DummyBot';
 import type { BotStateView, GameMode, TeamId } from '../../gameplay/types';
 import type { ProjectileProfileId, WeaponId } from '../../combat/weaponTypes';
 import type { FireShotPayload } from '../combat/ProjectileCombatRuntime';
@@ -118,6 +118,7 @@ export function updateBots(
     matchEnded: boolean
 ) {
     const authorityMode = context.sessionMode !== 'client';
+    const getIntent = (bot: DummyBot): BotIntent => bot.intent ?? 'push';
 
     for (const bot of context.bots.values()) {
         const botPos = bot.body.translation();
@@ -129,7 +130,13 @@ export function updateBots(
             ? context.getEngageTarget(bot.team, from, 58)
             : undefined;
 
-        const botFireSolution = bot.update(dt, movementTarget ?? undefined, engageTarget ?? undefined, matchEnded);
+        const botFireSolution = bot.update(
+            dt,
+            movementTarget ?? undefined,
+            engageTarget ?? undefined,
+            matchEnded,
+            getIntent(bot)
+        );
         if (botFireSolution) {
             for (const shot of botFireSolution.shots) {
                 context.fireShot(shot, bot.id);

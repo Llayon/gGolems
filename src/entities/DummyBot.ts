@@ -25,6 +25,8 @@ type BotShot = {
     range: number;
 };
 
+export type BotIntent = 'push' | 'hold' | 'contest' | 'retreat';
+
 export class DummyBot {
     id: string;
     team: TeamId;
@@ -53,6 +55,7 @@ export class DummyBot {
     maxHp = 100;
     alive = true;
     respawnTimer = 0;
+    intent: BotIntent = 'push';
 
     constructor(
         scene: THREE.Scene,
@@ -138,6 +141,10 @@ export class DummyBot {
         this.damageTimer = Math.max(this.damageTimer, duration);
     }
 
+    setIntent(intent: BotIntent) {
+        this.intent = intent;
+    }
+
     getSpreadDirection(baseDir: THREE.Vector3, spread: number) {
         if (spread <= 0.00001) {
             return _botSpreadDir.copy(baseDir);
@@ -163,7 +170,7 @@ export class DummyBot {
         return remainingHp;
     }
 
-    update(dt: number, moveTarget?: THREE.Vector3, engageTarget?: THREE.Vector3, freeze = false) {
+    update(dt: number, moveTarget?: THREE.Vector3, engageTarget?: THREE.Vector3, freeze = false, intent: BotIntent = this.intent) {
         let shot: { shots: BotShot[] } | null = null;
 
         if (this.respawnTimer > 0) {
@@ -217,23 +224,32 @@ export class DummyBot {
 
                 _desiredVelocity.set(0, 0, 0);
                 if (objectiveMode) {
-                    if (distance > 4.5) {
+                    const objectiveAdvanceDistance = intent === 'retreat' ? 6.5 : intent === 'hold' ? 3.4 : 4.5;
+                    const objectiveBackoffDistance = intent === 'retreat' ? 4.8 : 1.8;
+                    const objectiveStrafe = intent === 'contest' ? 0.14 : intent === 'retreat' ? 0.1 : 0.22;
+                    if (distance > objectiveAdvanceDistance) {
                         _desiredVelocity.add(_toTarget);
-                    } else if (distance < 1.8) {
-                        _desiredVelocity.addScaledVector(_toTarget, -0.35);
+                    } else if (distance < objectiveBackoffDistance) {
+                        _desiredVelocity.addScaledVector(_toTarget, intent === 'retreat' ? -0.55 : -0.35);
                     }
-                    _desiredVelocity.addScaledVector(_strafe, this.strafeSign * 0.22);
+                    _desiredVelocity.addScaledVector(_strafe, this.strafeSign * objectiveStrafe);
                 } else {
-                    if (distance > 21) {
+                    const preferredFarDistance = intent === 'retreat' ? 30 : intent === 'hold' ? 18 : intent === 'contest' ? 15 : 21;
+                    const preferredNearDistance = intent === 'retreat' ? 17 : intent === 'hold' ? 12.5 : intent === 'contest' ? 8.5 : 11;
+                    const strafeAmount = intent === 'contest' ? 0.55 : intent === 'retreat' ? 0.68 : intent === 'hold' ? 0.72 : 0.9;
+                    if (distance > preferredFarDistance) {
                         _desiredVelocity.add(_toTarget);
-                    } else if (distance < 11) {
-                        _desiredVelocity.addScaledVector(_toTarget, -0.9);
+                    } else if (distance < preferredNearDistance) {
+                        _desiredVelocity.addScaledVector(_toTarget, intent === 'contest' ? -0.55 : -0.9);
                     }
-                    _desiredVelocity.addScaledVector(_strafe, this.strafeSign * 0.9);
+                    _desiredVelocity.addScaledVector(_strafe, this.strafeSign * strafeAmount);
                 }
 
                 if (_desiredVelocity.lengthSq() > 0.0001) {
-                    _desiredVelocity.normalize().multiplyScalar(objectiveMode ? 6.2 : 8.5);
+                    const targetSpeed = objectiveMode
+                        ? (intent === 'retreat' ? 5.7 : intent === 'hold' ? 5.4 : 6.2)
+                        : (intent === 'retreat' ? 7.2 : intent === 'hold' ? 7.6 : intent === 'contest' ? 8.1 : 8.5);
+                    _desiredVelocity.normalize().multiplyScalar(targetSpeed);
                 }
 
                 const currentVelocity = this.body.linvel();
@@ -246,11 +262,15 @@ export class DummyBot {
                 this.fireCooldown -= dt;
                 const combatDistance = combatTarget ? combatTarget.distanceTo(_currentPos) : Number.POSITIVE_INFINITY;
                 if (combatTarget && this.fireCooldown <= 0 && combatDistance < 58) {
-                    const weaponId = combatDistance < 19
-                        ? 'steam_cannon'
-                        : combatDistance > 52
-                            ? 'rune_bolt'
-                            : 'arc_emitter';
+                    const weaponId = intent === 'retreat'
+                        ? (combatDistance > 30 ? 'rune_bolt' : 'arc_emitter')
+                        : intent === 'hold'
+                            ? (combatDistance > 34 ? 'rune_bolt' : combatDistance < 16 ? 'steam_cannon' : 'arc_emitter')
+                            : combatDistance < 19
+                                ? 'steam_cannon'
+                                : combatDistance > 52
+                                    ? 'rune_bolt'
+                                    : 'arc_emitter';
                     const definition = getWeaponDefinition(weaponId);
                     const baseDir = combatTarget.clone().sub(_currentPos).normalize();
                     const origin = _currentPos.clone().addScaledVector(baseDir, weaponId === 'steam_cannon' ? 1.2 : 1.6);
@@ -271,7 +291,8 @@ export class DummyBot {
                     }
 
                     shot = { shots };
-                    this.fireCooldown = definition.cooldown + (weaponId === 'steam_cannon' ? 0.55 : 0.25) + Math.random() * 0.35;
+                    const retreatPenalty = intent === 'retreat' ? 0.12 : 0;
+                    this.fireCooldown = definition.cooldown + (weaponId === 'steam_cannon' ? 0.55 : 0.25) + retreatPenalty + Math.random() * 0.35;
                 }
             }
         } else {
