@@ -108,12 +108,9 @@ export class Arena {
 
     async initAsync(camera: THREE.Camera) {
         this.terrain.setupLod(camera);
-        try {
-            await this.treeSpawner.loadAllTrees();
-            this.treeSpawner.scatter(this.surfaceY.bind(this), this.halfSize);
-        } catch (e) {
-            console.error('[Arena] Failed to load trees:', e);
-        }
+        this.treeSpawner.loadAllTrees()
+            .then(() => this.treeSpawner.scatter(this.surfaceY.bind(this), this.halfSize))
+            .catch((e) => console.error('[Arena] Failed to load trees:', e));
         this.grassSystem.init(this.surfaceY.bind(this), this.halfSize);
         try {
             await this.groundCoverSpawner.loadAll();
