@@ -1,7 +1,14 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-Core game code lives in `src/`. Use `src/core/` for renderer and app bootstrap, `src/entities/` for mechs, controllers, and bots, and `src/combat/` for weapons and combat rules. Runtime assets belong in `src/assets/`, with mech files under `src/assets/mechs/`. Blender exports and reference files live in `docs/blender_exports/`, while repeatable export helpers belong in `scripts/`. GitHub Pages deployment is defined in `.github/workflows/`.
+Core game code lives in `src/`. Use `src/core/` for renderer, app bootstrap, and runtime composition. The `Engine.ts` class (~950 lines) owns all subsystems and delegates per-frame logic to pure runtime functions in `src/core/` subdirectories via adapter context factories (`EngineRuntimeContexts.ts`, `EngineSessionRuntimeAdapters.ts`). `src/entities/` contains Golem controllers and bots. `src/combat/` owns weapons and combat rules. `src/mechs/` contains chassis/loadout definitions, rules, and runtime modules. Runtime assets belong in `src/assets/`. Blender exports and reference files live in `docs/blender_exports/`, while repeatable export helpers belong in `scripts/`. GitHub Pages deployment is defined in `.github/workflows/`.
+
+**Extracted modules** (pure functions, testable in isolation):
+- `src/core/combat/UnitLocator.ts` — enemy position iteration, nearest target lookup, team resolution
+- `src/core/respawn/SpawnSystem.ts` — spawn resolution with LOS checks, death tracking, spawn yaw
+- `src/core/bots/BotObjectiveSystem.ts` — bot intent, lane node navigation, control point scoring, retreat/push logic
+- `src/core/match/MatchController.ts` — game mode settings application
+- `src/core/match/MatchRuntime.ts` — scoring, match restart, team overview
 
 ## Build, Test, and Development Commands
 - `npm run dev` starts the Vite dev server on port `3000`.
@@ -23,6 +30,8 @@ npm run build
 ## Coding Style & Naming Conventions
 Use TypeScript and existing project conventions. Prefer clear, explicit names and keep files focused on one responsibility. Use `PascalCase` for classes and asset loaders (`KWIIRuntimeAsset.ts`), `camelCase` for variables and functions, and `UPPER_SNAKE_CASE` only for true constants. Match the surrounding file style; keep comments rare and only where the logic is not obvious.
 
+**File size limit:** Keep files under 400 lines. If a file grows beyond this, split it into smaller, focused modules.
+
 ## Testing Guidelines
 The minimum validation bar for gameplay code is:
 - `npm run lint`
@@ -33,8 +42,33 @@ The minimum validation bar for gameplay code is:
 
 When adding tests later, keep them near the related feature or under a dedicated `tests/` directory and name them after the feature they cover.
 
+## Communication
+
+Respond to the user in Russian only. Code comments and explanations may be in English.
+
 ## Commit & Pull Request Guidelines
-Recent history uses short, imperative commit messages such as `Fix KWII torso twist for skinned export` or `Add skinned KWII detailed export from source`. Keep commits narrowly scoped and descriptive. PRs should include:
+
+Use the **Conventional Commits** format so that LLMs and tools can parse the history:
+
+```
+<type>[optional scope]: <description>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+**Types:** `feat`, `fix` (required by spec), plus `refactor`, `docs`, `test`, `chore`, `perf`, `build`, `ci`, `style` as needed.
+
+**Rules:**
+- Scope goes in parentheses: `fix(mech):`, `feat(combat):`
+- Description is a short imperative summary after `: `
+- Split commits when a change spans multiple types — one type per commit
+- Breaking changes: append `!` before `:` or add `BREAKING CHANGE:` footer
+
+Good: `fix(mech): Fix KWII torso twist for skinned export`. Good: `feat(combat): Add steam_cannon projectile trail`. Bad: `Fix stuff in mech`. Bad: `Update things`.
+
+PRs should include:
 - what changed and why
 - gameplay or rendering impact
 - screenshots or GIFs for visual changes
