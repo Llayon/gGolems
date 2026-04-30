@@ -176,6 +176,8 @@ export class GroundCoverSpawner {
                     instanceIndex = 0;
                 }
 
+                if (meshIndex >= meshes.length) break;
+
                 const y = sampleHeight(placement.x, placement.z);
                 _dummy.position.set(placement.x, y, placement.z);
                 _dummy.scale.setScalar(placement.scale);

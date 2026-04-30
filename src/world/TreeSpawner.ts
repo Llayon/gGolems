@@ -189,6 +189,8 @@ export class TreeSpawner {
                     instanceIndex = 0;
                 }
 
+                if (meshIndex >= groups.length) break;
+
                 const y = sampleHeight(placement.x, placement.z);
                 dummy.position.set(placement.x, y, placement.z);
                 dummy.scale.setScalar(placement.scale);
