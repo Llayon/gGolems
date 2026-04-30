@@ -10,7 +10,8 @@
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
     "test:rules": "tsc -p tsconfig.rule-fixtures.json && node .rule-fixtures/mechs/rules/runRuleFixtures.js",
-    "test:runtime-smoke": "tsx src/core/runtimeSmoke/runRuntimeSmoke.ts"
+    "test:runtime-smoke": "tsx src/core/runtimeSmoke/runRuntimeSmoke.ts",
+    "test:terrain": "tsx src/core/runtimeSmoke/runTerrainSmoke.ts"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.19.3",

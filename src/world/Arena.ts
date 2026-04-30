@@ -41,13 +41,14 @@ export class Arena {
     readonly controlPointPositions: Record<'A' | 'B' | 'C', THREE.Vector3>;
     readonly laneNodes: ArenaLaneNode[];
 
-    constructor(scene: THREE.Scene, physics: RAPIER.World) {
+    constructor(scene: THREE.Scene, physics: RAPIER.World, camera: THREE.Camera) {
         const arenaHalfSize = this.halfSize;
         const wallThickness = 2;
         const wallHeight = 12;
         const wallSpan = arenaHalfSize * 2 - wallThickness * 2;
 
         this.terrain = new TerrainBuilder(scene, physics, arenaHalfSize);
+        this.terrain.setupLod(camera);
         this.soloSpawn = this.createSpawnPoint(-46, 92);
         this.botSpawn = this.createSpawnPoint(46, -92);
         this.blueSpawns = [

@@ -196,7 +196,7 @@ export class Game {
         this.physicsWrapper.initSync();
         this.physics = this.physicsWrapper.world;
 
-        this.world = new Arena(this.renderer.scene, this.physics);
+        this.world = new Arena(this.renderer.scene, this.physics, this.renderer.camera);
         this.mechCamera = new MechCamera(this.renderer.camera);
         this.golem = new GolemController(this.renderer.scene, this.physics, true, localMechOptions);
         this.golem.gameCamera = this.mechCamera;
@@ -659,6 +659,7 @@ export class Game {
         this.recentDeaths = ageRecentDeaths(this.recentDeaths, dt);
 
         this.physics.step();
+        this.world.terrain.update();
         this._updateCameraAndInput();
         this._updateMechs(dt);
         this._updateBots();

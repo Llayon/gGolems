@@ -1,105 +1,24 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
+import {
+    HeightmapSource,
+    ProceduralHeightmap,
+    blendPads,
+    clamp,
+    smoothstep,
+    TERRAIN_SPAWN_PADS,
+    TERRAIN_OBJECTIVE_PADS,
+    type TerrainPadConfig,
+} from './HeightmapSource';
+import { type LodLevel, TerrainLodController } from './TerrainLodController';
+import { buildTerrainMasses } from './TerrainMasses';
 
-type BoxMassConfig = {
-    x: number;
-    y: number;
-    z: number;
-    w: number;
-    h: number;
-    d: number;
-    color: number;
-    roughness?: number;
-    rotationX?: number;
-    rotationY?: number;
-    rotationZ?: number;
-};
-
-type CylinderMassConfig = {
-    x: number;
-    y: number;
-    z: number;
-    radius: number;
-    height: number;
-    color: number;
-    roughness?: number;
-    rotationY?: number;
-};
-
-type RockMoundConfig = {
-    x: number;
-    y: number;
-    z: number;
-    sx: number;
-    sy: number;
-    sz: number;
-    color: number;
-    roughness?: number;
-    rotationX?: number;
-    rotationY?: number;
-    rotationZ?: number;
-};
-
-type TerrainPadConfig = {
-    x: number;
-    z: number;
-    radius: number;
-    targetY?: number;
-};
-
-const _quat = new THREE.Quaternion();
-const _euler = new THREE.Euler();
 const _color = new THREE.Color();
 const _normal = new THREE.Vector3();
-const TERRAIN_SPAWN_PADS: TerrainPadConfig[] = [
-    { x: -46, z: 92, radius: 16, targetY: 2.4 },
-    { x: 46, z: -92, radius: 16, targetY: 2.4 },
-    { x: -92, z: 30, radius: 16, targetY: 2.5 },
-    { x: 92, z: -30, radius: 16, targetY: 2.5 },
-    { x: -30, z: -92, radius: 16, targetY: 2.4 },
-    { x: 30, z: 92, radius: 16, targetY: 2.4 },
-    { x: -118, z: -82, radius: 18, targetY: 2.8 },
-    { x: -118, z: -42, radius: 18, targetY: 2.8 },
-    { x: -118, z: 0, radius: 18, targetY: 2.8 },
-    { x: -118, z: 42, radius: 18, targetY: 2.8 },
-    { x: -118, z: 82, radius: 18, targetY: 2.8 },
-    { x: 118, z: -82, radius: 18, targetY: 2.8 },
-    { x: 118, z: -42, radius: 18, targetY: 2.8 },
-    { x: 118, z: 0, radius: 18, targetY: 2.8 },
-    { x: 118, z: 42, radius: 18, targetY: 2.8 },
-    { x: 118, z: 82, radius: 18, targetY: 2.8 }
-];
-
-const TERRAIN_OBJECTIVE_PADS: TerrainPadConfig[] = [
-    { x: -74, z: 34, radius: 18 },
-    { x: 0, z: -18, radius: 18 },
-    { x: 76, z: 38, radius: 18 }
-];
-
-function clamp(value: number, min: number, max: number) {
-    return Math.max(min, Math.min(max, value));
-}
-
-function smoothstep(edge0: number, edge1: number, value: number) {
-    const t = clamp((value - edge0) / (edge1 - edge0), 0, 1);
-    return t * t * (3 - 2 * t);
-}
 
 function hash2(x: number, y: number) {
     const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453123;
     return s - Math.floor(s);
-}
-
-function markShadows(mesh: THREE.Mesh) {
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-}
-
-function isProtectedTerrainPadArea(x: number, z: number, extraRadius = 0) {
-    if (TERRAIN_OBJECTIVE_PADS.some((pad) => Math.hypot(x - pad.x, z - pad.z) < pad.radius + extraRadius)) {
-        return true;
-    }
-    return TERRAIN_SPAWN_PADS.some((pad) => Math.hypot(x - pad.x, z - pad.z) < pad.radius + extraRadius);
 }
 
 export class TerrainBuilder {
@@ -107,22 +26,79 @@ export class TerrainBuilder {
     scene: THREE.Scene;
     physics: RAPIER.World;
     halfSize: number;
-    groundRows = 97;
-    groundCols = 97;
+    heightmap: HeightmapSource;
+    groundRows: number;
+    groundCols: number;
     groundColliderMode: 'heightfield' | 'trimeshFallback' = 'heightfield';
     groundColliderError = '';
+    spawnPads: TerrainPadConfig[];
+    objectivePads: TerrainPadConfig[];
+    lodController: TerrainLodController | null = null;
+    private _groundMaterials: THREE.MeshStandardMaterial | null = null;
+    private _groundColors: number[] = [];
 
-    constructor(scene: THREE.Scene, physics: RAPIER.World, halfSize: number) {
+    constructor(
+        scene: THREE.Scene,
+        physics: RAPIER.World,
+        halfSize: number,
+        heightmap?: HeightmapSource,
+        resolution = 97,
+        spawnPads: TerrainPadConfig[] = TERRAIN_SPAWN_PADS,
+        objectivePads: TerrainPadConfig[] = TERRAIN_OBJECTIVE_PADS
+    ) {
         this.scene = scene;
         this.physics = physics;
         this.halfSize = halfSize;
+        this.heightmap = heightmap ?? new ProceduralHeightmap({
+            size: resolution,
+            baseHeight: 1.45,
+            minHeight: 0.42,
+            octaves: [
+                { frequency: 0.008, amplitude: 1.0, lacunarity: 2.0, gain: 0.5 },
+                { frequency: 0.016, amplitude: 0.5, lacunarity: 2.0, gain: 0.5 },
+                { frequency: 0.032, amplitude: 0.25, lacunarity: 2.0, gain: 0.5 },
+                { frequency: 0.064, amplitude: 0.125, lacunarity: 2.0, gain: 0.5 },
+            ],
+            seed: 42
+        });
+        this.groundRows = resolution;
+        this.groundCols = resolution;
+        this.spawnPads = spawnPads;
+        this.objectivePads = objectivePads;
 
         this.buildGround();
         this.buildTerrainMasses();
     }
 
+    setupLod(camera: THREE.Camera) {
+        this.lodController = new TerrainLodController(camera);
+        const size = this.halfSize * 2;
+        const lodResolutions = {
+            high: this.groundCols,
+            mid: Math.floor(this.groundCols / 2),
+            low: Math.floor(this.groundCols / 4)
+        };
+
+        for (const [level, res] of Object.entries(lodResolutions)) {
+            const mesh = this.createLodMesh(level as LodLevel, res, size);
+            this.lodController.registerMesh(level as LodLevel, mesh);
+        }
+
+        this.collisionMeshes.push(this.lodController.meshes.high!);
+    }
+
     getCollisionMeshes() {
         return this.collisionMeshes;
+    }
+
+    update() {
+        if (this.lodController) {
+            this.lodController.update();
+        }
+    }
+
+    sampleHeight(x: number, z: number) {
+        return blendPads(this.heightmap, x, z, this.spawnPads, this.objectivePads);
     }
 
     createGroundTexture() {
@@ -130,9 +106,7 @@ export class TerrainBuilder {
         canvas.width = 256;
         canvas.height = 256;
         const ctx = canvas.getContext('2d');
-        if (!ctx) {
-            return null;
-        }
+        if (!ctx) return null;
 
         const image = ctx.createImageData(canvas.width, canvas.height);
         const data = image.data;
@@ -156,7 +130,6 @@ export class TerrainBuilder {
         }
 
         ctx.putImageData(image, 0, 0);
-
         const texture = new THREE.CanvasTexture(canvas);
         texture.wrapS = THREE.RepeatWrapping;
         texture.wrapT = THREE.RepeatWrapping;
@@ -164,83 +137,6 @@ export class TerrainBuilder {
         texture.colorSpace = THREE.SRGBColorSpace;
         texture.needsUpdate = true;
         return texture;
-    }
-
-    sampleBaseHeight(x: number, z: number) {
-        const nx = x / this.halfSize;
-        const nz = z / this.halfSize;
-        const radial = Math.sqrt(nx * nx + nz * nz);
-
-        const duneWave = Math.sin(x * 0.024) * 0.34 + Math.cos(z * 0.029) * 0.26 + Math.sin((x + z) * 0.015) * 0.18;
-        const centerBasin = -Math.max(0, 1 - radial / 0.68) * 0.65;
-        const serviceShelf = Math.exp(-Math.pow((x + 74) / 26, 2) - Math.pow((z - 34) / 22, 2)) * 1.65;
-        const annexShelf = Math.exp(-Math.pow((x - 76) / 22, 2) - Math.pow((z - 40) / 22, 2)) * 1.7;
-        const centralChannel = -Math.exp(-Math.pow((z + 18) / 12, 2)) * (1.55 + Math.exp(-Math.pow(x / 72, 2)) * 0.55);
-        const channelCore = -Math.exp(-Math.pow(x / 28, 2) - Math.pow((z + 18) / 8, 2)) * 0.55;
-        const channelNorthLip = Math.exp(-Math.pow(x / 46, 2) - Math.pow((z + 2) / 14, 2)) * 0.55;
-        const midIsland = Math.exp(-Math.pow(x / 16, 2) - Math.pow((z + 18) / 10, 2)) * 0.82;
-        const westExitShelf = Math.exp(-Math.pow((x + 22) / 12, 2) - Math.pow((z + 14) / 10, 2)) * 0.54;
-        const eastExitShelf = Math.exp(-Math.pow((x - 22) / 12, 2) - Math.pow((z + 14) / 10, 2)) * 0.54;
-        const blueBerm = Math.exp(-Math.pow((x + 58) / 16, 2) - Math.pow((z + 6) / 34, 2)) * 3.2;
-        const redBerm = Math.exp(-Math.pow((x - 58) / 16, 2) - Math.pow((z + 4) / 34, 2)) * 3.2;
-        const westPass = -Math.exp(-Math.pow((x + 78) / 16, 2) - Math.pow((z - 2) / 20, 2)) * 0.7;
-        const eastPass = -Math.exp(-Math.pow((x - 78) / 16, 2) - Math.pow((z - 2) / 20, 2)) * 0.72;
-        const northRise = Math.exp(-Math.pow((z - 96) / 20, 2)) * Math.exp(-Math.pow(x / 76, 2)) * 2.1;
-        const southRise = Math.exp(-Math.pow((z + 94) / 20, 2)) * Math.exp(-Math.pow((x - 4) / 78, 2)) * 1.9;
-        const westPerimeter = Math.max(0, 1 - Math.abs(x + this.halfSize * 0.82) / (this.halfSize * 0.18))
-            * Math.max(0, 1 - Math.abs(z) / (this.halfSize * 0.94))
-            * 3.4;
-        const eastPerimeter = Math.max(0, 1 - Math.abs(x - this.halfSize * 0.82) / (this.halfSize * 0.18))
-            * Math.max(0, 1 - Math.abs(z) / (this.halfSize * 0.94))
-            * 3.5;
-        const perimeterLift = smoothstep(0.78, 0.99, radial) * 7.2;
-
-        return Math.max(
-            0.42,
-            1.45
-            + duneWave
-            + centerBasin
-            + serviceShelf
-            + annexShelf
-            + centralChannel
-            + channelCore
-            + channelNorthLip
-            + midIsland
-            + westExitShelf
-            + eastExitShelf
-            + blueBerm
-            + redBerm
-            + westPass
-            + eastPass
-            + northRise
-            + southRise
-            + westPerimeter
-            + eastPerimeter
-            + perimeterLift
-        );
-    }
-
-    sampleHeight(x: number, z: number) {
-        let height = this.sampleBaseHeight(x, z);
-
-        for (const pad of TERRAIN_SPAWN_PADS) {
-            const distance = Math.hypot(x - pad.x, z - pad.z);
-            const influence = 1 - smoothstep(pad.radius * 0.45, pad.radius, distance);
-            if (influence > 0) {
-                height = THREE.MathUtils.lerp(height, pad.targetY, influence);
-            }
-        }
-
-        for (const pad of TERRAIN_OBJECTIVE_PADS) {
-            const distance = Math.hypot(x - pad.x, z - pad.z);
-            const influence = 1 - smoothstep(pad.radius * 0.42, pad.radius, distance);
-            if (influence > 0) {
-                const targetY = pad.targetY ?? this.sampleBaseHeight(pad.x, pad.z);
-                height = THREE.MathUtils.lerp(height, targetY, influence);
-            }
-        }
-
-        return height;
     }
 
     buildGround() {
@@ -264,55 +160,78 @@ export class TerrainBuilder {
         positions.needsUpdate = true;
         geometry.computeVertexNormals();
 
-        const normals = geometry.attributes.normal as THREE.BufferAttribute;
-        const colors: number[] = [];
-        for (let row = 0; row < this.groundRows; row++) {
-            const z = -this.halfSize + (row / (this.groundRows - 1)) * size;
-            for (let col = 0; col < this.groundCols; col++) {
-                const x = -this.halfSize + (col / (this.groundCols - 1)) * size;
-                const vertexIndex = row * this.groundCols + col;
-                const y = positions.getY(vertexIndex);
-                _normal.set(normals.getX(vertexIndex), normals.getY(vertexIndex), normals.getZ(vertexIndex));
-
-                const ridgeFactor = clamp((y - 0.6) / 8.8, 0, 1);
-                const basinFactor = clamp((2.4 - y) / 2.4, 0, 1);
-                const slopeFactor = clamp(1 - _normal.y, 0, 1);
-                const westDust = smoothstep(0.18, 0.82, (x + this.halfSize) / (this.halfSize * 2));
-                const channelAsh = Math.exp(-Math.pow((x + z * 0.18) / 34, 2)) * 0.28;
-                const scorchBand = Math.exp(-Math.pow((x - 4) / 28, 2) - Math.pow((z + 4) / 56, 2)) * 0.18;
-
-                const baseR = THREE.MathUtils.lerp(0.19, 0.46, ridgeFactor);
-                const baseG = THREE.MathUtils.lerp(0.14, 0.32, ridgeFactor);
-                const baseB = THREE.MathUtils.lerp(0.12, 0.21, ridgeFactor);
-
-                const dryLift = westDust * 0.07 + (1 - basinFactor) * 0.03;
-                const dampCool = basinFactor * 0.06 + channelAsh * 0.08;
-                const rockTint = slopeFactor * 0.18;
-
-                _color.setRGB(
-                    clamp(baseR + dryLift - dampCool + rockTint * 0.35 - scorchBand * 0.1, 0, 1),
-                    clamp(baseG + dryLift * 0.6 - dampCool * 0.8 - rockTint * 0.15 - scorchBand * 0.08, 0, 1),
-                    clamp(baseB - dampCool * 0.3 - rockTint * 0.05 - scorchBand * 0.02, 0, 1)
-                );
-                colors.push(_color.r, _color.g, _color.b);
-            }
-        }
-
-        geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-
-        const material = new THREE.MeshStandardMaterial({
+        this._groundColors = this.computeVertexColors(geometry, size);
+        this._groundMaterials = new THREE.MeshStandardMaterial({
             map: this.createGroundTexture() ?? undefined,
             vertexColors: true,
             roughness: 0.99,
             metalness: 0.02
         });
 
-        const ground = new THREE.Mesh(geometry, material);
-        ground.receiveShadow = true;
-        this.scene.add(ground);
-        this.collisionMeshes.push(ground);
-
         this.createGroundCollider(geometry, heights, size);
+    }
+
+    computeVertexColors(geometry: THREE.BufferGeometry, size: number): number[] {
+        const normals = geometry.attributes.normal as THREE.BufferAttribute;
+        const positions = geometry.attributes.position as THREE.BufferAttribute;
+        const count = positions.count;
+        const colors: number[] = [];
+
+        for (let i = 0; i < count; i++) {
+            const x = positions.getX(i);
+            const z = positions.getZ(i);
+            const y = positions.getY(i);
+            _normal.set(normals.getX(i), normals.getY(i), normals.getZ(i));
+
+            const ridgeFactor = clamp((y - 0.6) / 8.8, 0, 1);
+            const basinFactor = clamp((2.4 - y) / 2.4, 0, 1);
+            const slopeFactor = clamp(1 - _normal.y, 0, 1);
+            const westDust = smoothstep(0.18, 0.82, (x + this.halfSize) / (this.halfSize * 2));
+            const channelAsh = Math.exp(-Math.pow((x + z * 0.18) / 34, 2)) * 0.28;
+            const scorchBand = Math.exp(-Math.pow((x - 4) / 28, 2) - Math.pow((z + 4) / 56, 2)) * 0.18;
+
+            const baseR = THREE.MathUtils.lerp(0.19, 0.46, ridgeFactor);
+            const baseG = THREE.MathUtils.lerp(0.14, 0.32, ridgeFactor);
+            const baseB = THREE.MathUtils.lerp(0.12, 0.21, ridgeFactor);
+
+            const dryLift = westDust * 0.07 + (1 - basinFactor) * 0.03;
+            const dampCool = basinFactor * 0.06 + channelAsh * 0.08;
+            const rockTint = slopeFactor * 0.18;
+
+            _color.setRGB(
+                clamp(baseR + dryLift - dampCool + rockTint * 0.35 - scorchBand * 0.1, 0, 1),
+                clamp(baseG + dryLift * 0.6 - dampCool * 0.8 - rockTint * 0.15 - scorchBand * 0.08, 0, 1),
+                clamp(baseB - dampCool * 0.3 - rockTint * 0.05 - scorchBand * 0.02, 0, 1)
+            );
+            colors.push(_color.r, _color.g, _color.b);
+        }
+        return colors;
+    }
+
+    createLodMesh(level: LodLevel, resolution: number, size: number): THREE.Mesh {
+        const segments = resolution - 1;
+        const geometry = new THREE.PlaneGeometry(size, size, segments, segments);
+        geometry.rotateX(-Math.PI / 2);
+
+        const positions = geometry.attributes.position as THREE.BufferAttribute;
+        for (let row = 0; row < resolution; row++) {
+            const z = -this.halfSize + (row / (resolution - 1)) * size;
+            for (let col = 0; col < resolution; col++) {
+                const x = -this.halfSize + (col / (resolution - 1)) * size;
+                const vertexIndex = row * resolution + col;
+                positions.setY(vertexIndex, this.sampleHeight(x, z));
+            }
+        }
+        positions.needsUpdate = true;
+        geometry.computeVertexNormals();
+
+        const colors = this.computeVertexColors(geometry, size);
+        geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+
+        const mesh = new THREE.Mesh(geometry, this._groundMaterials!.clone());
+        mesh.receiveShadow = true;
+        this.scene.add(mesh);
+        return mesh;
     }
 
     createGroundCollider(geometry: THREE.BufferGeometry, heights: Float32Array, size: number) {
@@ -353,115 +272,6 @@ export class TerrainBuilder {
     }
 
     buildTerrainMasses() {
-        const rock = 0x56493f;
-        const darkRock = 0x473c34;
-
-        const ridgeMounds: RockMoundConfig[] = [
-            { x: -110, y: 6.2, z: -74, sx: 11, sy: 7.2, sz: 12, color: darkRock, rotationY: 0.24 },
-            { x: -112, y: 6.8, z: -26, sx: 13, sy: 8.2, sz: 14, color: darkRock, rotationY: 0.18 },
-            { x: -108, y: 6.9, z: 22, sx: 12, sy: 8.1, sz: 16, color: darkRock, rotationY: -0.12 },
-            { x: -102, y: 6.2, z: 68, sx: 11, sy: 7.2, sz: 13, color: darkRock, rotationY: -0.24 },
-            { x: -86, y: 4.8, z: 80, sx: 15, sy: 6.1, sz: 11, color: rock, rotationY: -0.16 },
-
-            { x: -78, y: 5.6, z: -108, sx: 16, sy: 7.2, sz: 10, color: darkRock, rotationY: 0.04 },
-            { x: -28, y: 5.2, z: -110, sx: 18, sy: 6.4, sz: 9, color: darkRock, rotationY: -0.08 },
-            { x: 26, y: 5.2, z: -106, sx: 18, sy: 6.2, sz: 10, color: darkRock, rotationY: 0.1 },
-            { x: 78, y: 5.0, z: -102, sx: 15, sy: 6.0, sz: 9, color: darkRock, rotationY: -0.1 },
-
-            { x: -58, y: 5.4, z: 110, sx: 18, sy: 6.2, sz: 10, color: darkRock, rotationY: 0.08 },
-            { x: -2, y: 5.6, z: 108, sx: 18, sy: 6.3, sz: 11, color: darkRock, rotationY: -0.04 },
-            { x: 50, y: 5.4, z: 110, sx: 17, sy: 6.1, sz: 10, color: darkRock, rotationY: 0.06 },
-            { x: 96, y: 5.0, z: 104, sx: 14, sy: 5.8, sz: 9, color: darkRock, rotationY: -0.08 },
-
-            { x: 108, y: 6.0, z: -58, sx: 12, sy: 6.6, sz: 11, color: rock, rotationY: -0.18 },
-            { x: 104, y: 6.1, z: -8, sx: 12, sy: 7.0, sz: 14, color: rock, rotationY: 0.04 },
-            { x: 104, y: 6.1, z: 44, sx: 11, sy: 6.8, sz: 13, color: rock, rotationY: -0.12 },
-            { x: 98, y: 5.5, z: 86, sx: 11, sy: 6.0, sz: 10, color: rock, rotationY: 0.2 },
-
-            { x: -66, y: 3.8, z: -52, sx: 10, sy: 4.4, sz: 8, color: 0x64584c, rotationY: -0.16 },
-            { x: 64, y: 3.8, z: -48, sx: 10, sy: 4.4, sz: 8, color: 0x64584c, rotationY: 0.14 },
-            { x: 84, y: 4.6, z: 62, sx: 14, sy: 5.0, sz: 9, color: 0x5c4f43, rotationY: -0.06 }
-        ];
-
-        ridgeMounds
-            .filter((config) => !isProtectedTerrainPadArea(config.x, config.z, Math.max(config.sx, config.sz) * 0.8))
-            .forEach((config) => this.addRockMound(config));
-
-        [
-            { x: -18, y: 2.8, z: 96, radius: 8, height: 5.6, color: 0x5e5146 },
-            { x: 54, y: 2.3, z: -82, radius: 6, height: 4.6, color: 0x5b4d42 },
-            { x: -82, y: 2.6, z: 92, radius: 7.4, height: 5.2, color: 0x5d5147 },
-            { x: 100, y: 2.8, z: 74, radius: 7.6, height: 5.4, color: 0x61544a }
-        ]
-            .filter((config) => !isProtectedTerrainPadArea(config.x, config.z, config.radius * 1.25))
-            .forEach((config) => this.addCylinderMass(config));
-    }
-
-    addBoxMass(config: BoxMassConfig) {
-        const geometry = new THREE.BoxGeometry(config.w, config.h, config.d);
-        const material = new THREE.MeshStandardMaterial({
-            color: config.color,
-            roughness: config.roughness ?? 0.95
-        });
-        const mesh = new THREE.Mesh(geometry, material);
-        mesh.position.set(config.x, this.sampleHeight(config.x, config.z) + config.y, config.z);
-        mesh.rotation.set(config.rotationX ?? 0, config.rotationY ?? 0, config.rotationZ ?? 0);
-        markShadows(mesh);
-        this.scene.add(mesh);
-        this.collisionMeshes.push(mesh);
-
-        _euler.set(mesh.rotation.x, mesh.rotation.y, mesh.rotation.z);
-        _quat.setFromEuler(_euler);
-
-        const bodyDesc = RAPIER.RigidBodyDesc.fixed()
-            .setTranslation(mesh.position.x, mesh.position.y, mesh.position.z)
-            .setRotation({ x: _quat.x, y: _quat.y, z: _quat.z, w: _quat.w });
-        const body = this.physics.createRigidBody(bodyDesc);
-        const collider = RAPIER.ColliderDesc.cuboid(config.w / 2, config.h / 2, config.d / 2);
-        this.physics.createCollider(collider, body);
-    }
-
-    addCylinderMass(config: CylinderMassConfig) {
-        const geometry = new THREE.CylinderGeometry(config.radius, config.radius * 1.1, config.height, 10);
-        const material = new THREE.MeshStandardMaterial({
-            color: config.color,
-            roughness: config.roughness ?? 0.96
-        });
-        const mesh = new THREE.Mesh(geometry, material);
-        mesh.position.set(config.x, this.sampleHeight(config.x, config.z) + config.y, config.z);
-        mesh.rotation.y = config.rotationY ?? 0;
-        markShadows(mesh);
-        this.scene.add(mesh);
-        this.collisionMeshes.push(mesh);
-
-        const bodyDesc = RAPIER.RigidBodyDesc.fixed().setTranslation(mesh.position.x, mesh.position.y, mesh.position.z);
-        const body = this.physics.createRigidBody(bodyDesc);
-        const collider = RAPIER.ColliderDesc.cylinder(config.height / 2, config.radius);
-        this.physics.createCollider(collider, body);
-    }
-
-    addRockMound(config: RockMoundConfig) {
-        const geometry = new THREE.DodecahedronGeometry(1, 1);
-        const material = new THREE.MeshStandardMaterial({
-            color: config.color,
-            roughness: config.roughness ?? 0.98
-        });
-        const mesh = new THREE.Mesh(geometry, material);
-        mesh.scale.set(config.sx, config.sy, config.sz);
-        mesh.position.set(config.x, this.sampleHeight(config.x, config.z) + config.y, config.z);
-        mesh.rotation.set(config.rotationX ?? 0, config.rotationY ?? 0, config.rotationZ ?? 0);
-        markShadows(mesh);
-        this.scene.add(mesh);
-        this.collisionMeshes.push(mesh);
-
-        _euler.set(mesh.rotation.x, mesh.rotation.y, mesh.rotation.z);
-        _quat.setFromEuler(_euler);
-
-        const bodyDesc = RAPIER.RigidBodyDesc.fixed()
-            .setTranslation(mesh.position.x, mesh.position.y, mesh.position.z)
-            .setRotation({ x: _quat.x, y: _quat.y, z: _quat.z, w: _quat.w });
-        const body = this.physics.createRigidBody(bodyDesc);
-        const collider = RAPIER.ColliderDesc.cuboid(config.sx * 0.82, config.sy * 0.8, config.sz * 0.82);
-        this.physics.createCollider(collider, body);
+        buildTerrainMasses(this.scene, this.physics, this.sampleHeight.bind(this), this.collisionMeshes);
     }
 }
