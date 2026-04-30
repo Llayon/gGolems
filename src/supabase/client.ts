@@ -10,6 +10,8 @@ export type SupabaseIntegrationStatus = {
     missingKeys: string[];
 };
 
+const SUPABASE_REQUEST_TIMEOUT_MS = 5000;
+
 const env = ((import.meta as ImportMeta & { env?: SupabaseEnv }).env ?? {}) as SupabaseEnv;
 
 const config = {
@@ -31,6 +33,19 @@ const status: SupabaseIntegrationStatus = {
 
 let client: SupabaseClient | null = null;
 
+function createTimeoutFetch(timeoutMs: number) {
+    const nativeFetch = globalThis.fetch?.bind(globalThis);
+    if (!nativeFetch) return undefined;
+
+    return (url: RequestInfo | URL, init?: RequestInit) => {
+        const controller = new AbortController();
+        const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+
+        const signal = init?.signal ?? controller.signal;
+        return nativeFetch(url, { ...init, signal }).finally(() => clearTimeout(timer));
+    };
+}
+
 if (status.enabled) {
     client = createClient(config.url!, config.anonKey!, {
         auth: {
@@ -38,6 +53,9 @@ if (status.enabled) {
             detectSessionInUrl: true,
             persistSession: true,
             storageKey: 'gGolems.supabase.auth'
+        },
+        global: {
+            fetch: createTimeoutFetch(SUPABASE_REQUEST_TIMEOUT_MS)
         }
     });
 }

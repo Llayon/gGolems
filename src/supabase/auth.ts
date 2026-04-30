@@ -23,7 +23,13 @@ export async function ensurePilotSessionUser() {
         throw new Error('Supabase client is not configured.');
     }
 
-    const { data: sessionData, error: sessionError } = await client.auth.getSession();
+    let sessionData: Awaited<ReturnType<typeof client.auth.getSession>>['data'];
+    let sessionError: Awaited<ReturnType<typeof client.auth.getSession>>['error'];
+    try {
+        ({ data: sessionData, error: sessionError } = await client.auth.getSession());
+    } catch (error) {
+        throw new Error(describeError(error, 'Failed to load Supabase session.'));
+    }
     if (sessionError) {
         throw new Error(describeError(sessionError, 'Failed to load Supabase session.'));
     }
@@ -32,7 +38,13 @@ export async function ensurePilotSessionUser() {
         return sessionData.session.user;
     }
 
-    const { data, error } = await client.auth.signInAnonymously();
+    let data: Awaited<ReturnType<typeof client.auth.signInAnonymously>>['data'];
+    let error: Awaited<ReturnType<typeof client.auth.signInAnonymously>>['error'];
+    try {
+        ({ data, error } = await client.auth.signInAnonymously());
+    } catch (thrown) {
+        throw new Error(describeError(thrown, 'Failed to create Supabase guest session.'));
+    }
     if (error || !data.user) {
         throw new Error(describeError(error, 'Failed to create Supabase guest session.'));
     }
