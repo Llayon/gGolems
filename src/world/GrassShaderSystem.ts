@@ -54,10 +54,10 @@ type GrassConfig = {
 };
 
 const DEFAULT_CONFIG: GrassConfig = {
-    bladeCount: 18000,
-    bladeWidth: 0.1,
-    bladeHeight: 0.5,
-    heightVariation: 0.4,
+    bladeCount: 120000,
+    bladeWidth: 0.08,
+    bladeHeight: 0.35,
+    heightVariation: 0.3,
 };
 
 function seededRandom(seed: number): () => number {
