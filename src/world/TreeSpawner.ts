@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { isProtectedTerrainPadArea } from './HeightmapSource';
+import { runWithConcurrency } from '../core/concurrency';
 
 type TreeSpecies = 'common' | 'dead' | 'twisted' | 'pine';
 
@@ -35,6 +36,8 @@ const TREE_PATHS: Record<TreeSpecies, string[]> = {
     pine: ['assets/nature/Pine_1.gltf', 'assets/nature/Pine_2.gltf', 'assets/nature/Pine_3.gltf', 'assets/nature/Pine_4.gltf', 'assets/nature/Pine_5.gltf'],
 };
 
+const ASSET_LOAD_TIMEOUT_MS = 8000;
+
 const _vec3 = new THREE.Vector3();
 const _quat = new THREE.Quaternion();
 const _euler = new THREE.Euler();
@@ -59,20 +62,24 @@ export class TreeSpawner {
     }
 
     async loadAllTrees() {
-        const loadPromises: Promise<void>[] = [];
+        const loadTasks: { species: TreeSpecies; path: string }[] = [];
 
         for (const species of Object.keys(TREE_PATHS) as TreeSpecies[]) {
             const paths = TREE_PATHS[species];
-            const promises = paths.map((path) => this.loadSingleTree(species, path));
-            loadPromises.push(...promises);
+            for (const path of paths) {
+                loadTasks.push({ species, path });
+            }
         }
 
-        await Promise.all(loadPromises);
+        await runWithConcurrency(loadTasks, (task) => this.loadSingleTree(task.species, task.path), 4);
     }
 
     private async loadSingleTree(species: TreeSpecies, path: string) {
         try {
-            const gltf = await this.loader.loadAsync(path);
+            const gltf = await Promise.race([
+                this.loader.loadAsync(path),
+                new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`timeout loading ${path}`)), ASSET_LOAD_TIMEOUT_MS))
+            ]);
             const mesh = this.extractMesh(gltf.scene);
             if (!mesh) return;
 

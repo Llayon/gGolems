@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { isProtectedTerrainPadArea } from './HeightmapSource';
+import { runWithConcurrency } from '../core/concurrency';
 
 type GroundCoverType = 'grass_common_short' | 'grass_common_tall' | 'grass_wispy_short' | 'grass_wispy_tall'
     | 'bush' | 'bush_flowers' | 'fern' | 'clover_1' | 'clover_2'
@@ -62,6 +63,8 @@ const COVER_PATHS: Record<GroundCoverType, string> = {
     plant_7_big: 'assets/nature/Plant_7_Big.gltf',
 };
 
+const ASSET_LOAD_TIMEOUT_MS = 8000;
+
 const _dummy = new THREE.Object3D();
 
 function seededRandom(seed: number): () => number {
@@ -84,13 +87,16 @@ export class GroundCoverSpawner {
     }
 
     async loadAll() {
-        const promises = (Object.keys(COVER_PATHS) as GroundCoverType[]).map((type) => this.loadType(type));
-        await Promise.all(promises);
+        const types = Object.keys(COVER_PATHS) as GroundCoverType[];
+        await runWithConcurrency(types, (type) => this.loadType(type), 4);
     }
 
     private async loadType(type: GroundCoverType) {
         try {
-            const gltf = await this.loader.loadAsync(COVER_PATHS[type]);
+            const gltf = await Promise.race([
+                this.loader.loadAsync(COVER_PATHS[type]),
+                new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`timeout loading ${COVER_PATHS[type]}`)), ASSET_LOAD_TIMEOUT_MS))
+            ]);
             const mesh = this.extractMesh(gltf.scene);
             if (!mesh) return;
 
