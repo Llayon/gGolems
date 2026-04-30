@@ -201,6 +201,7 @@ export class TreeSpawner {
             if (meshIndex < groups.length) {
                 groups[meshIndex].count = instanceIndex;
                 groups[meshIndex].instanceMatrix.needsUpdate = true;
+                groups[meshIndex].computeBoundingSphere();
             }
 
             for (let i = meshIndex + 1; i < groups.length; i++) {

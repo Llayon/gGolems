@@ -190,6 +190,7 @@ export class GroundCoverSpawner {
             if (meshIndex < meshes.length) {
                 meshes[meshIndex].count = instanceIndex;
                 meshes[meshIndex].instanceMatrix.needsUpdate = true;
+                meshes[meshIndex].computeBoundingSphere();
             }
         }
     }
