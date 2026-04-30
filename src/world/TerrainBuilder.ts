@@ -182,6 +182,7 @@ export class TerrainBuilder {
 
         this._groundColors = this.computeVertexColors(geometry, size);
         this._groundMaterials = new THREE.MeshStandardMaterial({
+            color: 0x6b5a42,
             map: this.loadTexture('assets/nature/ground_diffuse.png'),
             normalMap: this.loadTextureLinear('assets/nature/ground_normal.png'),
             normalScale: new THREE.Vector2(0.6, 0.6),
