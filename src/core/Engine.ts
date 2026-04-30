@@ -951,6 +951,7 @@ export async function initGame(
 ) {
     await RAPIER.init();
     const game = new Game(canvas, onStateUpdate, sessionMode, gameMode, localMechOptions, runtimeOptions);
+    await game.world.initAsync(game.renderer.camera);
     game.start();
     return game;
 }

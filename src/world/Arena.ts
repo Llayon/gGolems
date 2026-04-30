@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { WorldPropSystem } from './WorldPropSystem';
 import { TerrainBuilder } from './TerrainBuilder';
+import { TreeSpawner } from './TreeSpawner';
 import type { ControlPointId, TeamId } from '../gameplay/types';
 
 type BoxConfig = {
@@ -31,6 +32,7 @@ export class Arena {
     meshes: THREE.Mesh[] = [];
     propManager: WorldPropSystem;
     terrain: TerrainBuilder;
+    treeSpawner: TreeSpawner;
     readonly halfSize = 132;
     readonly spawnRadius = 104;
     readonly soloSpawn: THREE.Vector3;
@@ -48,7 +50,7 @@ export class Arena {
         const wallSpan = arenaHalfSize * 2 - wallThickness * 2;
 
         this.terrain = new TerrainBuilder(scene, physics, arenaHalfSize);
-        this.terrain.setupLod(camera);
+        this.treeSpawner = new TreeSpawner(scene);
         this.soloSpawn = this.createSpawnPoint(-46, 92);
         this.botSpawn = this.createSpawnPoint(46, -92);
         this.blueSpawns = [
@@ -96,6 +98,12 @@ export class Arena {
         this.createRouteLandmarks(scene, physics);
 
         this.propManager = new WorldPropSystem(scene, physics, this.surfaceY.bind(this));
+    }
+
+    async initAsync(camera: THREE.Camera) {
+        this.terrain.setupLod(camera);
+        await this.treeSpawner.loadAllTrees();
+        this.treeSpawner.scatter(this.surfaceY.bind(this), this.halfSize);
     }
 
     getCollisionMeshes() {
