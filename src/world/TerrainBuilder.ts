@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { TextureLoader } from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import {
     HeightmapSource,
@@ -37,25 +36,6 @@ export class TerrainBuilder {
     lodController: TerrainLodController | null = null;
     private _groundMaterials: THREE.MeshStandardMaterial | null = null;
     private _groundColors: number[] = [];
-    private textureLoader = new TextureLoader();
-
-    private loadTexture(path: string): THREE.Texture | undefined {
-        const tex = this.textureLoader.load(path);
-        tex.wrapS = THREE.RepeatWrapping;
-        tex.wrapT = THREE.RepeatWrapping;
-        tex.repeat.set(14, 14);
-        tex.colorSpace = THREE.SRGBColorSpace;
-        return tex;
-    }
-
-    private loadTextureLinear(path: string): THREE.Texture | undefined {
-        const tex = this.textureLoader.load(path);
-        tex.wrapS = THREE.RepeatWrapping;
-        tex.wrapT = THREE.RepeatWrapping;
-        tex.repeat.set(14, 14);
-        tex.colorSpace = THREE.LinearSRGBColorSpace;
-        return tex;
-    }
 
     constructor(
         scene: THREE.Scene,
@@ -183,10 +163,6 @@ export class TerrainBuilder {
         this._groundColors = this.computeVertexColors(geometry, size);
         this._groundMaterials = new THREE.MeshStandardMaterial({
             color: 0x6b5a42,
-            map: this.loadTexture('assets/nature/ground_diffuse.png'),
-            normalMap: this.loadTextureLinear('assets/nature/ground_normal.png'),
-            normalScale: new THREE.Vector2(0.6, 0.6),
-            roughnessMap: this.loadTextureLinear('assets/nature/ground_rough.png'),
             roughness: 0.85,
             metalness: 0.05
         });
