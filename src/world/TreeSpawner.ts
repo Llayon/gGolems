@@ -36,7 +36,7 @@ const TREE_PATHS: Record<TreeSpecies, string[]> = {
     pine: ['assets/nature/Pine_1.gltf', 'assets/nature/Pine_2.gltf', 'assets/nature/Pine_3.gltf', 'assets/nature/Pine_4.gltf', 'assets/nature/Pine_5.gltf'],
 };
 
-const ASSET_LOAD_TIMEOUT_MS = 8000;
+const ASSET_LOAD_TIMEOUT_MS = 30000;
 
 const _vec3 = new THREE.Vector3();
 const _quat = new THREE.Quaternion();

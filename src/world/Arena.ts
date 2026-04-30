@@ -112,12 +112,9 @@ export class Arena {
             .then(() => this.treeSpawner.scatter(this.surfaceY.bind(this), this.halfSize))
             .catch((e) => console.error('[Arena] Failed to load trees:', e));
         this.grassSystem.init(this.surfaceY.bind(this), this.halfSize);
-        try {
-            await this.groundCoverSpawner.loadAll();
-            this.groundCoverSpawner.scatter(this.surfaceY.bind(this), this.halfSize);
-        } catch (e) {
-            console.error('[Arena] Failed to load ground cover:', e);
-        }
+        this.groundCoverSpawner.loadAll()
+            .then(() => this.groundCoverSpawner.scatter(this.surfaceY.bind(this), this.halfSize))
+            .catch((e) => console.error('[Arena] Failed to load ground cover:', e));
     }
 
     getCollisionMeshes() {

@@ -54,8 +54,8 @@ type GrassConfig = {
 };
 
 const DEFAULT_CONFIG: GrassConfig = {
-    bladeCount: 120000,
-    bladeWidth: 0.08,
+    bladeCount: 60000,
+    bladeWidth: 0.12,
     bladeHeight: 0.35,
     heightVariation: 0.3,
 };

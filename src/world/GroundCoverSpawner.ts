@@ -54,7 +54,7 @@ const PATHS: Record<CoverType, string> = {
     plant_7_big: 'assets/nature/Plant_7_Big.gltf',
 };
 
-const ASSET_LOAD_TIMEOUT_MS = 8000;
+const ASSET_LOAD_TIMEOUT_MS = 30000;
 const _dummy = new THREE.Object3D();
 
 function seededRandom(seed: number): () => number {
