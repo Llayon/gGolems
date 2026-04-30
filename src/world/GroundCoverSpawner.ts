@@ -162,20 +162,19 @@ export class GroundCoverSpawner {
     private updateInstances(sampleHeight: (x: number, z: number) => number) {
         for (const [type, meshes] of this.instanceMeshes.entries()) {
             const placements = this.placements.filter((p) => p.type === type);
+            if (placements.length === 0 || meshes.length === 0) continue;
+
             const maxPerMesh = 200;
             let meshIndex = 0;
             let instanceIndex = 0;
 
             for (const placement of placements) {
-                if (meshIndex >= meshes.length) break;
-
                 if (instanceIndex >= maxPerMesh) {
                     meshes[meshIndex].count = instanceIndex;
                     meshes[meshIndex].instanceMatrix.needsUpdate = true;
                     meshIndex++;
                     instanceIndex = 0;
                 }
-
                 if (meshIndex >= meshes.length) break;
 
                 const y = sampleHeight(placement.x, placement.z);
@@ -188,14 +187,9 @@ export class GroundCoverSpawner {
                 instanceIndex++;
             }
 
-            if (meshes[meshIndex]) {
+            if (meshIndex < meshes.length) {
                 meshes[meshIndex].count = instanceIndex;
                 meshes[meshIndex].instanceMatrix.needsUpdate = true;
-            }
-
-            for (let i = meshIndex + 1; i < meshes.length; i++) {
-                meshes[i].count = 0;
-                meshes[i].instanceMatrix.needsUpdate = true;
             }
         }
     }

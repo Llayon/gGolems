@@ -180,15 +180,12 @@ export class TreeSpawner {
             let instanceIndex = 0;
 
             for (const placement of placements) {
-                if (meshIndex >= groups.length) break;
-
                 if (instanceIndex >= maxPerMesh) {
                     groups[meshIndex].count = instanceIndex;
                     groups[meshIndex].instanceMatrix.needsUpdate = true;
                     meshIndex++;
                     instanceIndex = 0;
                 }
-
                 if (meshIndex >= groups.length) break;
 
                 const y = sampleHeight(placement.x, placement.z);
@@ -201,7 +198,7 @@ export class TreeSpawner {
                 instanceIndex++;
             }
 
-            if (groups[meshIndex]) {
+            if (meshIndex < groups.length) {
                 groups[meshIndex].count = instanceIndex;
                 groups[meshIndex].instanceMatrix.needsUpdate = true;
             }
