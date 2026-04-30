@@ -3,8 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { isProtectedTerrainPadArea } from './HeightmapSource';
 import { runWithConcurrency } from '../core/concurrency';
 
-type GroundCoverType = 'grass_common_short' | 'grass_common_tall' | 'grass_wispy_short' | 'grass_wispy_tall'
-    | 'bush' | 'bush_flowers' | 'fern' | 'clover_1' | 'clover_2'
+type CoverType = 'bush' | 'bush_flowers' | 'fern' | 'clover_1' | 'clover_2'
     | 'flower_3_single' | 'flower_3_group' | 'flower_4_single' | 'flower_4_group'
     | 'plant_1' | 'plant_1_big' | 'plant_7' | 'plant_7_big';
 
@@ -15,19 +14,15 @@ type ScatterConfig = {
     minDistance: number;
 };
 
-type CoverPlacement = {
-    type: GroundCoverType;
+type Placement = {
+    type: CoverType;
     x: number;
     z: number;
     scale: number;
     rotationY: number;
 };
 
-const DEFAULT_CONFIGS: Record<GroundCoverType, ScatterConfig> = {
-    grass_common_short: { density: 0.008, minScale: 0.5, maxScale: 0.9, minDistance: 1.5 },
-    grass_common_tall: { density: 0.005, minScale: 0.6, maxScale: 1.0, minDistance: 2.0 },
-    grass_wispy_short: { density: 0.006, minScale: 0.4, maxScale: 0.8, minDistance: 1.5 },
-    grass_wispy_tall: { density: 0.004, minScale: 0.5, maxScale: 0.9, minDistance: 2.0 },
+const CONFIGS: Record<CoverType, ScatterConfig> = {
     bush: { density: 0.001, minScale: 0.7, maxScale: 1.3, minDistance: 5.0 },
     bush_flowers: { density: 0.0008, minScale: 0.8, maxScale: 1.2, minDistance: 5.0 },
     fern: { density: 0.002, minScale: 0.6, maxScale: 1.0, minDistance: 3.0 },
@@ -43,11 +38,7 @@ const DEFAULT_CONFIGS: Record<GroundCoverType, ScatterConfig> = {
     plant_7_big: { density: 0.001, minScale: 0.8, maxScale: 1.3, minDistance: 4.0 },
 };
 
-const COVER_PATHS: Record<GroundCoverType, string> = {
-    grass_common_short: 'assets/nature/Grass_Common_Short.gltf',
-    grass_common_tall: 'assets/nature/Grass_Common_Tall.gltf',
-    grass_wispy_short: 'assets/nature/Grass_Wispy_Short.gltf',
-    grass_wispy_tall: 'assets/nature/Grass_Wispy_Tall.gltf',
+const PATHS: Record<CoverType, string> = {
     bush: 'assets/nature/Bush_Common.gltf',
     bush_flowers: 'assets/nature/Bush_Common_Flowers.gltf',
     fern: 'assets/nature/Fern_1.gltf',
@@ -64,7 +55,6 @@ const COVER_PATHS: Record<GroundCoverType, string> = {
 };
 
 const ASSET_LOAD_TIMEOUT_MS = 8000;
-
 const _dummy = new THREE.Object3D();
 
 function seededRandom(seed: number): () => number {
@@ -77,8 +67,8 @@ function seededRandom(seed: number): () => number {
 
 export class GroundCoverSpawner {
     private scene: THREE.Scene;
-    private instanceMeshes: Map<GroundCoverType, THREE.InstancedMesh[]> = new Map();
-    private placements: CoverPlacement[] = [];
+    private instanceMeshes: Map<CoverType, THREE.InstancedMesh[]> = new Map();
+    private placements: Placement[] = [];
     private loader: GLTFLoader;
 
     constructor(scene: THREE.Scene) {
@@ -87,15 +77,15 @@ export class GroundCoverSpawner {
     }
 
     async loadAll() {
-        const types = Object.keys(COVER_PATHS) as GroundCoverType[];
+        const types = Object.keys(PATHS) as CoverType[];
         await runWithConcurrency(types, (type) => this.loadType(type), 4);
     }
 
-    private async loadType(type: GroundCoverType) {
+    private async loadType(type: CoverType) {
         try {
             const gltf = await Promise.race([
-                this.loader.loadAsync(COVER_PATHS[type]),
-                new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`timeout loading ${COVER_PATHS[type]}`)), ASSET_LOAD_TIMEOUT_MS))
+                this.loader.loadAsync(PATHS[type]),
+                new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`timeout loading ${PATHS[type]}`)), ASSET_LOAD_TIMEOUT_MS))
             ]);
             const mesh = this.extractMesh(gltf.scene);
             if (!mesh) return;
@@ -130,20 +120,15 @@ export class GroundCoverSpawner {
         return result;
     }
 
-    scatter(
-        sampleHeight: (x: number, z: number) => number,
-        halfSize: number,
-        seed = 42
-    ) {
+    scatter(sampleHeight: (x: number, z: number) => number, halfSize: number, seed = 42) {
         const rand = seededRandom(seed);
         const arenaSize = halfSize * 2;
-        const pad: { x: number; z: number }[] = [];
-        const newPlacements: CoverPlacement[] = [];
+        const newPlacements: Placement[] = [];
 
-        const types = Object.keys(DEFAULT_CONFIGS) as GroundCoverType[];
+        const types = Object.keys(CONFIGS) as CoverType[];
 
         for (const type of types) {
-            const config = DEFAULT_CONFIGS[type];
+            const config = CONFIGS[type];
             const targetCount = Math.floor(arenaSize * arenaSize * config.density);
             const placed: { x: number; z: number }[] = [];
 

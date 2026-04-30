@@ -4,6 +4,7 @@ import { WorldPropSystem } from './WorldPropSystem';
 import { TerrainBuilder } from './TerrainBuilder';
 import { TreeSpawner } from './TreeSpawner';
 import { GroundCoverSpawner } from './GroundCoverSpawner';
+import { GrassShaderSystem } from './GrassShaderSystem';
 import type { ControlPointId, TeamId } from '../gameplay/types';
 
 type BoxConfig = {
@@ -35,6 +36,7 @@ export class Arena {
     terrain: TerrainBuilder;
     treeSpawner: TreeSpawner;
     groundCoverSpawner: GroundCoverSpawner;
+    grassSystem: GrassShaderSystem;
     readonly halfSize = 132;
     readonly spawnRadius = 104;
     readonly soloSpawn: THREE.Vector3;
@@ -54,6 +56,7 @@ export class Arena {
         this.terrain = new TerrainBuilder(scene, physics, arenaHalfSize);
         this.treeSpawner = new TreeSpawner(scene);
         this.groundCoverSpawner = new GroundCoverSpawner(scene);
+        this.grassSystem = new GrassShaderSystem(scene);
         this.soloSpawn = this.createSpawnPoint(-46, 92);
         this.botSpawn = this.createSpawnPoint(46, -92);
         this.blueSpawns = [
@@ -111,6 +114,7 @@ export class Arena {
         } catch (e) {
             console.error('[Arena] Failed to load trees:', e);
         }
+        this.grassSystem.init(this.surfaceY.bind(this), this.halfSize);
         try {
             await this.groundCoverSpawner.loadAll();
             this.groundCoverSpawner.scatter(this.surfaceY.bind(this), this.halfSize);
