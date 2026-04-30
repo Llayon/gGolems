@@ -186,9 +186,8 @@ export class TerrainBuilder {
             normalMap: this.loadTextureLinear('assets/nature/ground_normal.png'),
             normalScale: new THREE.Vector2(0.6, 0.6),
             roughnessMap: this.loadTextureLinear('assets/nature/ground_rough.png'),
-            vertexColors: true,
-            roughness: 0.99,
-            metalness: 0.02
+            roughness: 0.85,
+            metalness: 0.05
         });
 
         this.createGroundCollider(geometry, heights, size);
@@ -247,9 +246,6 @@ export class TerrainBuilder {
         }
         positions.needsUpdate = true;
         geometry.computeVertexNormals();
-
-        const colors = this.computeVertexColors(geometry, size);
-        geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
 
         const mesh = new THREE.Mesh(geometry, this._groundMaterials!.clone());
         mesh.receiveShadow = true;
