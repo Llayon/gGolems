@@ -105,10 +105,18 @@ export class Arena {
 
     async initAsync(camera: THREE.Camera) {
         this.terrain.setupLod(camera);
-        await this.treeSpawner.loadAllTrees();
-        this.treeSpawner.scatter(this.surfaceY.bind(this), this.halfSize);
-        await this.groundCoverSpawner.loadAll();
-        this.groundCoverSpawner.scatter(this.surfaceY.bind(this), this.halfSize);
+        try {
+            await this.treeSpawner.loadAllTrees();
+            this.treeSpawner.scatter(this.surfaceY.bind(this), this.halfSize);
+        } catch (e) {
+            console.error('[Arena] Failed to load trees:', e);
+        }
+        try {
+            await this.groundCoverSpawner.loadAll();
+            this.groundCoverSpawner.scatter(this.surfaceY.bind(this), this.halfSize);
+        } catch (e) {
+            console.error('[Arena] Failed to load ground cover:', e);
+        }
     }
 
     getCollisionMeshes() {
