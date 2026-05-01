@@ -37,6 +37,19 @@ export class TerrainBuilder {
     private _groundMaterials: THREE.MeshStandardMaterial | null = null;
     private _groundColors: number[] = [];
 
+    private loadTex(path: string): THREE.Texture {
+        const tex = new THREE.TextureLoader().load(path, () => {
+            console.log(`[Terrain] Loaded texture: ${path}`);
+        }, undefined, (err) => {
+            console.error(`[Terrain] Failed to load texture: ${path}`, err);
+        });
+        tex.wrapS = THREE.RepeatWrapping;
+        tex.wrapT = THREE.RepeatWrapping;
+        tex.repeat.set(14, 14);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        return tex;
+    }
+
     constructor(
         scene: THREE.Scene,
         physics: RAPIER.World,
@@ -161,8 +174,17 @@ export class TerrainBuilder {
         geometry.computeVertexNormals();
 
         this._groundColors = this.computeVertexColors(geometry, size);
+        const diffuseMap = this.loadTex('assets/nature/ground_diffuse.png');
+        diffuseMap.addEventListener('load', () => {
+            if (this._groundMaterials) {
+                this._groundMaterials.map = diffuseMap;
+                this._groundMaterials.needsUpdate = true;
+            }
+        });
+
         this._groundMaterials = new THREE.MeshStandardMaterial({
             color: 0x6b5a42,
+            map: diffuseMap,
             roughness: 0.85,
             metalness: 0.05
         });
