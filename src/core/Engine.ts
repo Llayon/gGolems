@@ -662,7 +662,7 @@ export class Game {
         this.world.terrain.update();
         this._updateCameraAndInput();
         this._updateMechs(dt);
-        this._updateBots();
+        this._updateBots(dt);
         this._updateProjectilesAndFx();
         this._handleInputActions();
         this._updateControlPoints(dt);
@@ -721,8 +721,8 @@ export class Game {
         this.decals.update(dt);
     }
 
-    _updateBots() {
-        updateBotsRuntime(this.sessionRuntimeAdapters.bot(), 0, this.gameMode, this.teamScores.winner !== null);
+    _updateBots(dt: number) {
+        updateBotsRuntime(this.sessionRuntimeAdapters.bot(), dt, this.gameMode, this.teamScores.winner !== null);
     }
 
     _updateProjectilesAndFx() {
