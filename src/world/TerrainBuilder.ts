@@ -37,7 +37,7 @@ export class TerrainBuilder {
     private _groundMaterials: THREE.MeshStandardMaterial | null = null;
     private _groundColors: number[] = [];
 
-    private loadTex(path: string): THREE.Texture {
+    private loadTex(path: string, linear = false): THREE.Texture {
         const tex = new THREE.TextureLoader().load(path, () => {
             console.log(`[Terrain] Loaded texture: ${path}`);
         }, undefined, (err) => {
@@ -46,7 +46,7 @@ export class TerrainBuilder {
         tex.wrapS = THREE.RepeatWrapping;
         tex.wrapT = THREE.RepeatWrapping;
         tex.repeat.set(14, 14);
-        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.colorSpace = linear ? THREE.LinearSRGBColorSpace : THREE.SRGBColorSpace;
         return tex;
     }
 
@@ -174,17 +174,12 @@ export class TerrainBuilder {
         geometry.computeVertexNormals();
 
         this._groundColors = this.computeVertexColors(geometry, size);
-        const diffuseMap = this.loadTex('assets/nature/ground_diffuse.png');
-        diffuseMap.addEventListener('load', () => {
-            if (this._groundMaterials) {
-                this._groundMaterials.map = diffuseMap;
-                this._groundMaterials.needsUpdate = true;
-            }
-        });
-
         this._groundMaterials = new THREE.MeshStandardMaterial({
             color: 0x6b5a42,
-            map: diffuseMap,
+            map: this.loadTex('assets/nature/ground_diffuse.png'),
+            normalMap: this.loadTex('assets/nature/ground_normal.png', true),
+            normalScale: new THREE.Vector2(0.6, 0.6),
+            roughnessMap: this.loadTex('assets/nature/ground_rough.png', true),
             roughness: 0.85,
             metalness: 0.05
         });
