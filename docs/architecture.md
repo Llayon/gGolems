@@ -33,40 +33,144 @@ src/
 
 ## Dependency Graph (imports)
 
-```
-                    ┌─────────────┐
-                    │   Engine.ts │  ← Composition root (class Game)
-                    └──────┬──────┘
-                           │
-          ┌────────────────┼────────────────┐
-          ▼                ▼                ▼
-    ┌──────────┐    ┌──────────┐    ┌──────────────┐
-    │ Renderer │    │  World   │    │NetworkManager│
-    │ (Three)  │    │(Arena)   │    │  (PeerJS)    │
-    └──────────┘    └────┬─────┘    └──────┬───────┘
-                         │                 │
-          ┌──────────────┼──────┐          │
-          ▼              ▼      ▼          ▼
-    ┌──────────┐  ┌────────┐ ┌─────┐ ┌──────────┐
-    │ Terrain  │  │TreeSpwn│ │Grass│ │ Firebase │
-    │ Grass    │  │GrndCvr │ │     │ │ LobbyReg │
-    └──────────┘  └────────┘ └─────┘ └──────────┘
+### High-Level Architecture
 
-    ┌──────────────────────────────────────────────────────┐
-    │              src/core/  (pure functions)              │
-    ├──────────┬──────────┬──────────┬──────────┬──────────┤
-    │  bots/   │ combat/  │  match/  │ network/ │ respawn/ │
-    │BotRuntime│ProjCombat│MatchCtrl │NetSync   │SpawnSys  │
-    └────┬─────┴────┬─────┴────┬─────┴────┬─────┴────┬─────┘
-         │          │          │          │          │
-         ▼          ▼          ▼          ▼          ▼
-    ┌──────────────────────────────────────────────────────┐
-    │           EngineSessionRuntimeAdapters.ts            │
-    │         (factory: binds Engine state → contexts)      │
-    └──────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    subgraph App["Frontend (React 19)"]
+        App_ts["App.tsx"]
+        UI["ui/ — Lobby, HUD"]
+        AppHooks["app/ — useGameSession, usePilotAccount"]
+    end
+
+    subgraph Engine["Game Engine (Composition Root)"]
+        Engine["Engine.ts — class Game"]
+        Renderer["Renderer — Three.js scene"]
+        Network["NetworkManager — PeerJS"]
+    end
+
+    subgraph World["World Systems"]
+        Arena["Arena.ts"]
+        Terrain["TerrainBuilder + HeightmapSource"]
+        Grass["GrassShaderSystem"]
+        Trees["TreeSpawner + GroundCoverSpawner"]
+        Props["WorldPropSystem + TerrainMasses"]
+    end
+
+    subgraph Entities["Game Entities"]
+        Golem["GolemController — player mech"]
+        Bot["DummyBot — AI"]
+        Factory["GolemFactory"]
+    end
+
+    subgraph Runtime["Pure Runtime Modules (src/core/)"]
+        BotRT["bots/BotRuntime"]
+        CombatRT["combat/ProjectileCombatRuntime"]
+        HitRT["combat/PlayerHitRuntime"]
+        FxRT["combat/ProjectileCombatFxRuntime"]
+        MatchRT["match/MatchRuntime"]
+        MatchCtrl["match/MatchController"]
+        NetRT["network/NetworkMessageRuntime"]
+        NetSync["network/NetworkSyncAdapter"]
+        RemPlayerRT["network/RemotePlayerLifecycleRuntime"]
+        RespawnRT["respawn/RespawnRuntime"]
+        SpawnSys["respawn/SpawnSystem"]
+        WorldFxRT["world/WorldFxRuntime"]
+    end
+
+    subgraph Adapters["Context Factories"]
+        RuntimeCtx["EngineRuntimeContexts.ts"]
+        SessionCtx["EngineSessionRuntimeAdapters.ts"]
+    end
+
+    subgraph Integrations["External Services"]
+        Firebase["Firebase — Lobby Registry"]
+        Supabase["Supabase — Auth, Progression"]
+    end
+
+    App_ts --> AppHooks
+    App_ts --> Engine
+    AppHooks --> SessionCtx
+    UI --> AppHooks
+    UI --> App_ts
+
+    Engine --> Renderer
+    Engine --> Network
+    Engine --> Arena
+    Engine --> Golem
+    Engine --> Bot
+    Engine --> Factory
+    Engine --> RuntimeCtx
+    Engine --> SessionCtx
+    Engine --> Firebase
+
+    Arena --> Terrain
+    Arena --> Grass
+    Arena --> Trees
+    Arena --> Props
+
+    BotRT --> Bot
+    CombatRT --> Golem
+    HitRT --> Golem
+    FxRT --> Props
+
+    Engine --> BotRT
+    Engine --> CombatRT
+    Engine --> HitRT
+    Engine --> FxRT
+    Engine --> MatchRT
+    Engine --> MatchCtrl
+    Engine --> NetRT
+    Engine --> NetSync
+    Engine --> RemPlayerRT
+    Engine --> RespawnRT
+    Engine --> SpawnSys
+    Engine --> WorldFxRT
+
+    RuntimeCtx --> Engine
+    SessionCtx --> Engine
+
+    AppHooks --> Firebase
+    AppHooks --> Supabase
+
+    classDef engine fill:#f9d79b,stroke:#8a6d3b,color:#000
+    classDef world fill:#a8d8a8,stroke:#4a7a4a,color:#000
+    classDef entities fill:#a8c8f0,stroke:#3a5a8a,color:#000
+    classDef runtime fill:#f0b0b0,stroke:#8a3a3a,color:#000
+    classDef adapter fill:#d4b8e0,stroke:#6a3a7a,color:#000
+    classDef integration fill:#e0d8b0,stroke:#7a6a3a,color:#000
+    classDef app fill:#b0d4e8,stroke:#3a6a8a,color:#000
+
+    class Engine,Renderer,Network engine
+    class Arena,Terrain,Grass,Trees,Props world
+    class Golem,Bot,Factory entities
+    class BotRT,CombatRT,HitRT,FxRT,MatchRT,MatchCtrl,NetRT,NetSync,RemPlayerRT,RespawnRT,SpawnSys,WorldFxRT runtime
+    class RuntimeCtx,SessionCtx adapter
+    class Firebase,Supabase integration
+    class App_ts,UI,AppHooks app
 ```
 
 ### Direction Rules
+
+```mermaid
+graph LR
+    App["app/"] --> Engine["core/Engine.ts"]
+    UI["ui/"] --> App
+    UI --> I18N["i18n/"]
+    Engine --> World["world/"]
+    Engine --> Entities["entities/"]
+    Engine --> Runtime["core/*Runtime.ts"]
+    Engine --> Adapters["core/*Contexts.ts"]
+    Entities --> Mechs["mechs/"]
+    Entities --> Combat["combat/"]
+    Runtime -- "pure functions, no imports from" -.->|❌| Entities
+    Runtime -- "pure functions, no imports from" -.->|❌| World
+    Runtime -- "pure functions, no imports from" -.->|❌| UI
+
+    classDef layer fill:#f0e8d0,stroke:#8a7a5a,color:#000
+    class App,UI,Engine,World,Entities,Runtime,Adapters,Mechs,Combat,I18N layer
+```
+
 - `src/core/**` → **never** imports from `src/entities/`, `src/world/`, `src/ui/`
 - `Engine.ts` → imports runtime functions from `src/core/`, entities from `src/entities/`, world from `src/world/`
 - `src/entities/` → imports from `src/core/`, `src/combat/`, `src/mechs/`
@@ -75,31 +179,100 @@ src/
 
 ## Per-Frame Update Order (game loop)
 
+```mermaid
+graph TD
+    Loop["loop(time)"] --> dt["dt = min((time - lastTime) / 1000, 0.1)"]
+    dt --> Physics["physics.step() — Rapier3D"]
+    Physics --> TerrainUpdate["world.terrain.update() — LOD switch"]
+    TerrainUpdate --> Camera["_updateCameraAndInput() — mouse, camera mode"]
+    Camera --> Mechs["_updateMechs(dt) — local golem, remotes, decals, projectiles"]
+    Mechs --> Bots["_updateBots(dt) — AI: move → engage → fire"]
+    Bots --> ProjFx["_updateProjectilesAndFx() — aim point"]
+    ProjFx --> Input["_handleInputActions() — fire groups, dash, vent"]
+    Input --> CP["_updateControlPoints(dt) — capture scoring"]
+    CP --> Combat["_updateCombatAndRespawn(dt) — collisions, impact FX, respawn waves"]
+    Combat --> Particles["_updateParticlesAndProps(dt) — particles, debris, atmosphere"]
+    Particles --> NetTick["_updateNetworkTick(dt) — host broadcast / client input"]
+    NetTick --> Render["renderer.render() — Three.js frame"]
+
+    classDef step fill:#f0e8d0,stroke:#8a7a5a,color:#000
+    class Loop,dt,Physics,TerrainUpdate,Camera,Mechs,Bots,ProjFx,Input,CP,Combat,Particles,NetTick,Render step
 ```
-loop(time)
-  └── dt = min((time - lastTime) / 1000, 0.1)
-  └── physics.step()                           ← Rapier3D physics step
-  └── world.terrain.update()                   ← LOD controller switch
-  └── _updateCameraAndInput()                  ← Mouse delta, camera mode toggle
-  └── _updateMechs(dt)                         ← Local golem, remote players, decals, sounds
-  │    └── localGolem.update(dt)               ←   Movement, rotation, weapon fire requests
-  │    └── remotePlayers.sync()                ←   Network interpolation
-  │    └── decals.update(dt)                   ←   Impact marks
-  │    └── projectileManager.update(dt)        ←   Projectile positions, trails
-  └── _updateBots(dt)                          ← Bot AI: move → engage → fire
-  │    └── updateBotsRuntime(context, dt)      ←   Pure function, uses BotRuntimeContext
-  └── _updateProjectilesAndFx()                ← Aim point calculation
-  └── _handleInputActions()                    ← Consume fire groups, dash, vent
-  └── _updateControlPoints(dt)                 ← Capture scoring, dominance
-  └── _updateCombatAndRespawn(dt)              ← Projectile collisions, impact FX, respawn waves
-  └── _updateParticlesAndProps(dt)             ← Boiler particles, debris, atmosphere, props
-  └── _updateNetworkTick(dt)                   ← Host: broadcast snapshots, Client: send input
-  └── renderer.render()                        ← Three.js render frame
-```
+
+### Data Flow per Step
+
+| Step | Reads | Writes | Side Effects |
+|------|-------|--------|--------------|
+| `physics.step()` | — | Rapier3D world state | Collision detection |
+| `terrain.update()` | Camera position | LOD level visibility | Mesh add/remove |
+| `_updateCameraAndInput()` | Mouse delta, keys | Camera mode, yaw/pitch | — |
+| `_updateMechs(dt)` | Golem input, remote snapshots | Mech position, rotation, decals | Sound, particle spawn |
+| `_updateBots(dt)` | Bot positions, objective nodes | Bot movement, fire requests | Bot weapon fire |
+| `_updateProjectilesAndFx()` | Camera, aim | Aim target point | — |
+| `_handleInputActions()` | Input buffer | Golem weapon fire state | Weapon projectiles |
+| `_updateControlPoints(dt)` | Golem/bot positions | Point ownership, team scores | Match scoring |
+| `_updateCombatAndRespawn()` | Projectile positions, dead units | HP, respawn timers, death tracking | Impact FX, spawn waves |
+| `_updateParticlesAndProps()` | dt, prop positions | Particle state, prop FX | Steam, fire, debris |
+| `_updateNetworkTick()` | Engine state, remote players | Network packets | WebRTC send/receive |
+| `renderer.render()` | Scene state | Screen pixels | GPU draw calls |
 
 ## Runtime Module Pattern
 
 All `*Runtime.ts` files are **pure functions** that take a context interface and operate without side effects beyond the context:
+
+```mermaid
+graph LR
+    subgraph Engine["Engine.ts (per frame)"]
+        E["loop() calls runtime(ctx, dt)"]
+    end
+
+    subgraph Adapters["Context Factories"]
+        RF["EngineRuntimeContexts.ts"]
+        SF["EngineSessionRuntimeAdapters.ts"]
+    end
+
+    subgraph Runtime["Pure Functions"]
+        BR["BotRuntime.ts"]
+        PCR["ProjectileCombatRuntime.ts"]
+        PHR["PlayerHitRuntime.ts"]
+        MR["MatchRuntime.ts"]
+        RR["RespawnRuntime.ts"]
+        NSR["NetworkSyncAdapter.ts"]
+    end
+
+    E -->|"ctx = RF.projectileCombat()| PCR
+    E -->|"ctx = SF.bot()| BR
+    E -->|"ctx = RF.playerHit()| PHR
+    E -->|"ctx = RF.controlMatch()| MR
+    E -->|"ctx = RF.respawn()| RR
+    E -->|"ctx = RF.networkSync()| NSR
+    RF -->|"reads Engine state| E
+    SF -->|"reads Engine state| E
+
+    classDef engine fill:#f9d79b,stroke:#8a6d3b,color:#000
+    classDef adapter fill:#d4b8e0,stroke:#6a3a7a,color:#000
+    classDef runtime fill:#f0b0b0,stroke:#8a3a3a,color:#000
+    class E engine
+    class RF,SF adapter
+    class BR,PCR,PHR,MR,RR,NSR runtime
+```
+
+### Adapter Flow (Sequence)
+
+```mermaid
+sequenceDiagram
+    participant Loop as Engine.loop()
+    participant Ctx as EngineRuntimeContexts
+    participant RT as *Runtime.ts
+    participant State as Engine state (golems, bots, etc.)
+
+    Loop->>Ctx: ctx = ctxFactory.projectileCombat()
+    Ctx->>State: read projectile positions, units, terrain
+    Ctx-->>Loop: return ProjectileCombatContext
+    Loop->>RT: updateProjectileCollisions(ctx, dt)
+    RT->>State: mutate HP, spawn impact FX (via callbacks)
+    RT-->>Loop: return (void)
+```
 
 | File | Function | Purpose |
 |------|----------|---------|
@@ -147,6 +320,22 @@ Factory methods for **session-level** contexts that depend on session mode (solo
 
 - `bot()` → `BotRuntimeContext` — bots map, team size, spawn slots, create/destroy callbacks
 - `controlPoints()` → `ControlPointRuntimeContext` — point positions, capture state
+
+## Network Flow (Host ↔ Client)
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant PeerJS as PeerJS (WebRTC)
+    participant Host
+
+    Client->>Host: input packet (keyboard, mouse)
+    Host->>Host: process inputs → game logic
+    Host->>Host: physics.step() + bot AI + combat
+    Host->>Client: authoritative state snapshot
+    Client->>Client: interpolate remote players
+    Host->>Host: broadcast next tick
+```
 
 ## External Dependencies
 
