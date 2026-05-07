@@ -75,4 +75,4 @@ PRs should include:
 - notes on asset exports, config changes, or required env vars
 
 ## Configuration & Assets
-Local config lives in `.env.local`. `VITE_FIREBASE_*` and `VITE_SUPABASE_*` are optional integrations; `GEMINI_API_KEY` remains only for legacy/template compatibility and is not required for core gameplay. Do not hardcode secrets. For new mech assets, keep a repeatable exporter script in `scripts/` and commit only runtime-ready files. Use the canonical docs in `docs/` and `docs/llm-development-guide.md` as the source of truth for subsystem behavior.
+Local config lives in `.env.local`. `VITE_FIREBASE_*` and `VITE_SUPABASE_*` are optional integrations; `GEMINI_API_KEY` remains only for legacy/template compatibility and is not required for core gameplay. Do not hardcode secrets. For new mech assets, keep a repeatable exporter script in `scripts/` and commit only runtime-ready files. Use the canonical docs in `docs/` as the source of truth for subsystem behavior. `docs/architecture.md` contains the full dependency map, per-frame update order, runtime module catalog, and adapter pattern reference. Read it before making structural changes.
