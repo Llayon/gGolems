@@ -143,7 +143,7 @@ export function buildLoopContext(g: GameSources): EngineLoopContext {
             remotePlayers: g.remotePlayers,
             remotePlayerStates: g.remotePlayerStates,
             remoteSpawnSlots: g.remoteSpawnSlots,
-            getLocalUnitId: g.getLocalUnitId
+            getLocalUnitId: () => g.getLocalUnitId()
         }),
         hudContext: () => ({
             golem: g.golem,
@@ -160,7 +160,7 @@ export function buildLoopContext(g: GameSources): EngineLoopContext {
             hitTargetHp: g.hitTargetHp,
             hitTargetMaxHp: g.hitTargetMaxHp,
             terrain: g.world.terrain,
-            getAimTargetPoint: g.getAimTargetPoint,
+            getAimTargetPoint: (out: THREE.Vector3) => g.getAimTargetPoint(out),
             onStateUpdate: g.onStateUpdate
         }),
         inputContext: () => ({
@@ -169,8 +169,8 @@ export function buildLoopContext(g: GameSources): EngineLoopContext {
             mechCamera: g.mechCamera,
             particles: g.particles,
             canControlLocal: g.localRespawnState.alive && g.teamScores.winner === null,
-            getLocalUnitId: g.getLocalUnitId,
-            getAimTargetPoint: g.getAimTargetPoint,
+            getLocalUnitId: () => g.getLocalUnitId(),
+            getAimTargetPoint: (out: THREE.Vector3) => g.getAimTargetPoint(out),
             weaponFireContext: g.runtimeAdapters.weaponFire()
         })
     };
