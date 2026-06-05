@@ -6,20 +6,72 @@
 
 ```
 src/
-├── app/                          # React hooks, session management, pilot accounts (4 files, ~594 lines)
-├── core/                         # Game engine core — pure functions + adapters (32 files, ~5665 lines)
+├── app/                          # React hooks, session management, pilot accounts (8 files, ~1100 lines)
+│   ├── appHelpers.ts             # copyText, getStartupFailureMessage, releasePointerLock
+│   ├── useAppSettings.ts         # Settings state + localStorage sync
+│   ├── useHudWarning.ts          # computeHudWarning, computeHudRatios
+│   ├── useGameSession.ts         # Main game session orchestration
+│   ├── useFirebaseLobbyRooms.ts  # Firebase lobby hooks
+│   └── usePilotAccount.ts        # Pilot account + Supabase auth
+├── core/                         # Game engine core — pure functions + adapters (~50 files, ~7700 lines)
+│   ├── engineInit.ts             # Subsystem construction (renderer, physics, world, ...)
+│   ├── engineSpawn.ts            # getTeamSpawns, getSpawnYaw, placeGolemAtSpawn
+│   ├── engineBotManagement.ts    # createBot, destroyBot
+│   ├── engineMechUpdate.ts       # updateMechs, updateCameraAndInput, getAimTargetPoint
+│   ├── engineNetworkTick.ts      # 20Hz snapshot broadcast (NETWORK_TICK_INTERVAL=0.05)
+│   ├── engineHudRender.ts        # renderHud with buildGameHudState
+│   ├── engineInputActions.ts     # handleInputActions (fire/dash/vent)
+│   ├── engineFxUpdate.ts         # updateCombatAndRespawn, updateControlPoints, particles
+│   ├── engineContexts.ts         # getUnitLocatorContext, getBotObjectiveContext
+│   ├── engineNetworkSetup.ts     # setupNetworkHandlers
+│   ├── engineAdapterFactory.ts   # buildSessionAdapters, buildRuntimeAdapters
+│   ├── engineLoopContext.ts      # buildLoopContext (per-frame context aggregation)
+│   ├── engineRestartMatch.ts     # restartMatch (host/client gate)
+│   ├── Engine.ts                 # class Game — orchestrator (~511 lines)
 │   ├── bots/                     # Bot AI, movement targets, snapshots (2 files)
 │   ├── combat/                   # Projectile hit logic, FX, combat rules (4 files)
 │   ├── match/                    # Scoring, game mode settings, team overview (2 files)
 │   ├── network/                  # Network sync, message runtime, remote players (7 files)
 │   ├── respawn/                  # Respawn waves, spawn points, death tracking (3 files)
-│   ├── runtimeSmoke/             # Smoke tests (2 files)
+│   ├── runtimeSmoke/             # Smoke tests + per-test files (10 files)
+│   │   ├── runRuntimeSmoke.ts    # Orchestrator (15 lines)
+│   │   ├── smokeHelpers.ts       # createFakeGolem, createFakeBot, assert, runTest
+│   │   └── tests/                # 6 test files: testNetworkDispatcher, testRespawn, testPlayerHit, testAuthoritativeState, testRemoteFire, testBotRoster
 │   └── world/                    # World FX runtime (1 file)
-├── entities/                     # Golem controllers, DummyBot, factory (6 files, ~1502 lines)
-├── world/                        # Arena, terrain, trees, grass, props (16 files, ~4063 lines)
+├── entities/                     # Golem controllers, DummyBot, factory (7 files, ~1900 lines)
+│   ├── GolemController.ts        # Player mech orchestrator (~311 lines)
+│   ├── golemUpdate.ts            # Per-frame update logic (~171 lines)
+│   ├── GolemFactory.ts           # Procedural mesh creation
+│   ├── DummyBot.ts               # AI bot controller
+│   ├── KWIIRuntimeAsset.ts       # Hero visual loader
+│   └── GolemControllerTypes.ts   # Shared types
+├── world/                        # Arena, terrain, trees, grass, props (~22 files, ~4900 lines)
+│   ├── Arena.ts                  # Arena orchestrator (~116 lines)
+│   ├── arenaBase.ts              # Team bases, walls, combat cover
+│   ├── arenaColliders.ts         # Box/cylinder collider helpers
+│   ├── arenaLandmarks.ts         # Route landmarks, lane markers
+│   ├── arenaLaneNodes.ts         # Lane node positions for bot AI
+│   ├── arenaStructures.ts        # Steam yard, ruin quarter, rock arch, pressure tower
+│   ├── BreakableStructureManager.ts  # Damage/destroy orchestration
+│   ├── houseTemplates.ts         # GLTF/texture/material loaders
+│   ├── proceduralHouse.ts        # Procedural house construction
+│   ├── sectionedHouse.ts         # Sectioned houses + body creation
+│   ├── houseLifecycle.ts         # Proxy management
+│   ├── sectionPhysics.ts         # Section damage/collapse/falling
+│   ├── propShared.ts             # Shared prop types
+│   ├── TerrainBuilder.ts         # Heightfield, materials, LOD
+│   ├── TreeSpawner.ts            # 20 tree types via InstancedMesh
+│   ├── GroundCoverSpawner.ts     # 13 bush/flower types via InstancedMesh
+│   ├── GrassShaderSystem.ts      # 60k procedural grass blades (vertex shader)
+│   ├── WorldPropSystem.ts        # Prop registry + state
+│   └── HeightmapSource.ts        # ImageHeightmap + procedural fallback
 ├── mechs/                        # Chassis definitions, loadouts, rules, runtime (16 files, ~2126 lines)
 ├── combat/                       # Weapon definitions, profiles, projectile types (3 files, ~548 lines)
-├── gameplay/                     # Control points, game mode types (2 files, ~441 lines)
+├── gameplay/                     # Control points, game mode types (5 files, ~640 lines)
+│   ├── ControlPointManager.ts    # Orchestrator (~133 lines)
+│   ├── controlPointMeshes.ts     # Mesh creation (outer ring, fill, beacon, banners, label)
+│   ├── controlPointVisuals.ts    # Visual updates + label sprite, progress geometry
+│   └── types.ts                  # Shared gameplay types
 ├── network/                      # NetworkManager (PeerJS wrapper) (1 file, ~157 lines)
 ├── camera/                       # Third-person + orbit camera (1 file, ~299 lines)
 ├── fx/                           # Debris, particles, impact effects (4 files, ~659 lines)
@@ -30,6 +82,29 @@ src/
 ├── utils/                        # Quality profiles, helpers (3 files, ~155 lines)
 └── assets/                       # Asset loaders (GLTF, textures) (0 files)
 ```
+
+## File Size Limit
+
+All source files are capped at **400 lines** (`npm run test:file-sizes` enforces this). Large files are split into focused modules following the **runtime + adapter context** pattern — see `Engine.ts` for the canonical example of how a class orchestrator delegates per-frame logic to pure runtime functions in `src/core/`.
+
+### Engine.ts Module Splits
+
+| Module | Purpose | Lines |
+|--------|---------|-------|
+| `engineInit.ts` | Subsystem construction (renderer, physics, world, projectiles) | 95 |
+| `engineSpawn.ts` | Team spawns, spawn yaw, placeGolemAtSpawn | 79 |
+| `engineBotManagement.ts` | Bot create/destroy with BotSpawnContext | 51 |
+| `engineMechUpdate.ts` | Mech update, camera/input, aim target | 113 |
+| `engineNetworkTick.ts` | 20Hz snapshot broadcast (NETWORK_TICK_INTERVAL=0.05) | 124 |
+| `engineHudRender.ts` | HUD state + radar + team overview | 100 |
+| `engineInputActions.ts` | Fire groups, dash, vent | 75 |
+| `engineFxUpdate.ts` | Combat/respawn/control points/particles | 80 |
+| `engineContexts.ts` | getUnitLocatorContext, getBotObjectiveContext | 50 |
+| `engineNetworkSetup.ts` | WebRTC message handlers | 60 |
+| `engineAdapterFactory.ts` | buildSessionAdapters, buildRuntimeAdapters | 50 |
+| `engineLoopContext.ts` | buildLoopContext (per-frame context aggregation) | 110 |
+| `engineRestartMatch.ts` | restartMatch (host/client gate) | 80 |
+| `Engine.ts` | class Game — orchestrator | 511 |
 
 ## Dependency Graph (imports)
 
@@ -179,24 +254,27 @@ graph LR
 
 ## Per-Frame Update Order (game loop)
 
+The per-frame update is orchestrated by `Engine.ts` calling runtime functions in `src/core/`. Each step is a pure function that receives a typed context object:
+
 ```mermaid
 graph TD
     Loop["loop(time)"] --> dt["dt = min((time - lastTime) / 1000, 0.1)"]
-    dt --> Physics["physics.step() — Rapier3D"]
-    Physics --> TerrainUpdate["world.terrain.update() — LOD switch"]
-    TerrainUpdate --> Camera["_updateCameraAndInput() — mouse, camera mode"]
-    Camera --> Mechs["_updateMechs(dt) — local golem, remotes, decals, projectiles"]
-    Mechs --> Bots["_updateBots(dt) — AI: move → engage → fire"]
-    Bots --> ProjFx["_updateProjectilesAndFx() — aim point"]
-    ProjFx --> Input["_handleInputActions() — fire groups, dash, vent"]
-    Input --> CP["_updateControlPoints(dt) — capture scoring"]
-    CP --> Combat["_updateCombatAndRespawn(dt) — collisions, impact FX, respawn waves"]
-    Combat --> Particles["_updateParticlesAndProps(dt) — particles, debris, atmosphere"]
-    Particles --> NetTick["_updateNetworkTick(dt) — host broadcast / client input"]
-    NetTick --> Render["renderer.render() — Three.js frame"]
+    dt --> BuildCtx["buildLoopContext() — aggregate per-frame context"]
+    BuildCtx --> Physics["physics.step() — Rapier3D"]
+    Physics --> TerrainUpdate["terrain.update() — LOD switch"]
+    TerrainUpdate --> Camera["engineMechUpdate.updateCameraAndInput() — mouse, camera mode"]
+    Camera --> Mechs["engineMechUpdate.updateMechs(dt) — local golem, remotes, decals, projectiles"]
+    Mechs --> Bots["syncTeamBotRoster() + updateBots(dt) — AI: move → engage → fire"]
+    Bots --> ProjFx["engineMechUpdate.getAimTargetPoint() — aim point"]
+    ProjFx --> Input["engineInputActions.handleInputActions() — fire groups, dash, vent"]
+    Input --> CP["engineFxUpdate.updateControlPoints(dt) — capture scoring"]
+    CP --> Combat["engineFxUpdate.updateCombatAndRespawn(dt) — collisions, impact FX, respawn waves"]
+    Combat --> Particles["engineFxUpdate.updateParticlesAndProps(dt) — particles, debris, atmosphere"]
+    Particles --> NetTick["engineNetworkTick.updateNetworkTick(dt) — 20Hz host broadcast / client input"]
+    NetTick --> Render["engineHudRender.renderHud() + renderer.render() — Three.js frame"]
 
     classDef step fill:#f0e8d0,stroke:#8a7a5a,color:#000
-    class Loop,dt,Physics,TerrainUpdate,Camera,Mechs,Bots,ProjFx,Input,CP,Combat,Particles,NetTick,Render step
+    class Loop,dt,BuildCtx,Physics,TerrainUpdate,Camera,Mechs,Bots,ProjFx,Input,CP,Combat,Particles,NetTick,Render step
 ```
 
 ### Data Flow per Step
@@ -227,8 +305,9 @@ graph LR
     end
 
     subgraph Adapters["Context Factories"]
-        RF["EngineRuntimeContexts.ts"]
-        SF["EngineSessionRuntimeAdapters.ts"]
+        LF["engineLoopContext.ts"]
+        AF["engineAdapterFactory.ts"]
+        CX["engineContexts.ts"]
     end
 
     subgraph Runtime["Pure Functions"]
@@ -240,21 +319,21 @@ graph LR
         NSR["NetworkSyncAdapter.ts"]
     end
 
-    E -->|"ctx = RF.projectileCombat()| PCR
-    E -->|"ctx = SF.bot()| BR
-    E -->|"ctx = RF.playerHit()| PHR
-    E -->|"ctx = RF.controlMatch()| MR
-    E -->|"ctx = RF.respawn()| RR
-    E -->|"ctx = RF.networkSync()| NSR
-    RF -->|"reads Engine state| E
-    SF -->|"reads Engine state| E
+    E -->|"ctx = LF.buildLoopContext()| LF
+    LF -->|"aggregates per-frame state| E
+    AF -->|"buildSessionAdapters/buildRuntimeAdapters| E
+    E -->|"ctx = CX.getUnitLocatorContext()| ULR
+    E -->|"ctx = AF.projectileCombat()| PCR
+    E -->|"ctx = AF.bot()| BR
+    E -->|"ctx = AF.playerHit()| PHR
+    E -->|"ctx = AF.controlMatch()| MR
+    E -->|"ctx = AF.respawn()| RR
+    E -->|"ctx = AF.networkSync()| NSR
 
     classDef engine fill:#f9d79b,stroke:#8a6d3b,color:#000
-    classDef adapter fill:#d4b8e0,stroke:#6a3a7a,color:#000
-    classDef runtime fill:#f0b0b0,stroke:#8a3a3a,color:#000
     class E engine
-    class RF,SF adapter
-    class BR,PCR,PHR,MR,RR,NSR runtime
+    class LF,AF,CX adapter
+    class BR,PCR,PHR,MR,RR,NSR,ULR runtime
 ```
 
 ### Adapter Flow (Sequence)
@@ -262,11 +341,11 @@ graph LR
 ```mermaid
 sequenceDiagram
     participant Loop as Engine.loop()
-    participant Ctx as EngineRuntimeContexts
+    participant Ctx as engineAdapterFactory / engineLoopContext
     participant RT as *Runtime.ts
     participant State as Engine state (golems, bots, etc.)
 
-    Loop->>Ctx: ctx = ctxFactory.projectileCombat()
+    Loop->>Ctx: ctx = factory.projectileCombat()
     Ctx->>State: read projectile positions, units, terrain
     Ctx-->>Loop: return ProjectileCombatContext
     Loop->>RT: updateProjectileCollisions(ctx, dt)
@@ -297,7 +376,7 @@ sequenceDiagram
 
 ## Adapter Pattern
 
-### EngineRuntimeContexts.ts
+### engineAdapterFactory.ts
 Factory methods that build **context objects** for pure runtime functions. Each factory reads state from `Engine` and returns a plain object matching a context interface:
 
 - `projectileCombat()` → `ProjectileCombatContext`
@@ -312,10 +391,17 @@ Factory methods that build **context objects** for pure runtime functions. Each 
 - `networkMessage()` → `NetworkMessageContext`
 - `networkSync()` → `NetworkSyncContext`
 - `remotePlayer()` → `RemotePlayerContext`
-- `unitLocator()` → `UnitLocatorContext`
 - `matchController()` → `MatchControllerContext`
 
-### EngineSessionRuntimeAdapters.ts
+### engineLoopContext.ts
+Builds the **per-frame context** that aggregates all subsystems needed for one frame. Called once per loop() before any per-frame runtime function. Avoids circular imports via the `GameSources` type (only fields, no methods).
+
+### engineContexts.ts
+Lightweight context factories for runtime functions that need only a subset of state:
+- `getUnitLocatorContext()` → `UnitLocatorContext` — for enemy position iteration, nearest target lookup, team resolution
+- `getBotObjectiveContext()` → `BotObjectiveContext` — for bot intent, lane node navigation, control point scoring
+
+### Session-Level Adapters (buildSessionAdapters)
 Factory methods for **session-level** contexts that depend on session mode (solo/host/client):
 
 - `bot()` → `BotRuntimeContext` — bots map, team size, spawn slots, create/destroy callbacks
@@ -357,6 +443,8 @@ sequenceDiagram
 4. **Physics runs before game logic** — `physics.step()` is first in loop
 5. **Terrain height sampling is pure** — `sampleHeight(x, z)` has no side effects
 6. **Asset loading is non-blocking** — `initAsync` fires and forgets for trees/ground cover
+7. **File size limit** — All source files capped at 400 lines (`npm run test:file-sizes`)
+8. **No circular imports** — `engineLoopContext.ts` uses `GameSources` type (only fields, no methods) to avoid circular references with `Game` class
 
 ## Changing Subsystems
 
@@ -364,10 +452,14 @@ When modifying a subsystem, check these for potential impact:
 
 | If changing... | Also check... |
 |---------------|---------------|
-| `Engine.ts` loop order | `_updateMechs`, `_updateBots`, `_updateCombatAndRespawn` — order matters for causality |
+| `Engine.ts` loop order | `engineMechUpdate.ts`, `BotRuntime.ts`, `engineFxUpdate.ts` — order matters for causality |
+| `Engine.ts` constructor | `engineInit.ts` — subsystems construction order |
+| `Engine.ts` lifecycle | `engineRestartMatch.ts` — match reset, host/client gate |
 | `BotRuntime.ts` | `DummyBot.ts` update method, `BotObjectiveSystem.ts` target calculation |
 | `ProjectileCombatRuntime.ts` | `ProjectileManager.ts` FX, `GolemController.ts` damage handler |
 | `TerrainBuilder.ts` | `HeightmapSource.ts`, `TerrainMasses.ts`, `Arena.surfaceY()` |
 | Network message format | `NetworkMessageRuntime.ts`, `NetworkSyncAdapter.ts`, client-host compatibility |
 | Weapon definitions | `combat/weaponTypes.ts`, `mechs/` loadout rules, `ProjectileManager.ts` |
-| Control point logic | `ControlPointManager.ts`, `MatchRuntime.ts`, `BotObjectiveSystem.ts` |
+| Control point logic | `ControlPointManager.ts`, `controlPointMeshes.ts`, `controlPointVisuals.ts`, `MatchRuntime.ts` |
+| Arena structure creation | `arenaBase.ts`, `arenaStructures.ts`, `arenaLandmarks.ts` — mesh building, collider helpers |
+| Golem update loop | `golemUpdate.ts` — per-frame mech update (heat, recoil, movement, camera) |

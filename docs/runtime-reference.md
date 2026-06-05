@@ -9,9 +9,11 @@ Document how the live game session is built, updated, synchronized, and torn dow
 
 ## Current Architecture and Responsibilities
 
-- `src/core/Engine.ts` is the composition root for a live session.
-- `src/core/EngineRuntimeContexts.ts` builds explicit combat/network/world adapters.
-- `src/core/EngineSessionRuntimeAdapters.ts` builds explicit authoritative, respawn, remote lifecycle, and bot adapters.
+- `src/core/Engine.ts` is the composition root for a live session (~511 lines).
+- `src/core/engineInit.ts` constructs all subsystems (renderer, physics, world, local mech, projectiles).
+- `src/core/engineLoopContext.ts` builds the per-frame context object aggregating all subsystems.
+- `src/core/engineAdapterFactory.ts` builds session + runtime adapters (projectile combat, bot, respawn, network sync).
+- `src/core/engineMechUpdate.ts`, `engineFxUpdate.ts`, `engineNetworkTick.ts`, `engineHudRender.ts`, `engineInputActions.ts`, `engineSpawn.ts`, `engineBotManagement.ts`, `engineRestartMatch.ts`, `engineNetworkSetup.ts`, `engineContexts.ts` — per-frame logic split into focused modules.
 - `src/core/network/` holds DTO builders, message dispatch/apply logic, transport sync helpers, and remote-player lifecycle logic.
 - `src/core/combat/` holds projectile updates, hit resolution, and combat FX split by responsibility.
 - `src/core/respawn/`, `src/core/bots/`, `src/core/match/`, and `src/core/world/` isolate respawn waves, bots, score/control logic, and prop/world FX.
@@ -21,7 +23,11 @@ Document how the live game session is built, updated, synchronized, and torn dow
 - `GameHudState` is the published runtime snapshot for UI.
 - `SessionMode` is `solo`, `host`, or `client`.
 - `NetworkPosition` and related DTOs in `src/core/network/` are the plain-data boundary between transport and runtime mutation.
-- Runtime smoke coverage lives in `src/core/runtimeSmoke/runRuntimeSmoke.ts`.
+- `GameSources` (in `engineLoopContext.ts`) is the type-level interface exposing Engine fields to per-frame context builders — avoids circular imports.
+- Runtime smoke coverage lives in `src/core/runtimeSmoke/`:
+  - `runRuntimeSmoke.ts` — orchestrator (15 lines)
+  - `smokeHelpers.ts` — `createFakeGolem`, `createFakeBot`, `assert`, `runTest`
+  - `tests/` — 6 focused test files (testNetworkDispatcher, testRespawn, testPlayerHit, testAuthoritativeState, testRemoteFire, testBotRoster)
 
 ## Data Flow and Runtime Flow
 
@@ -53,7 +59,8 @@ The runtime contract is:
 
 ## Extension Points
 
-- Add runtime systems by extending `src/core/<domain>/` and wiring them through adapter factories, not by growing `Engine.ts`.
+- Add runtime systems by extending `src/core/<domain>/` and wiring them through adapter factories (`engineAdapterFactory.ts`), not by growing `Engine.ts`.
+- Add new per-frame steps by creating a focused `engineXxx.ts` module and wiring it into `engineLoopContext.ts` + the loop.
 - Add message types by extending the DTO/message runtime path in `src/core/network/`.
 - Add new match logic through `src/core/match/` and `src/gameplay/` without bypassing `GameHudState`.
 
