@@ -13,124 +13,38 @@ import { MatchStatusOverlay } from './ui/combat/MatchStatusOverlay';
 import { LobbyScreen } from './ui/lobby/LobbyScreen';
 import { MobileCombatLayout } from './ui/mobile/MobileCombatLayout';
 import { MobileSettingsOverlay } from './ui/mobile/MobileSettingsOverlay';
-import { createTranslator, getInitialLocale, saveLocale, type TranslationDescriptor, type TranslationKey, type Translator } from './i18n';
-import { formatSeconds } from './i18n/format';
+import { createTranslator, type Translator } from './i18n';
 import type { Locale } from './i18n/types';
 import type { GameMode } from './gameplay/types';
 import { CHASSIS_DEFINITIONS, DEFAULT_CHASSIS_ID, LOADOUT_DEFINITIONS, getDefaultLoadoutForChassis } from './mechs/definitions';
 import type { ChassisId, LoadoutId } from './mechs/types';
-
-const startupPhaseLabelKeys: Record<'startWorld' | 'createSession' | 'connectToHost', TranslationKey> = {
-    startWorld: 'errors.startWorld',
-    createSession: 'errors.createSession',
-    connectToHost: 'errors.connectToHost'
-};
-
-async function copyText(text: string) {
-    if (!text) return false;
-
-    try {
-        if (navigator.clipboard?.writeText) {
-            await navigator.clipboard.writeText(text);
-            return true;
-        }
-    } catch {
-        // Fallback below.
-    }
-
-    try {
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        textarea.setAttribute('readonly', '');
-        textarea.style.position = 'absolute';
-        textarea.style.left = '-9999px';
-        document.body.appendChild(textarea);
-        textarea.select();
-        const result = document.execCommand('copy');
-        document.body.removeChild(textarea);
-        return result;
-    } catch {
-        return false;
-    }
-}
-
-function getStartupFailureMessage(t: Translator, locale: Locale, failure: StartupFailure) {
-    const withDetail = (message: string) => failure.detail
-        ? `${message}\n\n${t('errors.detail', { detail: failure.detail })}`
-        : message;
-
-    switch (failure.code) {
-        case 'timeout':
-            return withDetail(t('errors.timeout', {
-                label: failure.phase ? t(startupPhaseLabelKeys[failure.phase]) : t('errors.startWorld'),
-                seconds: formatSeconds(locale, failure.seconds ?? 15)
-            }));
-        case 'hostIdRequired':
-            return t('errors.hostIdRequired');
-        case 'peerUnavailable':
-            return withDetail(t('errors.peerUnavailable'));
-        case 'peerIdUnavailable':
-            return withDetail(t('errors.peerIdUnavailable'));
-        case 'networkUnavailable':
-            return withDetail(t('errors.networkUnavailable'));
-        case 'serverError':
-            return withDetail(t('errors.serverError'));
-        case 'connectionFailed':
-            return withDetail(t('errors.connectionFailed'));
-        case 'invalidHostId':
-            return withDetail(t('errors.invalidHostId'));
-        default:
-            if (failure.phase) {
-                return withDetail(t('errors.phaseFailed', { label: t(startupPhaseLabelKeys[failure.phase]) }));
-            }
-            return t('errors.startup', { message: failure.detail || t('errors.unknown') });
-    }
-}
-
-function releasePointerLock() {
-    if (typeof document === 'undefined' || typeof document.exitPointerLock !== 'function') {
-        return;
-    }
-    if (document.pointerLockElement) {
-        document.exitPointerLock();
-    }
-}
-
+import { copyText, getStartupFailureMessage, releasePointerLock } from './app/appHelpers';
+import { computeHudWarning, computeHudRatios } from './app/useHudWarning';
+import { useAppSettings } from './app/useAppSettings';
 
 export default function App() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const copyResetRef = useRef<number | null>(null);
-    const [locale, setLocale] = useState<Locale>(() => getInitialLocale());
-    const [isTouchDevice, setIsTouchDevice] = useState(false);
-    const [isPortrait, setIsPortrait] = useState(false);
-    const [mobileLeftHanded, setMobileLeftHanded] = useState(false);
-    const [mobileAimPreset, setMobileAimPreset] = useState<'LOW' | 'MID' | 'HIGH'>('MID');
-    const [ambientAtmosphereEnabled, setAmbientAtmosphereEnabled] = useState(() => {
-        try {
-            const stored = window.localStorage.getItem('golems_atmosphere_enabled');
-            if (stored === 'on') return true;
-            if (stored === 'off') return false;
-        } catch {
-            // Ignore storage access issues.
-        }
-
-        const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
-        const touchDevice = navigator.maxTouchPoints > 0;
-        const minViewport = Math.min(window.innerWidth, window.innerHeight);
-        const isMobile = coarsePointer || touchDevice || minViewport <= 900;
-        return !isMobile;
-    });
-    const [hostId, setHostId] = useState('');
-    const [roomName, setRoomName] = useState('');
-    const [selectedGameMode, setSelectedGameMode] = useState<GameMode>('control');
-    const [selectedChassisId, setSelectedChassisId] = useState<ChassisId>(DEFAULT_CHASSIS_ID);
-    const [selectedLoadoutId, setSelectedLoadoutId] = useState<LoadoutId>(getDefaultLoadoutForChassis(DEFAULT_CHASSIS_ID).id);
-    const [roomFilter, setRoomFilter] = useState<'all' | GameMode>('all');
-    const [showUnavailableRooms, setShowUnavailableRooms] = useState(false);
+    const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
     const [showPilotPanel, setShowPilotPanel] = useState(true);
     const [showDesktopSettings, setShowDesktopSettings] = useState(false);
     const [showMobileSettings, setShowMobileSettings] = useState(false);
-    const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
+
+    const settings = useAppSettings();
+    const {
+        locale, setLocale,
+        isTouchDevice, isPortrait,
+        mobileLeftHanded, setMobileLeftHanded,
+        mobileAimPreset, setMobileAimPreset,
+        ambientAtmosphereEnabled, setAmbientAtmosphereEnabled,
+        hostId, setHostId, roomName, setRoomName,
+        selectedGameMode, setSelectedGameMode,
+        selectedChassisId, setSelectedChassisId,
+        selectedLoadoutId, setSelectedLoadoutId,
+        roomFilter, setRoomFilter,
+        showUnavailableRooms, setShowUnavailableRooms
+    } = settings;
+
     const t = createTranslator(locale);
     const firebaseLobbyStatus = getFirebaseLobbyStatus();
     const session = useGameSession({
@@ -199,92 +113,12 @@ export default function App() {
     };
 
     useEffect(() => {
-        const media = window.matchMedia('(pointer: coarse)');
-        const updateTouchState = () => {
-            setIsTouchDevice(media.matches || navigator.maxTouchPoints > 0);
-            setIsPortrait(window.innerHeight >= window.innerWidth);
-        };
-        updateTouchState();
-        media.addEventListener?.('change', updateTouchState);
-        window.addEventListener('resize', updateTouchState);
-        return () => {
-            media.removeEventListener?.('change', updateTouchState);
-            window.removeEventListener('resize', updateTouchState);
-        };
-    }, []);
-
-    useEffect(() => {
-        try {
-            const handed = window.localStorage.getItem('golems_mobile_handed');
-            const preset = window.localStorage.getItem('golems_mobile_aim_preset');
-            const atmosphere = window.localStorage.getItem('golems_atmosphere_enabled');
-            if (handed === 'left') setMobileLeftHanded(true);
-            if (preset === 'LOW' || preset === 'MID' || preset === 'HIGH') {
-                setMobileAimPreset(preset);
-            }
-            if (atmosphere === 'on' || atmosphere === 'off') {
-                setAmbientAtmosphereEnabled(atmosphere === 'on');
-            }
-        } catch {
-            // Ignore storage access issues.
-        }
-    }, []);
-
-    useEffect(() => {
-        saveLocale(locale);
-    }, [locale]);
-
-    useEffect(() => {
-        try {
-            const savedChassis = window.localStorage.getItem('golems_selected_chassis');
-            const savedLoadout = window.localStorage.getItem('golems_selected_loadout');
-            if (savedChassis && savedChassis in CHASSIS_DEFINITIONS) {
-                const chassisId = savedChassis as ChassisId;
-                setSelectedChassisId(chassisId);
-                const fallbackLoadout = getDefaultLoadoutForChassis(chassisId).id;
-                if (savedLoadout && savedLoadout in LOADOUT_DEFINITIONS && LOADOUT_DEFINITIONS[savedLoadout as LoadoutId].chassisId === chassisId) {
-                    setSelectedLoadoutId(savedLoadout as LoadoutId);
-                } else {
-                    setSelectedLoadoutId(fallbackLoadout);
-                }
-            }
-        } catch {
-            // Ignore storage issues.
-        }
-    }, []);
-
-    useEffect(() => {
-        try {
-            window.localStorage.setItem('golems_selected_chassis', selectedChassisId);
-            window.localStorage.setItem('golems_selected_loadout', selectedLoadoutId);
-        } catch {
-            // Ignore storage issues.
-        }
-    }, [selectedChassisId, selectedLoadoutId]);
-
-    useEffect(() => {
-        if (!availableLoadouts.some((loadout) => loadout.id === selectedLoadoutId)) {
-            setSelectedLoadoutId(getDefaultLoadoutForChassis(selectedChassisId).id);
-        }
-    }, [availableLoadouts, selectedChassisId, selectedLoadoutId]);
-
-    useEffect(() => {
         return () => {
             if (copyResetRef.current !== null) {
                 window.clearTimeout(copyResetRef.current);
             }
         }
     }, []);
-
-    useEffect(() => {
-        try {
-            window.localStorage.setItem('golems_mobile_handed', mobileLeftHanded ? 'left' : 'right');
-            window.localStorage.setItem('golems_mobile_aim_preset', mobileAimPreset);
-            window.localStorage.setItem('golems_atmosphere_enabled', ambientAtmosphereEnabled ? 'on' : 'off');
-        } catch {
-            // Ignore storage access issues.
-        }
-    }, [ambientAtmosphereEnabled, mobileAimPreset, mobileLeftHanded]);
 
     useEffect(() => {
         gameInstance?.setAtmosphereEnabled?.(ambientAtmosphereEnabled);
@@ -334,34 +168,27 @@ export default function App() {
         };
     }, [gameState.teamScores.winner, inLobby, isTouchDevice, loading]);
 
-    const torsoOffset = Math.atan2(
-        Math.sin(gameState.torsoYaw - gameState.legYaw),
-        Math.cos(gameState.torsoYaw - gameState.legYaw)
-    );
-    const twistRatio = gameState.maxTwist > 0
-        ? Math.max(-1, Math.min(1, torsoOffset / gameState.maxTwist))
-        : 0;
-    const throttleRatio = Math.max(-0.45, Math.min(1, gameState.throttle));
-    const hpRatio = gameState.maxHp > 0 ? gameState.hp / gameState.maxHp : 0;
-    const steamRatio = gameState.maxSteam > 0 ? gameState.steam / gameState.maxSteam : 0;
-    const warningMessage: TranslationDescriptor = gameState.isOverheated
-        ? { key: 'hud.warning.overheat', params: { seconds: formatSeconds(locale, gameState.overheatTimer) } }
-        : Math.abs(twistRatio) > 0.86
-            ? { key: 'hud.warning.torsoLimit' }
-            : !isTouchDevice && Math.abs(twistRatio) > 0.6
-                ? { key: 'hud.warning.centerTorso' }
-                : throttleRatio < -0.05
-                    ? { key: 'hud.warning.reverse' }
-                    : throttleRatio > 0.7
-                        ? { key: 'hud.warning.fullAhead' }
-                        : { key: 'hud.warning.cruise' };
+    const warningMessage = computeHudWarning({
+        isTouchDevice,
+        torsoYaw: gameState.torsoYaw,
+        legYaw: gameState.legYaw,
+        maxTwist: gameState.maxTwist,
+        throttle: gameState.throttle,
+        hp: gameState.hp,
+        maxHp: gameState.maxHp,
+        steam: gameState.steam,
+        maxSteam: gameState.maxSteam,
+        isOverheated: gameState.isOverheated,
+        overheatTimer: gameState.overheatTimer
+    }, locale);
+    const { hpRatio, steamRatio } = computeHudRatios(gameState);
     const mobileAimSensitivity = mobileAimPreset === 'LOW' ? 0.62 : mobileAimPreset === 'HIGH' ? 1.2 : 0.9;
-    const sessionMessage: TranslationDescriptor = sessionMode === 'solo'
+    const sessionMessage: any = sessionMode === 'solo'
         ? 'session.solo'
         : isHost
             ? 'session.host'
             : 'session.client';
-    const copyMessage: TranslationDescriptor = copyState === 'copied'
+    const copyMessage: any = copyState === 'copied'
         ? 'common.copied'
         : copyState === 'error'
             ? 'common.failed'
@@ -410,10 +237,7 @@ export default function App() {
                     availableChassis={availableChassis}
                     selectedChassisId={selectedChassisId}
                     selectedChassis={selectedChassis}
-                    onSelectChassis={(chassisId) => {
-                        setSelectedChassisId(chassisId);
-                        setSelectedLoadoutId(getDefaultLoadoutForChassis(chassisId).id);
-                    }}
+                    onSelectChassis={setSelectedChassisId}
                     availableLoadouts={availableLoadouts}
                     selectedLoadoutId={selectedLoadoutId}
                     selectedLoadout={selectedLoadout}
@@ -470,7 +294,7 @@ export default function App() {
                             warning={warningMessage}
                             legYaw={gameState.legYaw}
                             torsoYaw={gameState.torsoYaw}
-                            twistRatio={twistRatio}
+                            twistRatio={computeHudRatios(gameState).throttleRatio}
                             hpRatio={hpRatio}
                             steamRatio={steamRatio}
                             speed={gameState.speed}

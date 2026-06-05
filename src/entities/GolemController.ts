@@ -25,20 +25,15 @@ import {
     createWeaponRecoilState,
     findWeaponMountId,
     resolveWeaponMuzzleOrigin,
-    tickWeaponRecoilState,
     triggerWeaponRecoilRuntime,
     type WeaponRecoilState
 } from '../mechs/runtime/MechWeaponRuntime';
 import {
-    applyLocalMechDash,
-    updateLocalMechMovement
+    applyLocalMechDash
 } from '../mechs/runtime/LocalMechMovementRuntime';
-import { updateMechCameraAndFootsteps } from '../mechs/runtime/MechCameraFootstepRuntime';
 import {
-    applyProceduralMechPose,
     syncHeroVisual as syncHeroVisualRuntime
 } from '../mechs/runtime/MechVisualDriver';
-import { applyRemoteMechReplication } from '../mechs/runtime/RemoteMechReplicationRuntime';
 import type { ChassisDefinition, LoadoutDefinition } from '../mechs/types';
 import {
     applyMechSectionDamageRuntime,
@@ -51,12 +46,11 @@ import {
     spendMechSteamRuntime,
     syncMechDamageRuntime,
     syncMechSectionVisualsRuntime,
-    tickMechHeatStateRuntime,
     tickMechWeaponCooldownsRuntime,
     triggerMechOverheatRuntime
 } from '../mechs/runtime/MechStateRuntime';
+import { updateGolem } from './golemUpdate';
 
-const _currentVel = new THREE.Vector3();
 export type { GolemSection, GolemSectionState } from '../mechs/sections';
 export { GOLEM_SECTION_ORDER } from '../mechs/sections';
 export type { GolemControllerOptions, GolemEvents, GolemState } from './GolemControllerTypes';
@@ -292,107 +286,18 @@ export class GolemController {
         sounds: AudioManager,
         decals: DecalManager
     ): GolemEvents {
-        const events: GolemEvents = { dashed: false, vented: false, footstep: false };
-
-        if (this.damageFlashTimer > 0) {
-            this.damageFlashTimer = Math.max(0, this.damageFlashTimer - dt);
-        }
         this.updateWeaponCooldowns(dt);
-        tickWeaponRecoilState(this.weaponRecoil, this.weaponMountOrder, dt);
-        const flashRatio = this.damageFlashTimer > 0 ? this.damageFlashTimer / 0.16 : 0;
-        const flashIntensity = flashRatio * 1.6;
-        this.bronzeMaterial.emissive.setRGB(0.55 * flashRatio, 0.42 * flashRatio, 0.18 * flashRatio);
-        this.bronzeMaterial.emissiveIntensity = flashIntensity;
-        this.runeMaterial.emissiveIntensity = 2 + flashIntensity * 0.6;
-        this.boilerMaterial.emissiveIntensity = 1.5 + flashIntensity * 0.35;
-
-        tickMechHeatStateRuntime(this, dt);
-
-        if (this.isLocal) {
-            const localMovement = updateLocalMechMovement({
-                body: this.body,
-                chassis: this.chassis,
-                sections: this.sections,
-                maxSections: this.maxSections,
-                dt,
-                aimYawUnclamped,
-                cameraAimYaw: this.gameCamera?.aimYaw ?? null,
-                throttleInput,
-                turnInput,
-                centerTorso,
-                stopThrottle,
-                legYaw: this.legYaw,
-                torsoYaw: this.torsoYaw,
-                throttle: this.throttle,
-                dashRecoveryTimer: this.dashRecoveryTimer
-            });
-
-            this.legYaw = localMovement.legYaw;
-            this.torsoYaw = localMovement.torsoYaw;
-            this.targetTorsoYaw = localMovement.targetTorsoYaw;
-            this.throttle = localMovement.throttle;
-            this.dashRecoveryTimer = localMovement.dashRecoveryTimer;
-            if (this.gameCamera && typeof localMovement.cameraAimYaw === 'number') {
-                this.gameCamera.aimYaw = localMovement.cameraAimYaw;
-            }
-        } else {
-            const replicatedState = applyRemoteMechReplication({
-                body: this.body,
-                targetPos: this.targetPos,
-                targetLegYaw: this.targetLegYaw,
-                targetTorsoYaw: this.targetTorsoYaw,
-                legYaw: this.legYaw,
-                torsoYaw: this.torsoYaw,
-                weightClass: this.chassis.weightClass
-            }, dt);
-
-            this.legYaw = replicatedState.legYaw;
-            this.torsoYaw = replicatedState.torsoYaw;
-        }
-
-        const pos = this.body.translation();
-        this.model.position.set(pos.x, pos.y - 1.5, pos.z);
-
-        this.legs.rotation.y = -this.legYaw;
-        this.torso.rotation.y = -this.torsoYaw;
-
-        const vel = this.body.linvel();
-        _currentVel.set(vel.x, 0, vel.z);
-        this.currentSpeed = _currentVel.length();
-
-        const cameraAndFootsteps = updateMechCameraAndFootsteps({
-            isLocal: this.isLocal,
-            gameCamera: this.gameCamera ?? null,
-            heroVisual: this.heroVisual,
-            torso: this.torso,
-            modelPosition: this.model.position,
-            legYaw: this.legYaw,
-            currentSpeed: this.currentSpeed,
-            mass: this.mass,
-            walkCycle: this.walkCycle,
-            lastStepPhase: this.lastStepPhase,
+        return updateGolem({
+            golem: this,
             dt,
+            aimYawUnclamped,
+            throttleInput,
+            turnInput,
+            centerTorso,
+            stopThrottle,
             sounds,
             decals
         });
-        this.walkCycle = cameraAndFootsteps.walkCycle;
-        this.lastStepPhase = cameraAndFootsteps.lastStepPhase;
-        events.footstep = cameraAndFootsteps.footstepTriggered;
-
-        applyProceduralMechPose({
-            walkCycle: this.walkCycle,
-            weaponRecoil: this.weaponRecoil,
-            leftLeg: this.leftLeg,
-            rightLeg: this.rightLeg,
-            leftArm: this.leftArm,
-            rightArm: this.rightArm,
-            torso: this.torso,
-            pelvis: this.pelvis,
-            boiler: this.boiler
-        });
-        this.syncHeroVisual(dt);
-
-        return events;
     }
 
     getState(): GolemState {
