@@ -1,0 +1,59 @@
+# Graphics & Rendering Context (Graphics Agent)
+
+> Read this when working on rendering, shaders, Three.js scene, or visual effects.
+> For broader project context see `../AGENTS.md` and `../docs/architecture.md`.
+
+## Core Files
+- `src/core/Renderer.ts` — scene setup, lights, camera, shadow config, render loop
+- `src/world/GrassShaderSystem.ts` — procedural grass with vertex-shader wind animation
+- `src/world/TerrainBuilder.ts` — terrain mesh generation, LOD, texture splatting
+- `src/fx/DebrisManager.ts` — impact debris, wood/brick/roof particles
+- `src/combat/ProjectileManager.ts` — projectile trails, muzzle flash, impact decals
+- `src/assets/` — GLTF loaders, texture utilities
+
+## Key Rendering Pipeline
+1. `Renderer` creates scene with fog, ambient + hemisphere + directional light
+2. `Arena.initAsync()` loads trees/ground cover asynchronously (non-blocking)
+3. `TerrainBuilder` generates heightmap-based plane with LOD controller (high/mid/low)
+4. `GrassShaderSystem` generates 60k procedural blades in one BufferGeometry
+5. Per-frame: `loop()` → update subsystems → `renderer.render()`
+
+## Shader Conventions
+- Vertex shader: wind animation via `sin(iTime * speed + pos * freq) * strength`
+- Fragment shader: color blending via `vColor.x` (height ratio from vertex colors)
+- Use `THREE.ShaderMaterial` with `vertexColors: true` for per-blade coloration
+- Normal maps: load with `LinearSRGBColorSpace`, set `normalScale` to 0.5-0.8
+
+## InstancedMesh Rules
+- Always call `computeBoundingSphere()` after updating instance matrices
+- Grass shader uses ONE `BufferGeometry` (no InstancedMesh) for performance
+- Trees and ground cover use `InstancedMesh` with max 100-200 instances per mesh
+- Set `instanceMatrix.setUsage(THREE.DynamicDrawUsage)` for runtime updates
+- Frustum culling: must update bounding sphere or disable with `frustumCulled = false`
+
+## Asset Loading
+- Use `GLTFLoader.loadAsync()` wrapped in `runWithConcurrency(items, fn, 4)` — max 4 parallel
+- Per-asset timeout: 30s via `Promise.race([loadAsync, timeout])`
+- Trees/ground cover load asynchronously in `Arena.initAsync()` — never block game start
+- Texture paths: `assets/nature/` relative to `public/`
+
+## Quality Profile (`src/utils/quality.ts`)
+- `shadows: boolean` — enable/disable shadow maps
+- `softShadows: boolean` — PCFSoft vs PCF
+- `shadowMapSize: number` — directional light shadow resolution
+- `fogDensity: number` — FogExp2 density
+- `maxPixelRatio: number` — device pixel ratio cap
+
+## DO
+- Use `InstancedMesh` for repeated geometry (trees, bushes, grass blades)
+- Call `computeBoundingSphere()` after matrix updates
+- Load heavy assets asynchronously with `try-catch` fallback
+- Use `DynamicDrawUsage` for frequently updated instance matrices
+- Keep shader code inline in TS files (no separate `.glsl` files)
+
+## DON'T
+- Never call `.loadAsync()` in the game loop or `initAsync` blocking path
+- Never mutate Three.js objects from multiple threads (single-threaded only)
+- Don't use `MeshStandardMaterial` with custom shaders — use `ShaderMaterial`
+- Don't forget `texture.needsUpdate = true` after modifying texture data
+- Don't create new `Mesh`/`Geometry`/`Material` every frame — reuse and pool

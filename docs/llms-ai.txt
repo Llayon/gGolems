@@ -1,0 +1,84 @@
+# Bot AI & Objectives Context (AI Agent)
+
+> Read this when working on bot behavior, objectives, pathfinding, or combat AI.
+> For broader project context see `../AGENTS.md` and `../docs/architecture.md`.
+
+## Core Files
+- `src/core/bots/BotObjectiveSystem.ts` — pure functions for bot decision making
+- `src/core/bots/BotRuntime.ts` — bot runtime adapter, state management
+- `src/entities/DummyBot.ts` — standalone bot entity for testing
+- `src/core/combat/UnitLocator.ts` — enemy target lookup, nearest target, team resolution
+
+## Bot Objective System (Pure Functions)
+All functions in `BotObjectiveSystem.ts` are **pure** — no side effects, testable in isolation.
+
+### Role Assignment
+```ts
+getBotObjectiveRole(botId: string): { role, slot, sideBias }
+```
+- Roles cycle: `anchor` (defense), `assault` (center push), `flank` (enemy capture)
+- Slot derived from bot ID suffix (`-0`, `-1`, `-2`...)
+- `sideBias`: alternates left/right positioning (-1 or 1)
+
+### Priority Scoring
+```ts
+getPriorityControlPoint(ctx, team, from, botId): ControlPoint | null
+```
+- Scores each control point based on: distance, contest status, role alignment, team advantage
+- Contest = highest priority (+260), neutral = +180, enemy inside = +210
+- Penalizes overcrowding: `-friendlyInside * 28`, extra bots beyond desired = `-85`
+- Trailing team gets bonus for neutral/contested points (+38)
+
+### Movement Target
+```ts
+getBotMovementTarget(ctx, team, from, botId, botHpRatio, setIntent): Vector3
+```
+- Retreat if HP ≤ 35% and threat nearby
+- Uses lane nodes: `rotate_node` → `staging_node` → `objective_entry` → `hold_node`
+- Intent states: `push`, `hold`, `contest`, `retreat`
+- Rotation through nodes when far from objective and not anchor role
+
+### Retreat Target
+```ts
+getBotRetreatTarget(ctx, team, botId): Vector3
+```
+- Uses home lane `retreat_node`
+- Falls back to home point staging target, offset away from enemy
+- Final fallback: spawn position approximation
+
+## Context Interface
+```ts
+BotObjectiveContext = {
+    gameMode: string;
+    teamScores: { blue: number; red: number };
+    controlPoints: Array<{ id, owner, capture, contested, blueInside, redInside, position, radius }>;
+    getLaneNode: (pointId, kind, team, side) => Vector3 | undefined;
+    getNearestLaneId: (position) => 'A' | 'B' | 'C';
+    getNearestEnemyTarget: (team, from, maxDistance?) => Vector3 | null;
+}
+```
+
+## Lane System
+- Lanes: `A` (red home), `B` (center), `C` (blue home)
+- Node kinds: `hold_node`, `staging_node`, `objective_entry`, `rotate_node`, `retreat_node`
+- Sides: `left`, `right`, `center`
+- Blue team direction: C → B → A; Red team: A → B → C
+
+## Combat AI Integration
+- `UnitLocator` provides `getNearestEnemyTarget(team, from, maxDistance)` for threat detection
+- Bots retreat when HP ≤ 35% AND enemy within 42 units
+- Bots push toward contested points when in assault/flank role
+
+## DO
+- Keep bot objective functions pure — no global state, no side effects
+- Use `getBotObjectiveRole()` to distribute bots across roles evenly
+- Pass complete `BotObjectiveContext` — missing data causes fallback behavior
+- Use lane nodes for precise positioning, not raw point coordinates
+- Test with `npm run test:runtime-smoke` for bot path changes
+
+## DON'T
+- Don't mutate bot state inside objective functions — return new values only
+- Don't skip the `sideBias` — bots will cluster without alternating positions
+- Don't hardcode lane IDs — use `getTeamControlLanes(team)` for team-aware logic
+- Don't ignore `fullySecured` penalty — bots will over-defend secured points
+- Don't use raw `point.position` — always go through lane node system

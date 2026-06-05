@@ -1,0 +1,90 @@
+# Network & Multiplayer Context (Network Agent)
+
+> Read this when working on PeerJS connections, network sync, host-authoritative logic, or multiplayer messages.
+> For broader project context see `../AGENTS.md` and `../docs/architecture.md`.
+
+## Core Files
+- `src/network/NetworkManager.ts` — PeerJS wrapper, host/client setup, message routing
+- `src/core/network/NetworkSyncAdapter.ts` — sync state adapter for engine runtime
+- `src/core/network/NetworkMessageRuntime.ts` — message serialization/deserialization
+- `src/core/Engine.ts` — host-authoritative game loop, client state reconciliation
+
+## Network Architecture: Host-Authoritative P2P
+```
+[Host] ←→ [Client 1]
+   ↑
+   └── [Client 2]
+   └── [Client N]
+```
+- **Host** owns authoritative game state (physics, combat, scoring, bots)
+- **Clients** send inputs (movement, actions) to host
+- **Host** broadcasts state updates to all clients
+- Clients interpolate/extrapolate between snapshots
+
+## PeerJS Connection Flow
+### Host
+```ts
+manager.initAsHost((id) => {
+    // Host ready, share id with clients
+});
+```
+- Creates Peer with auto-generated ID
+- Listens for incoming connections via `peer.on('connection')`
+
+### Client
+```ts
+manager.initAsClient(hostId, (id) => {
+    // Connected to host
+});
+```
+- Connects to host by ID
+- Single connection (to host only)
+
+## Message Types
+- **Client → Host**: Input state (movement, weapon fire, mech actions)
+- **Host → Client**: State snapshot (positions, rotations, health, scores)
+- **Host → All**: Game events (player join/leave, match start/end, point capture)
+
+## NetworkManager API
+```ts
+broadcast(data, excludeId?)  // Send to all connected peers
+sendTo(id, data)             // Send to specific peer
+sendToHost(data)             // Client-only: send to host
+```
+
+## Error Handling
+- `NetworkStartupError` with typed codes:
+  - `peerUnavailable` — PeerJS service down
+  - `peerIdUnavailable` — ID collision (host mode)
+  - `networkUnavailable` — WebRTC/socket failure
+  - `connectionFailed` — WebRTC handshake failure
+  - `invalidHostId` — Client provided wrong host ID
+- All errors normalized via `normalizePeerError(error)`
+
+## Sync Patterns
+- **Host tick** (`syncNetworkTick`): Host broadcasts `AuthoritativeStateMessage` (players, bots, mode, points, scores, props) at 20Hz
+- **Client tick**: Client sends `ClientInputPacket` to host (movement, actions)
+- **Bot sync**: Host simulates bot AI (`isHost`), clients receive bot positions via `BotStateView[]` snapshot. Non-host bots use kinematic bodies.
+- **Remote players**: Host sends `PlayerSnapshotMap`, clients interpolate remote golem positions
+
+## CRITICAL CONSTRAINTS (Network + Physics)
+- **NOT lockstep**: Snapshot-based sync at `NETWORK.tickRate` (20Hz). Host broadcasts full state; clients send inputs. Do NOT implement lockstep or rollback.
+- **Host owns simulation**: All Rapier world mutations, bot AI, projectile spread, combat resolution run on host ONLY. See `llms-physics.txt` for `isHost` gating pattern.
+- **`Math.random()` is already safe**: Spread and bot AI are gated by `isHost` flag. New gameplay randomness must follow same pattern — gate by `isHost` or run in host-only context.
+- **Snapshot interval**: 50ms between host broadcasts (20Hz). Do NOT send updates every frame.
+- **No client-side prediction yet**: Clients receive snapshots and interpolate. No prediction or snap-to-host logic implemented — avoid assuming it exists.
+- **Message size limit**: Keep under 1KB per message. Large payloads (match init, asset lists) sent once separately.
+
+## DO
+- Always validate incoming message types before processing
+- Use sequence numbers for input ordering
+- Handle disconnects gracefully — update UI, remove player from match
+- Test with `npm run test:runtime-smoke` for network sync paths
+- Keep message payloads small — serialize only changed fields
+
+## DON'T
+- Don't trust client state on host — always validate inputs
+- Don't block game loop waiting for network — async only
+- Don't send full state every frame — diff-based updates only
+- Don't assume connection is always alive — handle `conn.on('close')`
+- Don't use `broadcast()` for client-to-host messages — use `sendToHost()`

@@ -1,0 +1,64 @@
+# Physics & Collision Context (Physics Agent)
+
+> Read this when working on Rapier3D physics, colliders, terrain collision, or rigid body dynamics.
+> For broader project context see `../AGENTS.md` and `../docs/architecture.md`.
+
+## Core Files
+- `src/core/Physics.ts` — Rapier world init, gravity, step
+- `src/world/TerrainBuilder.ts` — heightfield/trimesh collider, LOD meshes
+- `src/world/TerrainMasses.ts` — static rocks, cylinders, boxes with colliders
+- `src/world/HeightmapSource.ts` — procedural heightmap, terrain pads, blend logic
+- `src/world/TerrainLodController.ts` — LOD switching based on camera distance
+
+## Physics Init Flow
+1. `Physics.init()` or `initSync()` — calls `RAPIER.init()` then creates `RAPIER.World` with gravity
+2. `TerrainBuilder` creates heightfield collider from heightmap data
+3. Fallback: if heightfield fails, uses trimesh collider
+4. `buildTerrainMasses()` adds static rock/box/cylinder colliders to scene
+
+## Collider Types Used
+- `RAPIER.ColliderDesc.heightfield(rows, cols, heights, scale)` — ground terrain
+- `RAPIER.ColliderDesc.cuboid(hx, hy, hz)` — rocks (scaled dodecahedrons), boxes
+- `RAPIER.ColliderDesc.cylinder(halfHeight, radius)` — cylindrical terrain masses
+- `RAPIER.ColliderDesc.trimesh(vertices, indices)` — fallback ground
+
+## Rigid Body Patterns
+- Fixed bodies for terrain: `RAPIER.RigidBodyDesc.fixed()`
+- Translation + rotation: `.setTranslation(x, y, z).setRotation({x, y, z, w})`
+- Quaternion from Euler: `_quat.setFromEuler(_euler.set(rx, ry, rz))`
+- Always create body first, then collider: `physics.createRigidBody(bodyDesc)` → `physics.createCollider(collider, body)`
+
+## Heightmap System
+- `HeightmapSource` interface: `sampleHeight(x, z)` method
+- `ProceduralHeightmap` — multi-octave noise with configurable frequency/amplitude
+- Terrain pads (`TerrainPadConfig`) override height in spawn/objective zones
+- `blendPads()` blends heightmap with pad heights using smooth transitions
+- `isProtectedTerrainPadArea(x, z, radius)` — checks if position is in spawn/objective zone
+
+## Terrain LOD
+- `TerrainLodController` manages 3 LOD levels: high (97), mid (48), low (24)
+- Switching based on camera distance to terrain center
+- Only high LOD mesh is used for collision (`collisionMeshes.push(high)`)
+- Mid/low are visual-only, swapped via `mesh.visible`
+
+## CRITICAL CONSTRAINTS (Physics + Network)
+- **Host-authoritative physics**: `Engine.ts` owns the Rapier world. Host simulates all dynamic bodies; clients receive snapshots and interpolate.
+- **`Math.random()` safety**: Safe ONLY when gated by `isHost` flag (e.g. `DummyBot.update` line 205+) or in host-only code paths. Visual-only randomness (particles, debris, camera shake, decals) is always safe. Never use `Math.random()` in code that runs on BOTH host and client for the same gameplay event.
+- **Bot simulation gate**: `DummyBot` uses `dynamic` body on host (AI simulation) and `kinematic` body on client (follows `targetPos` from host). Line 94: `isHost ? dynamic() : kinematicPositionBased()`.
+- **Projectile spread**: Host calculates `dx/dy/dz` via `getSpreadDirection()`, broadcasts in `FireShotPayload`. Clients spawn projectiles with host-provided direction — do NOT recalculate spread client-side.
+- **No dynamic collider creation mid-match**: All terrain colliders created at `TerrainBuilder` init. Never add/remove colliders during active match.
+- **Gravity**: Shared constant `PHYSICS.gravity` from `src/utils/constants.ts`. Never modify per-client.
+
+## DO
+- Use `heightfield` collider for terrain — most performant for grid heightmaps
+- Always filter terrain masses with `isProtectedTerrainPadArea()` to avoid blocking spawns
+- Use `TriMeshFlags.FIX_INTERNAL_EDGES` for trimesh colliders
+- Sample height via `sampleHeight(x, z)` for placing objects on terrain
+- Keep static terrain bodies as `fixed()` — never dynamic
+
+## DON'T
+- Don't create dynamic rigid bodies for terrain — use `fixed()` only
+- Don't skip `isProtectedTerrainPadArea()` check when placing obstacles
+- Don't use trimesh collider as primary — heightfield is faster and more stable
+- Don't mutate Rapier world from multiple contexts — single-threaded only
+- Don't forget that heightfield expects heights in column-major order (`col * rows + row`)
