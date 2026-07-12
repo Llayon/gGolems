@@ -5,6 +5,7 @@ type VirtualAction =
     | 'alphaStrike'
     | 'dash'
     | 'vent'
+    | 'signature'
     | 'centerTorso'
     | 'stopThrottle';
 
@@ -24,6 +25,7 @@ export class InputManager {
         alphaStrike: false,
         dash: false,
         vent: false,
+        signature: false,
         centerTorso: false,
         stopThrottle: false
     };

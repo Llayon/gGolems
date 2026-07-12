@@ -49,4 +49,9 @@ export function handleInputActions(ctx: InputActionsContext) {
             ctx.mechCamera.addTrauma(0.5);
         }
     }
+    if (ctx.input.consumeKey('KeyR') || ctx.input.consumeVirtualAction('signature')) {
+        if (ctx.golem.useSignatureAbility(ctx.particles)) {
+            ctx.mechCamera.addTrauma(0.7);
+        }
+    }
 }

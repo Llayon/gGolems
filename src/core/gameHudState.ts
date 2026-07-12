@@ -9,6 +9,16 @@ import type {
     TeamScoreState
 } from '../gameplay/types';
 import type { GolemSection } from '../mechs/sections';
+import type { SignatureAbilityId } from '../mechs/types';
+
+export type SignatureHudState = {
+    abilityId: SignatureAbilityId | null;
+    cooldown: number;
+    cooldownMax: number;
+    activeTimer: number;
+    activeMax: number;
+    isActive: boolean;
+};
 
 export type SectionName = GolemSection;
 export type SectionState = Record<SectionName, number>;
@@ -73,9 +83,10 @@ export type GameHudState = {
     controlSummary: ControlHudSummary;
     teamScores: TeamScoreState;
     teamOverview: TeamOverview;
-    respawnTimer: number;
+respawnTimer: number;
     terrainColliderMode: 'heightfield' | 'trimeshFallback';
     terrainColliderError: string;
+    signature: SignatureHudState;
 };
 
 export const DEFAULT_SECTION_STATE: SectionState = {
@@ -138,5 +149,13 @@ export const INITIAL_GAME_HUD_STATE: GameHudState = {
     },
     respawnTimer: 0,
     terrainColliderMode: 'heightfield',
-    terrainColliderError: ''
+    terrainColliderError: '',
+    signature: {
+        abilityId: null,
+        cooldown: 0,
+        cooldownMax: 0,
+        activeTimer: 0,
+        activeMax: 0,
+        isActive: false
+    }
 };

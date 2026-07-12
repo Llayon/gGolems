@@ -149,8 +149,16 @@ export function buildGameHudState(params: BuildGameHudStateParams): GameHudState
         controlSummary,
         teamScores: { ...params.teamScores },
         teamOverview: params.teamOverview,
-        respawnTimer: params.respawnTimer,
+respawnTimer: params.respawnTimer,
         terrainColliderMode: params.terrainColliderMode,
-        terrainColliderError: params.terrainColliderError
+        terrainColliderError: params.terrainColliderError,
+        signature: {
+            abilityId: golemState.signatureAbilityId,
+            cooldown: golemState.signatureCooldown,
+            cooldownMax: golemState.signatureCooldownMax,
+            activeTimer: golemState.signatureActiveTimer,
+            activeMax: golemState.signatureActiveMax,
+            isActive: golemState.signatureIsActive
+        }
     };
 }

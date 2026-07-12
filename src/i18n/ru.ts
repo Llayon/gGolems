@@ -220,6 +220,20 @@ const ru: typeof en = {
     'pilot.controls.alpha': 'E альфа-залп',
     'pilot.controls.shift': 'SHIFT рывок',
     'pilot.controls.space': 'SPACE сброс пара',
+    'pilot.controls.signature': 'R сигнатурная способность',
+
+    'signature.pressure_surge.name': 'Перегрузка',
+    'signature.pressure_surge.description': 'Короткий импульс избыточного давления для агрессивных средних дистанций.',
+    'signature.vector_feint.name': 'Векторный рывок',
+    'signature.vector_feint.description': 'Мобильная сигнатура для быстрой смены позиции и линии.',
+    'signature.anchor_mode.name': 'Режим якоря',
+    'signature.anchor_mode.description': 'Стабильная сигнатура, поощряющая удержание позиции и обмен уроном.',
+
+    'hud.signature.ready': 'ГОТОВО',
+    'hud.signature.active': 'АКТИВНО',
+    'hud.signature.cooldown': 'ПЕРЕЗАРЯДКА',
+    'hud.signature.locked': 'ЗАБЛОКИРОВАНО',
+    'hud.signature.label': 'СИГНАТУРА',
 
     'mobile.hit': 'ПОПАДАНИЕ',
     'mobile.radar': 'РАДАР',

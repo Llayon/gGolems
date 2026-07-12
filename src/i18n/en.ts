@@ -220,6 +220,20 @@ const en = {
     'pilot.controls.alpha': 'E alpha strike',
     'pilot.controls.shift': 'SHIFT dash',
     'pilot.controls.space': 'SPACE vent steam',
+    'pilot.controls.signature': 'R signature ability',
+
+    'signature.pressure_surge.name': 'Pressure Surge',
+    'signature.pressure_surge.description': 'Short overpressure burst tuned for aggressive mid-range pushes.',
+    'signature.vector_feint.name': 'Vector Feint',
+    'signature.vector_feint.description': 'Mobility-biased signature for fast repositioning and lane swapping.',
+    'signature.anchor_mode.name': 'Anchor Mode',
+    'signature.anchor_mode.description': 'Stability-biased signature that rewards holding ground and trading through pressure.',
+
+    'hud.signature.ready': 'READY',
+    'hud.signature.active': 'ACTIVE',
+    'hud.signature.cooldown': 'COOLDOWN',
+    'hud.signature.locked': 'LOCKED',
+    'hud.signature.label': 'SIGNATURE',
 
     'mobile.hit': 'HIT',
     'mobile.radar': 'RADAR',
