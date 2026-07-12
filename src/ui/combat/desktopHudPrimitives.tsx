@@ -1,7 +1,7 @@
 import { formatSeconds } from '../../i18n/format';
 import { type Locale } from '../../i18n/types';
 import type { WeaponStatusView } from '../../combat/weaponTypes';
-import { type SectionName, type SectionState } from '../../core/gameHudState';
+import { type SectionName, type SectionState, type SignatureHudState } from '../../core/gameHudState';
 import type { TranslationKey, Translator } from '../../i18n';
 
 const sectionLabelKeys: Record<SectionName, TranslationKey> = {
@@ -259,6 +259,62 @@ export function WeaponRack(props: { weapons: WeaponStatusView[]; locale: Locale;
                     );
                 })}
             </div>
+        </div>
+    );
+}
+
+const signatureNameKeys: Record<string, TranslationKey> = {
+    pressure_surge: 'signature.pressure_surge.name',
+    vector_feint: 'signature.vector_feint.name',
+    anchor_mode: 'signature.anchor_mode.name'
+};
+
+export function SignatureIndicator(props: { signature: SignatureHudState; locale: Locale; t: Translator }) {
+    const { signature, locale, t } = props;
+    if (!signature.abilityId) return null;
+
+    const stateLabel = signature.isActive
+        ? t('hud.signature.active')
+        : signature.cooldown > 0
+            ? `${t('hud.signature.cooldown')} ${formatSeconds(locale, signature.cooldown)}`
+            : t('hud.signature.ready');
+
+    const stateTone = signature.isActive
+        ? 'text-[#7ee6f0] border-[#2e829a]/70'
+        : signature.cooldown > 0
+            ? 'text-[#efb768] border-[#8f6a38]/55'
+            : 'text-[#7ee6f0] border-[#2e829a]/55';
+
+    const nameKey = signatureNameKeys[signature.abilityId] ?? 'hud.signature.label';
+
+    const activeRatio = signature.activeMax > 0 && signature.isActive
+        ? Math.max(0, Math.min(1, signature.activeTimer / signature.activeMax))
+        : 0;
+    const cooldownRatio = signature.cooldownMax > 0 && signature.cooldown > 0
+        ? Math.max(0, Math.min(1, signature.cooldown / signature.cooldownMax))
+        : 0;
+
+    return (
+        <div className={`w-full rounded-[24px] border bg-black/28 p-3 shadow-[inset_0_0_16px_rgba(0,0,0,0.38)] ${stateTone}`}>
+            <div className="mb-1 text-center text-[10px] tracking-[0.32em]">{t('hud.signature.label')}</div>
+            <div className="mt-1 text-sm font-bold tracking-[0.18em] text-[#f3deb5]">{t(nameKey)}</div>
+            <div className="mt-1 text-[9px] tracking-[0.18em]">{stateLabel}</div>
+            {signature.isActive && (
+                <div className="mt-2 h-1.5 w-full rounded-full bg-[rgba(0,0,0,0.55)]">
+                    <div
+                        className="h-full rounded-full bg-[#7ee6f0]"
+                        style={{ width: `${activeRatio * 100}%` }}
+                    />
+                </div>
+            )}
+            {!signature.isActive && signature.cooldown > 0 && (
+                <div className="mt-2 h-1.5 w-full rounded-full bg-[rgba(0,0,0,0.55)]">
+                    <div
+                        className="h-full rounded-full bg-[#efb768]"
+                        style={{ width: `${cooldownRatio * 100}%` }}
+                    />
+                </div>
+            )}
         </div>
     );
 }

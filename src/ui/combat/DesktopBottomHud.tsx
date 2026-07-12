@@ -5,6 +5,7 @@ import type { Translator } from '../../i18n';
 import {
     HeadingTape,
     SectionArmorDisplay,
+    SignatureIndicator,
     WeaponRack
 } from './desktopHudPrimitives';
 import type { DesktopBottomHudViewModel } from './desktopHudTypes';
@@ -111,6 +112,8 @@ export function DesktopBottomHud(props: {
                             {viewModel.steamLabel}
                         </div>
                     </div>
+
+                    <SignatureIndicator signature={gameState.signature} locale={locale} t={t} />
                 </div>
             </div>
         </div>
