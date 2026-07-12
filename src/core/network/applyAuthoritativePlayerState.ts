@@ -91,4 +91,16 @@ export function applyAuthoritativeRemotePlayerState(params: {
     golem.setSectionState(snapshot.sections);
     golem.hp = snapshot.hp;
     setGolemPresence(golem, snapshot.alive);
+
+    if (snapshot.signatureId) {
+        if (!golem.signatureState.isActive || golem.signatureState.abilityId !== snapshot.signatureId) {
+            golem.signatureState.abilityId = snapshot.signatureId;
+            golem.signatureState.isActive = true;
+            golem.signatureState.activeTimer = snapshot.signatureActiveTimer ?? 0;
+        }
+    } else if (golem.signatureState.isActive) {
+        golem.signatureState.isActive = false;
+        golem.signatureState.activeTimer = 0;
+        golem.signatureState.abilityId = null;
+    }
 }

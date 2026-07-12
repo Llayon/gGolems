@@ -1,6 +1,7 @@
 import type { GolemController, GolemSection } from '../../entities/GolemController';
 import type { DummyBot } from '../../entities/DummyBot';
 import type { TeamId } from '../../gameplay/types';
+import { createInitialMechSignatureState } from '../../mechs/runtimeTypes';
 
 export function assert(condition: unknown, message: string): asserts condition {
     if (!condition) {
@@ -52,6 +53,7 @@ export function createFakeGolem(options?: {
         torsoYaw: 0,
         targetLegYaw: 0,
         targetTorsoYaw: 0,
+        signatureState: createInitialMechSignatureState(),
         body: {
             setTranslation(next: { x: number; y: number; z: number }) {
                 state.position = { ...next };

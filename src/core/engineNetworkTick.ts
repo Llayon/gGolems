@@ -39,6 +39,7 @@ export type NetworkTickContext = {
 
 function buildHostSnapshot(ctx: NetworkTickContext) {
     const pos = ctx.golem.body.translation();
+    const localSig = ctx.golem.signatureState;
     const snapshotSources = [{
         id: ctx.getLocalUnitId(),
         position: { x: pos.x, y: pos.y, z: pos.z },
@@ -50,13 +51,16 @@ function buildHostSnapshot(ctx: NetworkTickContext) {
         sections: ctx.golem.sections,
         alive: ctx.localRespawnState.alive,
         respawnTimer: ctx.localRespawnState.timer,
-        slot: ctx.localRespawnState.slot
+        slot: ctx.localRespawnState.slot,
+        signatureId: localSig.abilityId,
+        signatureActiveTimer: localSig.isActive ? localSig.activeTimer : 0
     }];
 
     ctx.remotePlayers.forEach((player, id) => {
         const state = ctx.remotePlayerStates.get(id)
             ?? { alive: true, timer: 0, slot: ctx.remoteSpawnSlots.get(id) ?? 1, team: 'blue' as TeamId };
         const pPos = player.body.translation();
+        const playerSig = player.signatureState;
         snapshotSources.push({
             id,
             position: { x: pPos.x, y: pPos.y, z: pPos.z },
@@ -68,7 +72,9 @@ function buildHostSnapshot(ctx: NetworkTickContext) {
             sections: player.sections,
             alive: state.alive,
             respawnTimer: state.timer,
-            slot: state.slot
+            slot: state.slot,
+            signatureId: playerSig.abilityId,
+            signatureActiveTimer: playerSig.isActive ? playerSig.activeTimer : 0
         });
     });
 

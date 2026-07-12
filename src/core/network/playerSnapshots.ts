@@ -1,11 +1,11 @@
-import { CHASSIS_DEFINITIONS, LOADOUT_DEFINITIONS } from '../../mechs/definitions';
+import { CHASSIS_DEFINITIONS, LOADOUT_DEFINITIONS, SIGNATURE_ABILITY_DEFINITIONS } from '../../mechs/definitions';
 import {
     GOLEM_SECTION_ORDER,
     cloneSectionState,
     type GolemSection,
     type GolemSectionState
 } from '../../mechs/sections';
-import type { ChassisId, LoadoutId } from '../../mechs/types';
+import type { ChassisId, LoadoutId, SignatureAbilityId } from '../../mechs/types';
 
 export type NetworkPosition = {
     x: number;
@@ -26,6 +26,8 @@ export type PlayerSnapshot = {
     alive: boolean;
     respawnTimer: number;
     slot: number;
+    signatureId?: SignatureAbilityId | null;
+    signatureActiveTimer?: number;
 };
 
 export type PlayerSnapshotMap = Record<string, PlayerSnapshot>;
@@ -42,6 +44,8 @@ export type AuthoritativePlayerSnapshotSource = {
     alive: boolean;
     respawnTimer: number;
     slot: number;
+    signatureId?: SignatureAbilityId | null;
+    signatureActiveTimer?: number;
 };
 
 function roundToHundredths(value: number) {
@@ -62,6 +66,10 @@ function isChassisId(value: unknown): value is ChassisId {
 
 function isLoadoutId(value: unknown): value is LoadoutId {
     return typeof value === 'string' && value in LOADOUT_DEFINITIONS;
+}
+
+function isSignatureAbilityId(value: unknown): value is SignatureAbilityId {
+    return typeof value === 'string' && value in SIGNATURE_ABILITY_DEFINITIONS;
 }
 
 function readSectionState(value: unknown): GolemSectionState | null {
@@ -94,7 +102,9 @@ export function buildPlayerSnapshot(source: AuthoritativePlayerSnapshotSource): 
         sections: cloneSectionState(source.sections),
         alive: source.alive,
         respawnTimer: roundToHundredths(source.respawnTimer),
-        slot: source.slot
+        slot: source.slot,
+        signatureId: source.signatureId ?? null,
+        signatureActiveTimer: roundToHundredths(source.signatureActiveTimer ?? 0)
     };
 }
 
@@ -136,6 +146,13 @@ export function readPlayerSnapshot(value: unknown): PlayerSnapshot | null {
         return null;
     }
 
+    const signatureId: SignatureAbilityId | null = isSignatureAbilityId(value.signatureId)
+        ? value.signatureId
+        : null;
+    const signatureActiveTimer = isFiniteNumber(value.signatureActiveTimer)
+        ? value.signatureActiveTimer
+        : 0;
+
     return {
         x: value.x,
         y: value.y,
@@ -148,7 +165,9 @@ export function readPlayerSnapshot(value: unknown): PlayerSnapshot | null {
         sections,
         alive: value.alive,
         respawnTimer: value.respawnTimer,
-        slot: value.slot
+        slot: value.slot,
+        signatureId,
+        signatureActiveTimer
     };
 }
 
