@@ -28,10 +28,32 @@ export type FrameFamilyDefinition = {
     description: string;
 };
 
+export type SignatureAbilityKind =
+    | 'pressure_surge'
+    | 'vector_feint'
+    | 'anchor_mode';
+
+export type SignatureAbilityActivation = 'burst' | 'toggle';
+
 export type SignatureAbilityDefinition = {
     id: SignatureAbilityId;
     name: string;
     description: string;
+    kind: SignatureAbilityKind;
+    activation: SignatureAbilityActivation;
+    cooldown: number;
+    duration: number;
+    steamCost: number;
+    moveSpeedMultiplier: number;
+    damageMultiplier: number;
+    incomingDamageMultiplier: number;
+    heatBuildupMultiplier: number;
+    passiveSteamRegen: number;
+    blinkDistance: number;
+    postSlowdownDuration: number;
+    postSlowdownMultiplier: number;
+    overheatOnCancel: boolean;
+    heatlockAfterActivation: number;
 };
 
 export type MountSlotDefinition = {

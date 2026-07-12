@@ -38,6 +38,7 @@ export type LocalMechMovementContext = {
     torsoYaw: number;
     throttle: number;
     dashRecoveryTimer: number;
+    externalSpeedMultiplier: number;
 };
 
 export type LocalMechMovementResult = {
@@ -82,7 +83,7 @@ export function updateLocalMechMovement(
         (context.sections.leftLeg / context.maxSections.leftLeg + context.sections.rightLeg / context.maxSections.rightLeg) * 0.5
     );
     const bodyTurnStep = ROTATION.legsTurnRate[context.chassis.weightClass] * context.dt * (0.45 + legIntegrity * 0.55);
-    const maxSpeed = context.chassis.topSpeed * (0.3 + legIntegrity * 0.72);
+    const maxSpeed = context.chassis.topSpeed * (0.3 + legIntegrity * 0.72) * context.externalSpeedMultiplier;
 
     let resolvedAimYaw = context.aimYawUnclamped;
     let nextCameraAimYaw = context.cameraAimYaw;

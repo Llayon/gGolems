@@ -51,6 +51,8 @@ export type GolemUpdateSource = {
     isOverheated: boolean;
     overheatTimer: number;
     syncHeroVisual: (dt: number) => void;
+    getEffectiveMoveSpeedMultiplier: () => number;
+    cancelSignatureOnMove: () => boolean;
 };
 
 export type GolemUpdateContext = {
@@ -68,7 +70,7 @@ export type GolemUpdateContext = {
 const _vel = new THREE.Vector3();
 
 export function updateGolem(ctx: GolemUpdateContext): GolemEvents {
-    const events: GolemEvents = { dashed: false, vented: false, footstep: false };
+    const events: GolemEvents = { dashed: false, vented: false, footstep: false, signatureUsed: false };
     const g = ctx.golem;
 
     if (g.damageFlashTimer > 0) {
@@ -100,7 +102,8 @@ export function updateGolem(ctx: GolemUpdateContext): GolemEvents {
             legYaw: g.legYaw,
             torsoYaw: g.torsoYaw,
             throttle: g.throttle,
-            dashRecoveryTimer: g.dashRecoveryTimer
+            dashRecoveryTimer: g.dashRecoveryTimer,
+            externalSpeedMultiplier: g.getEffectiveMoveSpeedMultiplier()
         });
 
         g.legYaw = localMovement.legYaw;
@@ -110,6 +113,10 @@ export function updateGolem(ctx: GolemUpdateContext): GolemEvents {
         g.dashRecoveryTimer = localMovement.dashRecoveryTimer;
         if (g.gameCamera && typeof localMovement.cameraAimYaw === 'number') {
             g.gameCamera.aimYaw = localMovement.cameraAimYaw;
+        }
+
+        if (Math.abs(ctx.throttleInput) > 0.001 || Math.abs(g.throttle) > 0.05) {
+            g.cancelSignatureOnMove();
         }
     } else {
         const replicatedState = applyRemoteMechReplication({

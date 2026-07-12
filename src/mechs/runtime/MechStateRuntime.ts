@@ -15,6 +15,8 @@ import {
     tickSteamState,
     triggerOverheatState
 } from '../rules/steamRules';
+import { SIGNATURE_ABILITY_DEFINITIONS } from '../definitions';
+import type { MechSignatureState } from '../runtimeTypes';
 import {
     buildWeaponCooldownPatch,
     buildWeaponFireCooldownPatch,
@@ -74,6 +76,7 @@ type MechStateSnapshotTarget = MechHeatTarget & MechDamageTarget & MechWeaponTar
     throttle: number;
     currentSpeed: number;
     mass: number;
+    signatureState: MechSignatureState;
 };
 
 type MechSectionMutationTarget = MechDamageTarget & MechWeaponPatchTarget & MechSectionVisualTarget;
@@ -278,6 +281,8 @@ export function buildMechStateSnapshot(
     pos: { x: number; y: number; z: number }
 ): GolemState {
     _snapshotPosition.set(pos.x, pos.y, pos.z);
+    const sig = target.signatureState;
+    const sigDef = sig.abilityId ? SIGNATURE_ABILITY_DEFINITIONS[sig.abilityId] : null;
     return {
         pos: _snapshotPosition.clone(),
         legYaw: target.legYaw,
@@ -293,6 +298,12 @@ export function buildMechStateSnapshot(
         mass: target.mass,
         sections: { ...target.sections },
         maxSections: { ...target.maxSections },
-        weaponStatus: buildMechWeaponStatusRuntime(target)
+        weaponStatus: buildMechWeaponStatusRuntime(target),
+        signatureAbilityId: sig.abilityId,
+        signatureCooldown: sig.cooldownRemaining,
+        signatureCooldownMax: sigDef?.cooldown ?? 0,
+        signatureActiveTimer: sig.activeTimer,
+        signatureActiveMax: sigDef?.duration ?? 0,
+        signatureIsActive: sig.isActive
     };
 }

@@ -46,17 +46,62 @@ export const SIGNATURE_ABILITY_DEFINITIONS: Record<string, SignatureAbilityDefin
     pressure_surge: {
         id: 'pressure_surge',
         name: 'Pressure Surge',
-        description: 'Short overpressure burst tuned for aggressive mid-range pushes.'
+        description: 'Short overpressure burst tuned for aggressive mid-range pushes.',
+        kind: 'pressure_surge',
+        activation: 'burst',
+        cooldown: 18,
+        duration: 4,
+        steamCost: 25,
+        moveSpeedMultiplier: 1.35,
+        damageMultiplier: 1.2,
+        incomingDamageMultiplier: 1,
+        heatBuildupMultiplier: 1.3,
+        passiveSteamRegen: 0,
+        blinkDistance: 0,
+        postSlowdownDuration: 1.5,
+        postSlowdownMultiplier: 0.6,
+        overheatOnCancel: false,
+        heatlockAfterActivation: 0
     },
     vector_feint: {
         id: 'vector_feint',
         name: 'Vector Feint',
-        description: 'Mobility-biased signature for fast repositioning and lane swapping.'
+        description: 'Mobility-biased signature for fast repositioning and lane swapping.',
+        kind: 'vector_feint',
+        activation: 'burst',
+        cooldown: 12,
+        duration: 2,
+        steamCost: 20,
+        moveSpeedMultiplier: 1.4,
+        damageMultiplier: 1,
+        incomingDamageMultiplier: 1,
+        heatBuildupMultiplier: 1,
+        passiveSteamRegen: 0,
+        blinkDistance: 18,
+        postSlowdownDuration: 0,
+        postSlowdownMultiplier: 1,
+        overheatOnCancel: false,
+        heatlockAfterActivation: 2
     },
     anchor_mode: {
         id: 'anchor_mode',
         name: 'Anchor Mode',
-        description: 'Stability-biased signature that rewards holding ground and trading through pressure.'
+        description: 'Stability-biased signature that rewards holding ground and trading through pressure.',
+        kind: 'anchor_mode',
+        activation: 'toggle',
+        cooldown: 22,
+        duration: 6,
+        steamCost: 30,
+        moveSpeedMultiplier: 1,
+        damageMultiplier: 1,
+        incomingDamageMultiplier: 0.5,
+        heatBuildupMultiplier: 0.7,
+        passiveSteamRegen: 5,
+        blinkDistance: 0,
+        postSlowdownDuration: 0,
+        postSlowdownMultiplier: 1,
+        overheatOnCancel: true,
+        heatlockAfterActivation: 0
     }
 };
 

@@ -1,8 +1,9 @@
 import type { WeaponMountId, WeaponMountRuntime } from '../../combat/weaponTypes';
 import { getChassisDefinition, getDefaultLoadoutForChassis } from '../definitions';
 import { cloneSectionState, type GolemSectionState } from '../sections';
-import type { ChassisId } from '../types';
-import type { MechHeatState } from '../runtimeTypes';
+import type { ChassisId, SignatureAbilityId } from '../types';
+import type { MechHeatState, MechSignatureState } from '../runtimeTypes';
+import { createInitialMechSignatureState } from '../runtimeTypes';
 
 export function createFixtureHeatState(overrides: Partial<MechHeatState> = {}): MechHeatState {
     return {
@@ -47,4 +48,13 @@ export function createFixtureWeaponMounts(
 
         return acc;
     }, {} as Record<WeaponMountId, WeaponMountRuntime>);
+}
+
+export function createFixtureSignatureState(
+    overrides: Partial<MechSignatureState> = {}
+): MechSignatureState {
+    return {
+        ...createInitialMechSignatureState(),
+        ...overrides
+    };
 }

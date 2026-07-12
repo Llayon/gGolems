@@ -33,7 +33,7 @@ export type FireShotPayload = {
 };
 
 export type WeaponFireRuntimeContext = {
-    golem: Pick<GolemController, 'getWeaponMuzzleOrigin' | 'triggerWeaponRecoil'>;
+    golem: Pick<GolemController, 'getWeaponMuzzleOrigin' | 'triggerWeaponRecoil' | 'getEffectiveDamageMultiplier'>;
     mechCamera: MechCamera;
     camera: THREE.Camera;
     projectiles: ProjectileManager;
@@ -123,6 +123,7 @@ export function fireWeaponRequests(
     context.camera.getWorldDirection(_cameraAimDir).normalize();
     const shots: FireShotPayload[] = [];
     let trauma = 0;
+    const damageMultiplier = context.golem.getEffectiveDamageMultiplier();
 
     for (const request of requests) {
         context.golem.getWeaponMuzzleOrigin(request.mountId, _muzzleOrigin);
@@ -148,7 +149,7 @@ export function fireWeaponRequests(
                 dx: dir.x,
                 dy: dir.y,
                 dz: dir.z,
-                damage: request.damage,
+                damage: request.damage * damageMultiplier,
                 speed: request.projectileSpeed,
                 range: request.effectiveRange
             };

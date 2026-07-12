@@ -34,7 +34,16 @@ import {
 import {
     syncHeroVisual as syncHeroVisualRuntime
 } from '../mechs/runtime/MechVisualDriver';
-import type { ChassisDefinition, LoadoutDefinition } from '../mechs/types';
+import type { ChassisDefinition, LoadoutDefinition, SignatureAbilityId } from '../mechs/types';
+import { createInitialMechSignatureState, type MechSignatureState } from '../mechs/runtimeTypes';
+import {
+    cancelSignatureOnMoveForTarget,
+    getEffectiveDamageMultiplierForTarget,
+    getEffectiveIncomingDamageMultiplierForTarget,
+    getEffectiveMoveSpeedMultiplierForTarget,
+    tickSignatureForTarget,
+    useSignatureForTarget
+} from '../mechs/runtime/SignatureControllerRuntime';
 import {
     applyMechSectionDamageRuntime,
     applyMechSectionStateRuntime,
@@ -102,6 +111,7 @@ export class GolemController {
     currentSpeed = 0;
     damageFlashTimer = 0;
     dashRecoveryTimer = 0;
+    signatureState: MechSignatureState = createInitialMechSignatureState();
 
     targetPos = new THREE.Vector3();
     targetLegYaw = 0;
@@ -203,8 +213,9 @@ export class GolemController {
         resetMechDamageAndWeaponsRuntime(this);
     }
 
-    applySectionDamage(section: GolemSection, damage: number) {
-        return applyMechSectionDamageRuntime(this, section, damage, () => this.flashDamage());
+applySectionDamage(section: GolemSection, damage: number) {
+        const effectiveDamage = damage * this.getEffectiveIncomingDamageMultiplier();
+        return applyMechSectionDamageRuntime(this, section, effectiveDamage, () => this.flashDamage());
     }
 
     canFire() {
@@ -276,6 +287,34 @@ export class GolemController {
         }
     }
 
+    getSignatureAbilityId(): SignatureAbilityId | null {
+        return this.loadout.signatureAbilityId ?? null;
+    }
+
+    useSignatureAbility(particles?: ParticleManager): boolean {
+        return useSignatureForTarget(this, particles);
+    }
+
+    cancelSignatureOnMove(): boolean {
+        return cancelSignatureOnMoveForTarget(this);
+    }
+
+    tickSignatureCooldown(dt: number) {
+        tickSignatureForTarget(this, dt);
+    }
+
+    getEffectiveMoveSpeedMultiplier(): number {
+        return getEffectiveMoveSpeedMultiplierForTarget(this);
+    }
+
+    getEffectiveDamageMultiplier(): number {
+        return getEffectiveDamageMultiplierForTarget(this);
+    }
+
+    getEffectiveIncomingDamageMultiplier(): number {
+        return getEffectiveIncomingDamageMultiplierForTarget(this);
+    }
+
     update(
         dt: number,
         aimYawUnclamped: number,
@@ -287,6 +326,7 @@ export class GolemController {
         decals: DecalManager
     ): GolemEvents {
         this.updateWeaponCooldowns(dt);
+        this.tickSignatureCooldown(dt);
         return updateGolem({
             golem: this,
             dt,

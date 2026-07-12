@@ -2,6 +2,7 @@ import type {
     WeaponMountId,
     WeaponMountRuntime
 } from '../combat/weaponTypes';
+import type { SignatureAbilityId } from './types';
 import type { GolemSectionState } from './sections';
 
 export type MechHeatState = {
@@ -22,3 +23,23 @@ export type MechWeaponState = {
     weaponMountOrder: WeaponMountId[];
     weaponMounts: Record<WeaponMountId, WeaponMountRuntime>;
 };
+
+export type MechSignatureState = {
+    abilityId: SignatureAbilityId | null;
+    cooldownRemaining: number;
+    activeTimer: number;
+    isActive: boolean;
+    heatlockTimer: number;
+    postSlowdownTimer: number;
+};
+
+export function createInitialMechSignatureState(): MechSignatureState {
+    return {
+        abilityId: null,
+        cooldownRemaining: 0,
+        activeTimer: 0,
+        isActive: false,
+        heatlockTimer: 0,
+        postSlowdownTimer: 0
+    };
+}
