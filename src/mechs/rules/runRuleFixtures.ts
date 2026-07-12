@@ -2,9 +2,9 @@ import * as assert from 'node:assert/strict';
 
 import { computeWeaponDamageAtDistance } from '../../combat/weapons';
 import type { LoadoutDefinition } from '../types';
-import { validateLoadoutDefinition } from '../definitions';
+import { SIGNATURE_ABILITY_DEFINITIONS, validateLoadoutDefinition } from '../definitions';
 import { GOLEM_SECTION_ORDER } from '../sections';
-import { createFixtureHeatState, createFixtureSectionState, createFixtureWeaponMounts } from './ruleFixtures';
+import { createFixtureHeatState, createFixtureSectionState, createFixtureSignatureState, createFixtureWeaponMounts } from './ruleFixtures';
 import {
     applySectionDamageState,
     applySectionStatePatch,
@@ -20,6 +20,13 @@ import {
     canAnyWeaponFire,
     evaluateReadyWeaponMounts
 } from './weaponRules';
+import {
+    applySignatureActivation,
+    canActivateSignature,
+    deactivateSignature,
+    tickSignatureState,
+    triggerPostSlowdown
+} from './signatureRules';
 
 function runSmoke(name: string, fn: () => void) {
     fn();
@@ -164,6 +171,58 @@ runSmoke('loadout legality rejects incompatible or incomplete assignments', () =
     };
 
     assert.throws(() => validateLoadoutDefinition(missingAssignmentLoadout), /missing assignment/i);
+});
+
+runSmoke('signature rules enforce cooldown and tick down deterministically', () => {
+    const pressureSurge = SIGNATURE_ABILITY_DEFINITIONS['pressure_surge'];
+    assert.ok(pressureSurge, 'pressure_surge definition must exist');
+    assert.equal(pressureSurge.cooldown, 18);
+    assert.equal(pressureSurge.duration, 4);
+
+    let state = createFixtureSignatureState();
+    assert.equal(canActivateSignature(state, pressureSurge), true, 'fresh state should be able to activate');
+
+    const activationResult = applySignatureActivation(state, pressureSurge, 'pressure_surge');
+    assert.equal(activationResult.success, true, 'activation should succeed');
+    state = activationResult.nextState;
+    assert.equal(state.isActive, true);
+    assert.equal(state.activeTimer, pressureSurge.duration);
+    assert.equal(state.cooldownRemaining, pressureSurge.cooldown);
+    assert.equal(state.abilityId, 'pressure_surge');
+
+    assert.equal(canActivateSignature(state, pressureSurge), false, 'active state should not be re-activatable');
+
+    state = tickSignatureState(state, 1.0);
+    assert.equal(state.activeTimer, 3, 'active timer should decrement');
+    assert.equal(state.cooldownRemaining, 17, 'cooldown should decrement');
+    assert.equal(state.isActive, true, 'still active until activeTimer reaches 0');
+
+    for (let i = 0; i < 4; i++) state = tickSignatureState(state, 1.0);
+    assert.equal(state.isActive, false, 'should deactivate after duration expires');
+    assert.equal(state.abilityId, null, 'abilityId should clear on deactivation');
+    assert.equal(state.cooldownRemaining, 13, 'cooldown should keep ticking after deactivation brings activeTimer to 0');
+});
+
+runSmoke('signature toggle deactivation clears active state', () => {
+    const anchorMode = SIGNATURE_ABILITY_DEFINITIONS['anchor_mode'];
+    assert.equal(anchorMode.activation, 'toggle');
+    assert.equal(anchorMode.incomingDamageMultiplier, 0.5);
+
+    let state = createFixtureSignatureState();
+    state = applySignatureActivation(state, anchorMode, 'anchor_mode').nextState;
+    assert.equal(state.isActive, true);
+
+    state = deactivateSignature(state);
+    assert.equal(state.isActive, false);
+    assert.equal(state.abilityId, null);
+    assert.equal(state.activeTimer, 0);
+});
+
+runSmoke('signature post slowdown trap sets timer without affecting cooldown', () => {
+    let state = createFixtureSignatureState({ cooldownRemaining: 5 });
+    state = triggerPostSlowdown(state, 1.5);
+    assert.equal(state.postSlowdownTimer, 1.5);
+    assert.equal(state.cooldownRemaining, 5, 'post slowdown must not touch cooldown');
 });
 
 console.log('Rule fixtures completed successfully.');
