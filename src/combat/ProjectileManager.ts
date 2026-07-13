@@ -6,6 +6,7 @@ import { GolemController, GolemSection } from '../entities/GolemController';
 import { DecalManager } from '../fx/DecalManager';
 import { PropManager } from '../world/PropManager';
 import type { TeamId } from '../gameplay/types';
+import { applySplashDamage } from '../core/combat/SplashDamageRuntime';
 
 const _segment = new THREE.Vector3();
 const _segmentDir = new THREE.Vector3();
@@ -38,6 +39,8 @@ type ProjectileInstance = {
     speed: number;
     weaponId: WeaponId;
     profile: ProjectileProfileId;
+    splashRadius: number;
+    splashFalloff: number;
 };
 
 type ProjectileSpawnSpec = {
@@ -49,6 +52,8 @@ type ProjectileSpawnSpec = {
     damage: number;
     speed: number;
     range: number;
+    splashRadius?: number;
+    splashFalloff?: number;
 };
 
 export class ProjectileManager {
@@ -59,12 +64,14 @@ export class ProjectileManager {
     materialByProfile: Record<ProjectileProfileId, THREE.MeshStandardMaterial>;
     raycaster = new THREE.Raycaster();
 
-    constructor(scene: THREE.Scene) {
+constructor(scene: THREE.Scene) {
         this.scene = scene;
         this.geometryByProfile = {
             bolt: new THREE.SphereGeometry(PROJECTILE_PROFILES.bolt.radius, 8, 8),
             arc_pulse: new THREE.SphereGeometry(PROJECTILE_PROFILES.arc_pulse.radius, 8, 8),
-            steam_slug: new THREE.SphereGeometry(PROJECTILE_PROFILES.steam_slug.radius, 10, 10)
+            steam_slug: new THREE.SphereGeometry(PROJECTILE_PROFILES.steam_slug.radius, 10, 10),
+            pellet: new THREE.SphereGeometry(PROJECTILE_PROFILES.pellet.radius, 6, 6),
+            rocket: new THREE.SphereGeometry(PROJECTILE_PROFILES.rocket.radius, 10, 10)
         };
         this.materialByProfile = {
             bolt: new THREE.MeshStandardMaterial({
@@ -81,11 +88,21 @@ export class ProjectileManager {
                 color: PROJECTILE_PROFILES.steam_slug.color,
                 emissive: PROJECTILE_PROFILES.steam_slug.emissive,
                 emissiveIntensity: PROJECTILE_PROFILES.steam_slug.emissiveIntensity
+            }),
+            pellet: new THREE.MeshStandardMaterial({
+                color: PROJECTILE_PROFILES.pellet.color,
+                emissive: PROJECTILE_PROFILES.pellet.emissive,
+                emissiveIntensity: PROJECTILE_PROFILES.pellet.emissiveIntensity
+            }),
+            rocket: new THREE.MeshStandardMaterial({
+                color: PROJECTILE_PROFILES.rocket.color,
+                emissive: PROJECTILE_PROFILES.rocket.emissive,
+                emissiveIntensity: PROJECTILE_PROFILES.rocket.emissiveIntensity
             })
         };
     }
 
-    fire(spec: ProjectileSpawnSpec) {
+fire(spec: ProjectileSpawnSpec) {
         const geometry = this.geometryByProfile[spec.profile];
         const material = this.materialByProfile[spec.profile];
         const mesh = new THREE.Mesh(geometry, material);
@@ -102,7 +119,9 @@ export class ProjectileManager {
             damage: spec.damage,
             speed: spec.speed,
             weaponId: spec.weaponId,
-            profile: spec.profile
+            profile: spec.profile,
+            splashRadius: spec.splashRadius ?? 0,
+            splashFalloff: spec.splashFalloff ?? 0
         });
     }
 
@@ -135,12 +154,12 @@ export class ProjectileManager {
         this.impacts = [];
     }
 
-    checkCollisions(
+checkCollisions(
         bots: Map<string, DummyBot>,
-        players: Map<string, GolemController>, 
-        localPlayer: GolemController, 
-        localId: string, 
-        isHost: boolean, 
+        players: Map<string, GolemController>,
+        localPlayer: GolemController,
+        localId: string,
+        isHost: boolean,
         colliders: THREE.Mesh[],
         props: PropManager,
         decals: DecalManager,
@@ -155,6 +174,27 @@ export class ProjectileManager {
                 projectile.origin.distanceTo(point)
             );
 
+        const triggerSplash = (p: ProjectileInstance, point: THREE.Vector3, ownerTeam: TeamId | null, excludeTargetId?: string) => {
+            if (p.splashRadius <= 0) return;
+            applySplashDamage({
+                point,
+                radius: p.splashRadius,
+                splashFalloff: p.splashFalloff,
+                baseDamage: getImpactDamage(p, point),
+                ownerId: p.ownerId,
+                ownerTeam,
+                excludeTargetId,
+                bots,
+                remotePlayers: players,
+                localPlayer,
+                localPlayerId: localId,
+                isHost,
+                getUnitTeam: getTeamForUnit,
+                isTargetAlive: canTargetPlayer,
+                onPlayerHit
+            });
+        };
+
         for (const p of this.projectiles) {
             if (!p.active) continue;
 
@@ -164,6 +204,8 @@ export class ProjectileManager {
             const travelDistance = _segment.length();
             if (travelDistance <= 0.0001) continue;
             _segmentDir.copy(_segment).divideScalar(travelDistance);
+
+            const ownerTeam = getTeamForUnit(p.ownerId);
 
             // World collision
             this.raycaster.set(p.prevPos, _segmentDir);
@@ -185,10 +227,9 @@ export class ProjectileManager {
                 if (!consumedByProp) {
                     decals.addBulletMark(hit.point);
                 }
+                triggerSplash(p, hit.point, ownerTeam);
                 continue;
             }
-
-            const ownerTeam = getTeamForUnit(p.ownerId);
 
             let hitBot = false;
             for (const [botId, bot] of bots.entries()) {
@@ -209,6 +250,7 @@ export class ProjectileManager {
                         damage: impactDamage
                     });
                     if (isHost) onPlayerHit(p.ownerId, botId, impactDamage, '__bot__');
+                    triggerSplash(p, _closestPoint, ownerTeam, botId);
                     hitBot = true;
                     break;
                 }
@@ -232,6 +274,7 @@ export class ProjectileManager {
                     damage: impactDamage
                 });
                 if (isHost) onPlayerHit(p.ownerId, localId, impactDamage, localHit.section);
+                triggerSplash(p, localHit.point, ownerTeam, localId);
                 continue;
             }
 
@@ -254,6 +297,7 @@ export class ProjectileManager {
                         damage: impactDamage
                     });
                     if (isHost) onPlayerHit(p.ownerId, pid, impactDamage, remoteHit.section);
+                    triggerSplash(p, remoteHit.point, ownerTeam, pid);
                     hitRemote = true;
                     break;
                 }

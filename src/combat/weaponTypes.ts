@@ -1,10 +1,10 @@
 import type { TranslationKey } from '../i18n/types';
 import type { GolemSection } from '../mechs/sections';
 
-export type WeaponId = 'rune_bolt' | 'arc_emitter' | 'steam_cannon';
+export type WeaponId = 'rune_bolt' | 'arc_emitter' | 'steam_cannon' | 'scatterslug' | 'rocket_pod';
 export type WeaponMountId = 'rightArmMount' | 'leftArmMount' | 'torsoMount';
 export type WeaponGroupId = 1 | 2 | 3;
-export type ProjectileProfileId = 'bolt' | 'arc_pulse' | 'steam_slug';
+export type ProjectileProfileId = 'bolt' | 'arc_pulse' | 'steam_slug' | 'pellet' | 'rocket';
 export type WeaponSlotClass = 'arm' | 'torso';
 export type WeaponRole = 'precision' | 'pressure' | 'breach';
 export type WeaponSection = Extract<GolemSection, 'leftArm' | 'rightArm' | 'leftTorso' | 'rightTorso' | 'centerTorso'>;
@@ -40,6 +40,8 @@ export type WeaponDefinition = {
     fireTrauma: number;
     cockpitRecoil: CockpitRecoilProfile;
     muzzleOffset: { x: number; y: number; z: number };
+    splashRadius?: number;
+    splashFalloff?: number;
 };
 
 export type ProjectileProfileDefinition = {

@@ -41,7 +41,7 @@ export class AudioManager {
         this.servoOsc.frequency.setTargetAtTime(targetFreq, this.ctx.currentTime, 0.1);
     }
 
-    playWeaponFire(profile: 'bolt' | 'arc_pulse' | 'steam_slug', intensity = 1) {
+    playWeaponFire(profile: 'bolt' | 'arc_pulse' | 'steam_slug' | 'pellet' | 'rocket', intensity = 1) {
         if (!this.ctx) return;
         const time = this.ctx.currentTime;
         const osc = this.ctx.createOscillator();
@@ -59,6 +59,18 @@ export class AudioManager {
             osc.frequency.exponentialRampToValueAtTime(180, time + 0.11);
             gain.gain.setValueAtTime(0.035 * intensity, time);
             gain.gain.exponentialRampToValueAtTime(0.001, time + 0.11);
+        } else if (profile === 'pellet') {
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(180, time);
+            osc.frequency.exponentialRampToValueAtTime(110, time + 0.07);
+            gain.gain.setValueAtTime(0.045 * intensity, time);
+            gain.gain.exponentialRampToValueAtTime(0.001, time + 0.07);
+        } else if (profile === 'rocket') {
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(95, time);
+            osc.frequency.exponentialRampToValueAtTime(38, time + 0.22);
+            gain.gain.setValueAtTime(0.075 * intensity, time);
+            gain.gain.exponentialRampToValueAtTime(0.001, time + 0.22);
         } else {
             osc.type = 'square';
             osc.frequency.setValueAtTime(150, time);
@@ -70,10 +82,14 @@ export class AudioManager {
         osc.connect(gain);
         gain.connect(this.ctx.destination);
         osc.start(time);
-        osc.stop(time + (profile === 'steam_slug' ? 0.18 : 0.12));
+        let stopTime = 0.12;
+        if (profile === 'steam_slug') stopTime = 0.18;
+        else if (profile === 'rocket') stopTime = 0.24;
+        else if (profile === 'pellet') stopTime = 0.09;
+        osc.stop(time + stopTime);
     }
 
-    playWeaponImpact(profile: 'bolt' | 'arc_pulse' | 'steam_slug', intensity = 1) {
+    playWeaponImpact(profile: 'bolt' | 'arc_pulse' | 'steam_slug' | 'pellet' | 'rocket', intensity = 1) {
         if (!this.ctx) return;
         const time = this.ctx.currentTime;
         const osc = this.ctx.createOscillator();
@@ -91,6 +107,18 @@ export class AudioManager {
             osc.frequency.exponentialRampToValueAtTime(120, time + 0.12);
             gain.gain.setValueAtTime(0.04 * intensity, time);
             gain.gain.exponentialRampToValueAtTime(0.001, time + 0.12);
+        } else if (profile === 'pellet') {
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(190, time);
+            osc.frequency.exponentialRampToValueAtTime(80, time + 0.1);
+            gain.gain.setValueAtTime(0.05 * intensity, time);
+            gain.gain.exponentialRampToValueAtTime(0.001, time + 0.1);
+        } else if (profile === 'rocket') {
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(80, time);
+            osc.frequency.exponentialRampToValueAtTime(28, time + 0.24);
+            gain.gain.setValueAtTime(0.085 * intensity, time);
+            gain.gain.exponentialRampToValueAtTime(0.001, time + 0.24);
         } else {
             osc.type = 'sawtooth';
             osc.frequency.setValueAtTime(95, time);
@@ -102,7 +130,11 @@ export class AudioManager {
         osc.connect(gain);
         gain.connect(this.ctx.destination);
         osc.start(time);
-        osc.stop(time + (profile === 'steam_slug' ? 0.22 : 0.14));
+        let stopTime = 0.14;
+        if (profile === 'steam_slug') stopTime = 0.22;
+        else if (profile === 'rocket') stopTime = 0.28;
+        else if (profile === 'pellet') stopTime = 0.12;
+        osc.stop(time + stopTime);
     }
 
     playFootstep(mass: number) {

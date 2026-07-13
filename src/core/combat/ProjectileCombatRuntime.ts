@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { WeaponFireRequest, ProjectileProfileId, WeaponId, WeaponMountId } from '../../combat/weaponTypes';
+import { getWeaponDefinition } from '../../combat/weapons';
 import type { GolemController, GolemSection } from '../../entities/GolemController';
 import type { DummyBot } from '../../entities/DummyBot';
 import type { MechCamera } from '../../camera/MechCamera';
@@ -100,6 +101,7 @@ export function readFireShotPayloads(data: any): FireShotPayload[] {
 }
 
 export function spawnShot(projectiles: ProjectileManager, shot: FireShotPayload, ownerId: string) {
+    const definition = getWeaponDefinition(shot.weaponId);
     projectiles.fire({
         origin: _weaponOrigin.set(shot.ox, shot.oy, shot.oz).clone(),
         dir: _weaponDir.set(shot.dx, shot.dy, shot.dz).clone(),
@@ -108,7 +110,9 @@ export function spawnShot(projectiles: ProjectileManager, shot: FireShotPayload,
         profile: shot.profile,
         damage: shot.damage,
         speed: shot.speed,
-        range: shot.range
+        range: shot.range,
+        splashRadius: definition?.splashRadius,
+        splashFalloff: definition?.splashFalloff
     });
 }
 

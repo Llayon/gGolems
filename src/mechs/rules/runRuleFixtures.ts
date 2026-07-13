@@ -142,6 +142,12 @@ runSmoke('weapon damage falloff preserves weapon roles across distance bands', (
 
     assert.equal(computeWeaponDamageAtDistance('steam_cannon', 42, 12), 42);
     assert.equal(computeWeaponDamageAtDistance('steam_cannon', 42, 38), 18);
+
+    assert.equal(computeWeaponDamageAtDistance('scatterslug', 6, 4), 6);
+    assert.equal(computeWeaponDamageAtDistance('scatterslug', 6, 22), 2);
+
+    assert.equal(computeWeaponDamageAtDistance('rocket_pod', 28, 10), 28);
+    assert.equal(computeWeaponDamageAtDistance('rocket_pod', 28, 70), 15);
 });
 
 runSmoke('loadout legality rejects incompatible or incomplete assignments', () => {
