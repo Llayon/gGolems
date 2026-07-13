@@ -17,7 +17,8 @@ import { updateProjectileCombat } from './combat/ProjectileCombatRuntime';
 import { playProjectileImpactFx as playProjectileImpactFxRuntime } from './combat/ProjectileCombatFxRuntime';
 import { playWorldPropFx as playWorldPropFxRuntime } from './world/WorldFxRuntime';
 import { updateRespawns as updateRespawnsRuntime } from './respawn/RespawnRuntime';
-import { updateControlMatch } from './match/MatchRuntime';
+import { updateControlMatch, updateTdmMatch } from './match/MatchRuntime';
+import { tickMatchPhase, isMatchFrozenForInput } from './match/MatchPhase';
 
 const RESPAWN_WAVE_DELAY = 8;
 const _boilerPos = new THREE.Vector3();
@@ -77,17 +78,24 @@ export type ControlPointUpdateContext = {
 };
 
 export function updateControlPoints(ctx: ControlPointUpdateContext, dt: number) {
-    if (!ctx.authorityMode || ctx.matchEnded || ctx.gameMode !== 'control') return;
-    updateControlMatch({
-        controlPoints: ctx.controlPoints,
-        teamScores: ctx.teamScores,
-        localPlayer: ctx.localPlayer,
-        localRespawnState: ctx.localRespawnState,
-        remotePlayers: ctx.remotePlayers,
-        remotePlayerStates: ctx.remotePlayerStates,
-        bots: ctx.bots
-    }, dt);
+    if (!ctx.authorityMode || ctx.matchEnded) return;
+    tickMatchPhase(ctx.teamScores, dt);
+    if (ctx.gameMode === 'control') {
+        updateControlMatch({
+            controlPoints: ctx.controlPoints,
+            teamScores: ctx.teamScores,
+            localPlayer: ctx.localPlayer,
+            localRespawnState: ctx.localRespawnState,
+            remotePlayers: ctx.remotePlayers,
+            remotePlayerStates: ctx.remotePlayerStates,
+            bots: ctx.bots
+        }, dt);
+    } else if (ctx.gameMode === 'tdm') {
+        updateTdmMatch({ teamScores: ctx.teamScores }, dt);
+    }
 }
+
+export { tickMatchPhase, isMatchFrozenForInput };
 
 export type ParticlesAndPropsContext = {
     golem: GolemController;

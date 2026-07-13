@@ -234,6 +234,8 @@ const ru: typeof en = {
     'hud.signature.cooldown': 'ПЕРЕЗАРЯДКА',
     'hud.signature.locked': 'ЗАБЛОКИРОВАНО',
     'hud.signature.label': 'СИГНАТУРА',
+    'hud.overtime': 'ОВЕРТАЙМ',
+    'hud.match.pregame': 'МАТЧ НАЧНЁТСЯ ЧЕРЕЗ',
 
     'mobile.hit': 'ПОПАДАНИЕ',
     'mobile.radar': 'РАДАР',

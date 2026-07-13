@@ -6,7 +6,7 @@ import { assert, createFakeGolem, runTest } from '../smokeHelpers';
 export function runPlayerHitTest() {
     runTest('player hit runtime applies lethal remote damage and awards TDM score', () => {
         const remote = createFakeGolem({ maxHp: 40, hp: 20 });
-        const scores: TeamScoreState = { blue: 0, red: 0, scoreToWin: 10, winner: null };
+        const scores: TeamScoreState = { blue: 0, red: 0, scoreToWin: 10, winner: null, phase: 'active', phaseTimer: 0, matchClock: 480, matchDuration: 480 };
         const queued: string[] = [];
         const confirms: Array<{ ownerId: string; hp: number; maxHp: number }> = [];
 

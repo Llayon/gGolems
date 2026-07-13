@@ -234,6 +234,8 @@ const en = {
     'hud.signature.cooldown': 'COOLDOWN',
     'hud.signature.locked': 'LOCKED',
     'hud.signature.label': 'SIGNATURE',
+    'hud.overtime': 'OVERTIME',
+    'hud.match.pregame': 'MATCH START IN',
 
     'mobile.hit': 'HIT',
     'mobile.radar': 'RADAR',

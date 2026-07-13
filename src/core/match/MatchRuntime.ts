@@ -4,6 +4,7 @@ import type { ControlPointManager, ControlUnitPresence } from '../../gameplay/Co
 import type { GameMode, TeamId, TeamOverview, TeamScoreState } from '../../gameplay/types';
 import type { NetworkPosition } from '../network/playerSnapshots';
 import type { PlayerRespawnState, RemotePlayerState, RespawnSessionMode } from '../respawn/types';
+import { createInitialMatchPhaseState, isMatchScoringActive, resetMatchPhaseState } from './MatchPhase';
 
 export type MatchControlRuntimeContext = {
     controlPoints: ControlPointManager;
@@ -59,11 +60,16 @@ export function createTeamScores(
     mode: GameMode,
     scoreToWinByMode: Record<GameMode, number>
 ): TeamScoreState {
+    const phase = createInitialMatchPhaseState(mode);
     return {
         blue: 0,
         red: 0,
         scoreToWin: scoreToWinByMode[mode],
-        winner: null
+        winner: null,
+        phase: phase.phase,
+        phaseTimer: phase.phaseTimer,
+        matchClock: phase.matchClock,
+        matchDuration: phase.matchDuration
     };
 }
 
@@ -75,6 +81,7 @@ export function applyGameModeSettings(
 ) {
     teamScores.scoreToWin = scoreToWinByMode[mode];
     controlPoints.setVisible(mode === 'control');
+    resetMatchPhaseState(teamScores, mode);
 }
 
 export function buildTeamOverview(context: Pick<MatchControlRuntimeContext, 'localRespawnState' | 'remotePlayerStates' | 'bots'>): TeamOverview {
@@ -155,12 +162,27 @@ export function collectControlUnits(context: MatchControlRuntimeContext): Contro
 }
 
 export function updateControlMatch(context: MatchControlRuntimeContext, dt: number) {
-    context.controlPoints.update(dt, collectControlUnits(context));
     if (context.teamScores.winner) return;
+    if (!isMatchScoringActive(context.teamScores)) return;
+
+    context.controlPoints.update(dt, collectControlUnits(context));
 
     const scoreDelta = context.controlPoints.tickScore(dt);
     context.teamScores.blue += scoreDelta.blue;
     context.teamScores.red += scoreDelta.red;
+
+    if (context.teamScores.blue >= context.teamScores.scoreToWin) {
+        context.teamScores.blue = context.teamScores.scoreToWin;
+        context.teamScores.winner = 'blue';
+    } else if (context.teamScores.red >= context.teamScores.scoreToWin) {
+        context.teamScores.red = context.teamScores.scoreToWin;
+        context.teamScores.winner = 'red';
+    }
+}
+
+export function updateTdmMatch(context: Pick<MatchControlRuntimeContext, 'teamScores'>, _dt: number) {
+    if (context.teamScores.winner) return;
+    if (!isMatchScoringActive(context.teamScores)) return;
 
     if (context.teamScores.blue >= context.teamScores.scoreToWin) {
         context.teamScores.blue = context.teamScores.scoreToWin;

@@ -123,6 +123,19 @@ export function MatchStatusOverlay(props: {
                     <div className="mt-1 text-center text-[9px] tracking-[0.24em] text-[#cbb48a]">
                         {props.t('hud.scoreTarget', { score: props.scores.scoreToWin })}
                     </div>
+                    {props.scores.phase === 'pregame' ? (
+                        <div className="mt-1 text-center text-xl font-bold tracking-[0.32em] text-[#ffd489]">
+                            {formatSeconds(props.locale, props.scores.phaseTimer)}
+                        </div>
+                    ) : props.scores.phase === 'overtime' ? (
+                        <div className="mt-1 text-center text-base font-bold tracking-[0.22em] text-[#ff8e5d]">
+                            {props.t('hud.overtime')} {formatSeconds(props.locale, props.scores.matchClock)}
+                        </div>
+                    ) : (
+                        <div className="mt-1 text-center text-xs font-bold tracking-[0.18em] text-[#a5bcc2]">
+                            {formatSeconds(props.locale, props.scores.matchClock)}
+                        </div>
+                    )}
                     <div className="mt-1 text-center text-[10px] tracking-[0.18em] text-[#e7d3aa]">
                         {pointStatus}
                     </div>

@@ -4,6 +4,7 @@ import type {
     ControlPointId,
     ControlPointView,
     GameMode,
+    MatchPhase,
     TeamId,
     TeamOverview,
     TeamScoreState
@@ -87,6 +88,9 @@ respawnTimer: number;
     terrainColliderMode: 'heightfield' | 'trimeshFallback';
     terrainColliderError: string;
     signature: SignatureHudState;
+    matchPhase: MatchPhase;
+    matchPhaseTimer: number;
+    matchClock: number;
 };
 
 export const DEFAULT_SECTION_STATE: SectionState = {
@@ -142,7 +146,7 @@ export const INITIAL_GAME_HUD_STATE: GameHudState = {
         blueToWin: 200,
         redToWin: 200
     },
-    teamScores: { blue: 0, red: 0, scoreToWin: 200, winner: null },
+    teamScores: { blue: 0, red: 0, scoreToWin: 200, winner: null, phase: 'pregame', phaseTimer: 5, matchClock: 600, matchDuration: 600 },
     teamOverview: {
         blue: { alive: 5, total: 5, waveTimer: 0 },
         red: { alive: 5, total: 5, waveTimer: 0 }
@@ -157,5 +161,8 @@ export const INITIAL_GAME_HUD_STATE: GameHudState = {
         activeTimer: 0,
         activeMax: 0,
         isActive: false
-    }
+    },
+    matchPhase: 'pregame',
+    matchPhaseTimer: 5,
+    matchClock: 600
 };

@@ -58,7 +58,7 @@ export function runAuthoritativeStateTest() {
         applyAuthoritativeStateMessage(context, {
             props: { structures: 1 },
             points: { blue: 1 },
-            scores: { blue: 3, red: 2, scoreToWin: 200, winner: null },
+            scores: { blue: 3, red: 2, scoreToWin: 200, winner: null, phase: 'active', phaseTimer: 0, matchClock: 540, matchDuration: 600 },
             bots: [{ id: 'bot-red-0', team: 'red', x: 0, y: 0, z: 0, yaw: 0, hp: 60, maxHp: 60, alive: true, respawnTimer: 0 }],
             players: {
                 'local-player': {

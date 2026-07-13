@@ -2,6 +2,7 @@ export type TeamId = 'blue' | 'red';
 export type ControlOwner = TeamId | 'neutral';
 export type ControlPointId = 'A' | 'B' | 'C';
 export type GameMode = 'control' | 'tdm';
+export type MatchPhase = 'pregame' | 'active' | 'overtime' | 'ended';
 
 export type ControlPointView = {
     id: ControlPointId;
@@ -18,6 +19,10 @@ export type TeamScoreState = {
     red: number;
     scoreToWin: number;
     winner: ControlOwner | null;
+    phase: MatchPhase;
+    phaseTimer: number;
+    matchClock: number;
+    matchDuration: number;
 };
 
 export type BotStateView = {

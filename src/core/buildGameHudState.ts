@@ -159,6 +159,9 @@ respawnTimer: params.respawnTimer,
             activeTimer: golemState.signatureActiveTimer,
             activeMax: golemState.signatureActiveMax,
             isActive: golemState.signatureIsActive
-        }
+        },
+        matchPhase: params.teamScores.phase,
+        matchPhaseTimer: params.teamScores.phaseTimer,
+        matchClock: params.teamScores.matchClock
     };
 }

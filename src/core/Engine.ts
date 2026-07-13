@@ -79,6 +79,7 @@ import {
     updateRespawns as updateRespawnsRuntime
 } from './respawn/RespawnRuntime';
 import { updateControlMatch, createTeamScores } from './match/MatchRuntime';
+import { isMatchFrozenForInput } from './match/MatchPhase';
 import {
     getUnitTeam,
     forEachEnemyPosition,
@@ -138,7 +139,7 @@ export class Game {
     sessionMode: SessionMode;
     gameMode: GameMode;
     remoteSpawnSlots: Map<string, number> = new Map();
-    teamScores: TeamScoreState = { blue: 0, red: 0, scoreToWin: SCORE_TO_WIN.control, winner: null };
+    teamScores: TeamScoreState = { blue: 0, red: 0, scoreToWin: SCORE_TO_WIN.control, winner: null, phase: 'pregame', phaseTimer: 5, matchClock: 600, matchDuration: 600 };
     localRespawnState: PlayerRespawnState = { alive: true, timer: 0, slot: 0 };
     respawnWaves: Record<TeamId, number> = { blue: 0, red: 0 };
     recentDeaths: RecentDeath[] = [];
@@ -439,15 +440,20 @@ export class Game {
         this.hitConfirmTimer = Math.max(0, this.hitConfirmTimer - dt);
         this.recentDeaths = ageRecentDeaths(this.recentDeaths, dt);
 
+        const matchFrozenForInput = isMatchFrozenForInput(this.teamScores);
         this.physics.step();
         this.world.terrain.update();
         this._updateCameraAndInput();
-        this._updateMechs(dt);
-        this._updateBots(dt);
-        this._updateProjectilesAndFx();
-        this._handleInputActions();
+        if (!matchFrozenForInput) {
+            this._updateMechs(dt);
+            this._updateBots(dt);
+            this._updateProjectilesAndFx();
+            this._handleInputActions();
+        }
         this._updateControlPoints(dt);
-        this._updateCombatAndRespawn(dt);
+        if (!matchFrozenForInput) {
+            this._updateCombatAndRespawn(dt);
+        }
         this._updateParticlesAndProps(dt);
         this._updateNetworkTick(dt);
         this._renderHud();
