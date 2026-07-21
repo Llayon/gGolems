@@ -12,6 +12,8 @@ function getPilotMatchModeLabel(t: Translator, mode: string) {
             return t('lobby.mode.control');
         case 'tdm':
             return t('lobby.mode.tdm');
+        case '1v1':
+            return t('lobby.mode.1v1');
         default:
             return mode.toUpperCase();
     }

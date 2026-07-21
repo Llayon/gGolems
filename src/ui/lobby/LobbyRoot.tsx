@@ -108,7 +108,7 @@ export function LobbyRoot(props: LobbyScreenProps) {
 
                 <div className={`${shellWidthClass} max-w-full`}>
                     <LobbySelectionSummary
-                        modeLabel={props.t(props.selectedGameMode === 'tdm' ? 'lobby.mode.tdm' : 'lobby.mode.control')}
+                        modeLabel={props.t(props.selectedGameMode === 'tdm' ? 'lobby.mode.tdm' : props.selectedGameMode === '1v1' ? 'lobby.mode.1v1' : 'lobby.mode.control')}
                         chassisLabel={props.selectedChassis.name}
                         loadoutLabel={props.selectedLoadout.name}
                         roomCountLabel={props.firebaseEnabled ? `${viewModel.visibleFirebaseRooms.length}` : undefined}

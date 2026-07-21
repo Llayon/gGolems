@@ -5,7 +5,8 @@ export const OVERTIME_DURATION = 120;
 
 export const MATCH_DURATION: Record<GameMode, number> = {
     control: 600,
-    tdm: 480
+    tdm: 480,
+    '1v1': 360
 };
 
 export function createInitialMatchPhaseState(mode: GameMode): {

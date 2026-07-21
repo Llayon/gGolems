@@ -1,4 +1,4 @@
-import en from './en';
+﻿import en from './en';
 
 const ru: typeof en = {
     'locale.label': 'ЯЗЫК',
@@ -42,8 +42,10 @@ const ru: typeof en = {
     'lobby.modeTitle': 'РЕЖИМ МАТЧА',
     'lobby.mode.control': 'ТОЧКИ',
     'lobby.mode.tdm': 'КОМАНДНЫЙ БОЙ',
+    'lobby.mode.1v1': 'ДУЭЛЬ',
     'lobby.modeHint.control': 'Три точки захвата, очки за удержание и боты на цели.',
     'lobby.modeHint.tdm': 'Без точек, только убийства, волны респавна и давление по составу.',
+    'lobby.modeHint.1v1': 'Сольная дуэль против одного бота, первый до 5 фрагов за 6 минут.',
     'lobby.frameTitle': 'ШАССИ',
     'lobby.loadoutTitle': 'КОМПЛЕКТ',
     'lobby.weight.light': 'ЛЁГКИЙ',
@@ -169,6 +171,7 @@ const ru: typeof en = {
     'hud.victory.red': 'КРАСНЫЕ ПОБЕДИЛИ',
     'hud.mode.control': 'ТОЧКИ',
     'hud.mode.tdm': 'КОМАНДНЫЙ БОЙ',
+    'hud.mode.1v1': 'ДУЭЛЬ',
     'hud.matchLocked': 'БОЙ ЗАВЕРШЕН',
     'hud.point.contested': 'ТОЧКА {{point}} ОСПАРИВАЕТСЯ',
     'hud.point.securing': '{{team}} УДЕРЖИВАЮТ {{point}} {{progress}}',

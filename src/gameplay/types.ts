@@ -1,7 +1,7 @@
 export type TeamId = 'blue' | 'red';
 export type ControlOwner = TeamId | 'neutral';
 export type ControlPointId = 'A' | 'B' | 'C';
-export type GameMode = 'control' | 'tdm';
+export type GameMode = 'control' | 'tdm' | '1v1';
 export type MatchPhase = 'pregame' | 'active' | 'overtime' | 'ended';
 
 export type ControlPointView = {

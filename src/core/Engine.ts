@@ -104,7 +104,8 @@ type GameRuntimeOptions = {
 const TEAM_SIZE = 5;
 const SCORE_TO_WIN: Record<GameMode, number> = {
     control: 200,
-    tdm: 30
+    tdm: 30,
+    '1v1': 5
 };
 const RESPAWN_WAVE_DELAY = 8;
 const LOCAL_PLAYER_ID = 'local-player';
@@ -173,6 +174,7 @@ export class Game {
         this.onStateUpdate = onStateUpdate;
         this.sessionMode = sessionMode;
         this.gameMode = gameMode;
+        this.teamSize = gameMode === '1v1' ? 1 : TEAM_SIZE;
         this.localMechOptions = localMechOptions;
 
         const { subsystems, teamScores } = initEngineSubsystems(
@@ -295,6 +297,7 @@ export class Game {
 
     setGameMode(mode: GameMode) {
         this.gameMode = mode;
+        this.teamSize = mode === '1v1' ? 1 : TEAM_SIZE;
         applyGameModeSettings(this.controlPoints, this.teamScores, mode, SCORE_TO_WIN);
     }
 

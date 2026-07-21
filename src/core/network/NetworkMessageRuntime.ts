@@ -119,7 +119,7 @@ export function applyAuthoritativeStateMessage(
     if (data.scores) {
         context.setTeamScores(data.scores);
     }
-    if (data.mode === 'control' || data.mode === 'tdm') {
+    if (data.mode === 'control' || data.mode === 'tdm' || data.mode === '1v1') {
         context.setGameMode(data.mode);
     }
     if (data.bots) {
@@ -225,7 +225,7 @@ export function applyRestartMatchMessage(
     context: RestartMatchRuntimeContext,
     data: RestartMatchMessageLike
 ) {
-    if (data.mode === 'control' || data.mode === 'tdm') {
+    if (data.mode === 'control' || data.mode === 'tdm' || data.mode === '1v1') {
         context.setGameMode(data.mode);
     }
     context.restartMatch(true);

@@ -17,7 +17,8 @@ const ROOM_TTL_MS = 45000;
 const ROOM_LIST_REFRESH_MS = 5000;
 const SCORE_TO_WIN_BY_MODE: Record<GameMode, number> = {
     control: 200,
-    tdm: 30
+    tdm: 30,
+    '1v1': 5
 };
 
 export type LobbyJoinability = 'open' | 'closing' | 'full' | 'ended';
@@ -199,7 +200,7 @@ export function subscribeFirebaseLobbies(onRooms: (rooms: FirebaseLobbyRoom[]) =
                 shortCode: value.shortCode ?? (child.key ?? '').slice(-6).toUpperCase(),
                 roomName: value.roomName?.trim() || value.shortCode || (child.key ?? '').slice(-6).toUpperCase(),
                 hostPeerId: value.hostPeerId,
-                gameMode: value.gameMode === 'tdm' ? 'tdm' : 'control',
+                gameMode: value.gameMode === 'tdm' ? 'tdm' : value.gameMode === '1v1' ? '1v1' : 'control',
                 status: 'open',
                 inProgress: value.inProgress !== false,
                 currentPlayers: typeof value.currentPlayers === 'number' ? Math.max(1, Math.round(value.currentPlayers)) : 1,
@@ -211,7 +212,7 @@ export function subscribeFirebaseLobbies(onRooms: (rooms: FirebaseLobbyRoom[]) =
                 redScore: typeof value.redScore === 'number' ? Math.max(0, Math.round(value.redScore)) : 0,
                 scoreToWin: typeof value.scoreToWin === 'number'
                     ? Math.max(1, Math.round(value.scoreToWin))
-                    : SCORE_TO_WIN_BY_MODE[value.gameMode === 'tdm' ? 'tdm' : 'control'],
+                    : SCORE_TO_WIN_BY_MODE[value.gameMode === 'tdm' ? 'tdm' : value.gameMode === '1v1' ? '1v1' : 'control'],
                 createdAt: typeof value.createdAt === 'number' ? value.createdAt : 0,
                 updatedAt: typeof value.updatedAt === 'number' ? value.updatedAt : 0,
                 expiresAt

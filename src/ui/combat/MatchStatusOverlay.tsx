@@ -70,7 +70,9 @@ export function MatchStatusOverlay(props: {
                 : 'border-[#8f6a38]/55 bg-black/25 text-[#e6c78c]';
     const pointStatus = props.gameMode === 'control'
         ? getPointStatusText(props.controlSummary, props.t, props.locale)
-        : props.t('hud.mode.tdm');
+        : props.gameMode === 'tdm'
+            ? props.t('hud.mode.tdm')
+            : props.t('hud.mode.1v1');
     const pointDetail = props.gameMode === 'control'
         ? getPointDetailText(props.controlSummary, props.t)
         : null;

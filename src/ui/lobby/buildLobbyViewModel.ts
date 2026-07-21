@@ -60,7 +60,9 @@ export function buildLobbyViewModel(props: Pick<
         directJoinModeKey: directJoinRoom
             ? directJoinRoom.gameMode === 'tdm'
                 ? 'lobby.mode.tdm'
-                : 'lobby.mode.control'
+                : directJoinRoom.gameMode === '1v1'
+                    ? 'lobby.mode.1v1'
+                    : 'lobby.mode.control'
             : null,
         directJoinStatusKey: directJoinRoom?.inProgress ? 'lobby.roomState.live' : 'lobby.roomState.open',
         directJoinAvailabilityKey: directJoinRoom ? lobbyJoinabilityKeys[directJoinRoom.joinability] : null

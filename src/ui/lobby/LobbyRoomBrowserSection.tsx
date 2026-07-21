@@ -74,7 +74,7 @@ export function LobbyRoomBrowserSection(props: LobbyRoomBrowserSectionProps) {
                             <div className="mt-1 flex items-center justify-between gap-3">
                                 <div className="font-bold tracking-[0.22em] text-[#efb768]">{room.shortCode}</div>
                                 <div className="rounded-full border border-[#8f6a38]/45 bg-black/30 px-2 py-1 text-[9px] tracking-[0.18em] text-[#d7c5a1]">
-                                    {props.t(room.gameMode === 'tdm' ? 'lobby.mode.tdm' : 'lobby.mode.control')}
+                                    {props.t(room.gameMode === 'tdm' ? 'lobby.mode.tdm' : room.gameMode === '1v1' ? 'lobby.mode.1v1' : 'lobby.mode.control')}
                                 </div>
                             </div>
                             <div className="mt-1 flex items-center justify-between gap-3 text-[10px] tracking-[0.16em] text-[#bfa987]">
